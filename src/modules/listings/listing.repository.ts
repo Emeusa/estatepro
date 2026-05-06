@@ -2,18 +2,47 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { toListingRecord } from "@/lib/supabase-mappers";
 import { ListingFilters, ListingRecord, PaginatedResponse } from "@/lib/types";
 
+async function listPublicAgentIds() {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("agents")
+    .select("id")
+    .eq("verification_status", "approved")
+    .eq("is_blocked", false)
+    .limit(1000);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []).map((agent) => agent.id as string);
+}
+
 export async function listPublicListings(
   filters: ListingFilters
 ): Promise<PaginatedResponse<ListingRecord>> {
   const supabase = createServerSupabaseClient();
+  const publicAgentIds = await listPublicAgentIds();
+
+  if (!publicAgentIds.length) {
+    return { items: [], nextCursor: null };
+  }
+
   let query = supabase
     .from("listings")
     .select("*")
     .eq("status", "active")
+    .in("agent_id", publicAgentIds)
     .order("created_at", { ascending: false })
     .limit(filters.limit ?? 12);
 
-  if (filters.location) {
+  if (filters.state) {
+    query = query.eq("location->>state", filters.state);
+  }
+  if (filters.city) {
+    query = query.eq("location->>city", filters.city);
+  }
+  if (!filters.state && !filters.city && filters.location) {
     query = query.eq("location->>slug", filters.location);
   }
   if (filters.propertyType) {
@@ -50,6 +79,28 @@ export async function getListingById(listingId: string) {
     return null;
   }
   return toListingRecord(data);
+}
+
+export async function listPublicListingsByAgent(agentId: string) {
+  const publicAgentIds = await listPublicAgentIds();
+  if (!publicAgentIds.includes(agentId)) {
+    return [];
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("listings")
+    .select("*")
+    .eq("status", "active")
+    .eq("agent_id", agentId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []).map(toListingRecord);
 }
 
 export async function listAgentListings(agentId: string) {
@@ -124,6 +175,8 @@ export async function createListing(
       description: payload.description,
       price: payload.price,
       property_type: payload.propertyType,
+      listing_category: payload.listingCategory,
+      availability: payload.availability,
       status: "pending",
       image_urls: payload.imageUrls,
       contact_phone: payload.contactPhone,
@@ -151,6 +204,8 @@ export async function updateListing(
   if (payload.description !== undefined) updates.description = payload.description;
   if (payload.price !== undefined) updates.price = payload.price;
   if (payload.propertyType !== undefined) updates.property_type = payload.propertyType;
+  if (payload.listingCategory !== undefined) updates.listing_category = payload.listingCategory;
+  if (payload.availability !== undefined) updates.availability = payload.availability;
   if (payload.status !== undefined) updates.status = payload.status;
   if (payload.imageUrls !== undefined) updates.image_urls = payload.imageUrls;
   if (payload.contactPhone !== undefined) updates.contact_phone = payload.contactPhone;

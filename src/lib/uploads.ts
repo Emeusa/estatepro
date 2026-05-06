@@ -26,6 +26,10 @@ async function upload(bucket: string, path: string, file: File) {
   }
 }
 
+function safeFileName(fileName: string) {
+  return fileName.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-").slice(0, 80);
+}
+
 export async function uploadListingImages(files: File[]) {
   const userId = await requireUserId();
 
@@ -43,7 +47,7 @@ export async function uploadVerificationDocuments(files: File[]) {
   const userId = await requireUserId();
 
   const uploads = files.slice(0, 4).map(async (file, index) => {
-    const path = `${userId}/${Date.now()}-${index}-${file.name}`;
+    const path = `${userId}/${Date.now()}-${index}-${safeFileName(file.name)}`;
     await upload("verification-documents", path, file);
     return path;
   });

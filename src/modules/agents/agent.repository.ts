@@ -45,8 +45,8 @@ async function rollbackAuthUser(userId: string) {
 }
 
 async function getAdminDocumentUrl(path: string) {
-  if (path.startsWith("http://") || path.startsWith("https://")) {
-    return path;
+  if (path.startsWith("http://") || path.startsWith("https://") || path.includes("..")) {
+    return null;
   }
 
   const supabase = createServerSupabaseClient();
@@ -54,15 +54,15 @@ async function getAdminDocumentUrl(path: string) {
     .from("verification-documents")
     .createSignedUrl(path, 60 * 30);
 
-  return error || !data?.signedUrl ? path : data.signedUrl;
+  return error || !data?.signedUrl ? null : data.signedUrl;
 }
 
 async function withAdminDocumentUrls(agent: AgentProfile): Promise<AgentProfile> {
   return {
     ...agent,
-    verificationDocuments: await Promise.all(
-      agent.verificationDocuments.map((documentPath) => getAdminDocumentUrl(documentPath))
-    )
+    verificationDocuments: (
+      await Promise.all(agent.verificationDocuments.map((documentPath) => getAdminDocumentUrl(documentPath)))
+    ).filter((documentUrl): documentUrl is string => Boolean(documentUrl))
   };
 }
 

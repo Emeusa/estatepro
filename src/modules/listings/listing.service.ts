@@ -1,4 +1,4 @@
-import { listingFilterSchema, listingInputSchema } from "@/modules/listings/listing.schema";
+import { listingFilterSchema, listingInputSchema, listingUpdateSchema } from "@/modules/listings/listing.schema";
 import {
   activatePendingListingsForAgent,
   createListing,
@@ -8,8 +8,10 @@ import {
   listListingsByAgentIds,
   listListingsForAdmin,
   listPublicListings,
+  listPublicListingsByAgent,
   updateListing
 } from "@/modules/listings/listing.repository";
+import { getAgentProfile } from "@/modules/agents/agent.repository";
 
 export async function getPublicListings(input: Record<string, unknown>) {
   return listPublicListings(listingFilterSchema.parse(input));
@@ -24,7 +26,17 @@ export async function getPublicListingDetails(listingId: string) {
   if (!listing || listing.status !== "active") {
     return null;
   }
+
+  const { agent } = await getAgentProfile(listing.agentId);
+  if (!agent || agent.verificationStatus !== "approved" || agent.isBlocked) {
+    return null;
+  }
+
   return listing;
+}
+
+export async function getPublicAgentListings(agentId: string) {
+  return listPublicListingsByAgent(agentId);
 }
 
 export async function getAgentListings(agentId: string) {
@@ -43,6 +55,24 @@ export async function approvePendingListingsForAgent(agentId: string) {
   return activatePendingListingsForAgent(agentId);
 }
 
+export async function ensureAgentCanManageListings(agentId: string) {
+  const { agent } = await getAgentProfile(agentId);
+
+  if (!agent) {
+    throw new Error("Agent profile was not found.");
+  }
+
+  if (agent.isBlocked) {
+    throw new Error("Your agent account is blocked and cannot manage listings.");
+  }
+
+  if (agent.verificationStatus === "rejected") {
+    throw new Error("Your agent account was rejected and cannot manage listings.");
+  }
+
+  return agent;
+}
+
 export async function ensureAgentOwnsListing(agentId: string, listingId: string) {
   const listing = await getListingById(listingId);
   if (!listing) {
@@ -55,15 +85,18 @@ export async function ensureAgentOwnsListing(agentId: string, listingId: string)
 }
 
 export async function createAgentListing(agentId: string, input: unknown) {
+  await ensureAgentCanManageListings(agentId);
   const payload = listingInputSchema.parse(input);
   return createListing(agentId, payload);
 }
 
-export async function updateAgentListing(listingId: string, input: unknown) {
-  const payload = listingInputSchema.partial().parse(input);
+export async function updateAgentListing(agentId: string, listingId: string, input: unknown) {
+  await ensureAgentCanManageListings(agentId);
+  const payload = listingUpdateSchema.parse(input);
   return updateListing(listingId, payload);
 }
 
-export async function removeAgentListing(listingId: string) {
+export async function removeAgentListing(agentId: string, listingId: string) {
+  await ensureAgentCanManageListings(agentId);
   return deleteListing(listingId);
 }

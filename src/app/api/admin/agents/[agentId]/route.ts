@@ -5,6 +5,7 @@ import {
   updateAgentBlockStatus,
   updateAgentVerification
 } from "@/modules/agents/agent.service";
+import { agentModerationSchema } from "@/modules/agents/agent.schema";
 import { approvePendingListingsForAgent } from "@/modules/listings/listing.service";
 
 type Props = {
@@ -17,9 +18,9 @@ export async function PATCH(request: NextRequest, { params }: Props) {
     requireRole(decoded, "admin");
 
     const { agentId } = await params;
-    const body = await request.json();
+    const body = agentModerationSchema.parse(await request.json());
 
-    if (typeof body.verificationStatus === "string") {
+    if (body.verificationStatus) {
       await updateAgentVerification(agentId, body.verificationStatus);
       if (body.verificationStatus === "approved") {
         await approvePendingListingsForAgent(agentId);

@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { ListingForm } from "@/components/forms/listing-form";
 import { apiRequest } from "@/lib/api";
+import { AVAILABILITY_LABELS, getUnavailableBadge, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
 import { ListingRecord } from "@/lib/types";
 
 type Props = {
@@ -61,7 +62,10 @@ export function ListingManager({ token, initialListings }: Props) {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="font-medium text-slate-950">{listing.title}</p>
-                  <p className="mt-1 text-sm capitalize text-slate-500">{listing.status}</p>
+                  <p className="mt-1 text-sm capitalize text-slate-500">
+                    {listing.status} · {LISTING_CATEGORY_LABELS[listing.listingCategory]} ·{" "}
+                    {getUnavailableBadge(listing) ?? AVAILABILITY_LABELS[listing.availability]}
+                  </p>
                 </div>
                 <span className="text-sm text-slate-500">NGN {listing.price.toLocaleString()}</span>
               </div>

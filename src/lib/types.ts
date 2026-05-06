@@ -2,6 +2,8 @@ export type UserRole = "agent" | "client" | "admin";
 export type VerificationStatus = "pending" | "approved" | "rejected";
 export type ListingStatus = "pending" | "active" | "blocked";
 export type PropertyType = "apartment" | "duplex" | "land" | "office" | "shop";
+export type ListingCategory = "for_sale" | "for_rent" | "short_let";
+export type ListingAvailability = "available" | "sold" | "rented" | "booked";
 
 export type LocationValue = {
   state: string;
@@ -34,6 +36,8 @@ export type ListingRecord = {
   description: string;
   price: number;
   propertyType: PropertyType;
+  listingCategory: ListingCategory;
+  availability: ListingAvailability;
   status: ListingStatus;
   imageUrls: string[];
   contactPhone: string;
@@ -52,6 +56,8 @@ export type SubscriptionRecord = {
 
 export type ListingFilters = {
   location?: string;
+  state?: string;
+  city?: string;
   maxPrice?: number;
   propertyType?: PropertyType;
   cursor?: string;

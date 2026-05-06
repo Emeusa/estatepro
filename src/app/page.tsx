@@ -9,7 +9,8 @@ type Props = {
 export default async function HomePage({ searchParams }: Props) {
   const params = await searchParams;
   const listings = await getPublicListings({
-    location: typeof params.location === "string" ? params.location : undefined,
+    state: typeof params.state === "string" ? params.state : undefined,
+    city: typeof params.city === "string" ? params.city : undefined,
     maxPrice: typeof params.maxPrice === "string" ? Number(params.maxPrice) : undefined,
     propertyType: typeof params.propertyType === "string" ? params.propertyType : undefined
   });
@@ -26,7 +27,8 @@ export default async function HomePage({ searchParams }: Props) {
         </p>
       </section>
       <FilterBar
-        initialLocation={typeof params.location === "string" ? params.location : undefined}
+        initialState={typeof params.state === "string" ? params.state : undefined}
+        initialCity={typeof params.city === "string" ? params.city : undefined}
         initialMaxPrice={typeof params.maxPrice === "string" ? Number(params.maxPrice) : undefined}
         initialType={typeof params.propertyType === "string" ? params.propertyType : undefined}
       />

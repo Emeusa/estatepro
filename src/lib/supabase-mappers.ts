@@ -37,6 +37,8 @@ type DatabaseListing = {
   description: string;
   price: number;
   property_type: ListingRecord["propertyType"];
+  listing_category?: ListingRecord["listingCategory"];
+  availability?: ListingRecord["availability"];
   status: ListingRecord["status"];
   image_urls: string[];
   contact_phone: string;
@@ -84,6 +86,8 @@ export function toListingRecord(row: DatabaseListing): ListingRecord {
     description: row.description,
     price: row.price,
     propertyType: row.property_type,
+    listingCategory: row.listing_category ?? "for_sale",
+    availability: row.availability ?? "available",
     status: row.status,
     imageUrls: row.image_urls ?? [],
     contactPhone: row.contact_phone,

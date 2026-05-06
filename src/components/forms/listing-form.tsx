@@ -3,7 +3,9 @@
 import { FormEvent, useState } from "react";
 
 import { ApiRequestError, apiRequest } from "@/lib/api";
-import { ListingRecord } from "@/lib/types";
+import { AVAILABILITY_LABELS, CATEGORY_AVAILABILITY, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
+import { getLgasForState, NIGERIA_STATES } from "@/lib/nigeria-locations";
+import { ListingCategory, ListingRecord } from "@/lib/types";
 import { uploadListingImages } from "@/lib/uploads";
 
 type Props = {
@@ -16,6 +18,14 @@ export function ListingForm({ token, listing, onSaved }: Props) {
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedState, setSelectedState] = useState(listing?.location.state ?? "");
+  const [selectedLga, setSelectedLga] = useState(listing?.location.city ?? "");
+  const [listingCategory, setListingCategory] = useState<ListingCategory>(listing?.listingCategory ?? "for_sale");
+  const [availability, setAvailability] = useState(listing?.availability ?? "available");
+
+  const lgas = getLgasForState(selectedState);
+  const cityOptions = selectedLga && !lgas.includes(selectedLga) ? [selectedLga, ...lgas] : lgas;
+  const availabilityOptions = CATEGORY_AVAILABILITY[listingCategory];
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -32,6 +42,8 @@ export function ListingForm({ token, listing, onSaved }: Props) {
       description: form.get("description"),
       price: Number(form.get("price")),
       propertyType: form.get("propertyType"),
+      listingCategory: form.get("listingCategory"),
+      availability: form.get("availability"),
       imageUrls: listing?.imageUrls ?? [],
       contactPhone: form.get("contactPhone"),
       contactWhatsapp: form.get("contactWhatsapp"),
@@ -65,6 +77,10 @@ export function ListingForm({ token, listing, onSaved }: Props) {
       setFieldErrors({});
       if (!listing) {
         formElement.reset();
+        setSelectedState("");
+        setSelectedLga("");
+        setListingCategory("for_sale");
+        setAvailability("available");
       }
     } catch (error) {
       if (error instanceof ApiRequestError && error.fields) {
@@ -106,6 +122,36 @@ export function ListingForm({ token, listing, onSaved }: Props) {
           </select>
         </div>
       </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <select
+          className="input"
+          name="listingCategory"
+          value={listingCategory}
+          onChange={(event) => {
+            const nextCategory = event.target.value as ListingCategory;
+            setListingCategory(nextCategory);
+            setAvailability("available");
+          }}
+        >
+          {Object.entries(LISTING_CATEGORY_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <select
+          className="input"
+          name="availability"
+          value={availability}
+          onChange={(event) => setAvailability(event.target.value as typeof availability)}
+        >
+          {availabilityOptions.map((value) => (
+            <option key={value} value={value}>
+              {AVAILABILITY_LABELS[value]}
+            </option>
+          ))}
+        </select>
+      </div>
       <div>
         <input className="input" name="images" type="file" multiple accept="image/*" />
         {fieldErrors.images ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.images}</p> : null}
@@ -129,11 +175,39 @@ export function ListingForm({ token, listing, onSaved }: Props) {
       </div>
       <div className="grid gap-3 md:grid-cols-3">
         <div>
-          <input className="input" name="state" defaultValue={listing?.location.state} placeholder="State" />
+          <select
+            className="input"
+            name="state"
+            value={selectedState}
+            onChange={(event) => {
+              setSelectedState(event.target.value);
+              setSelectedLga("");
+            }}
+          >
+            <option value="">Select state</option>
+            {NIGERIA_STATES.map((state) => (
+              <option key={state} value={state}>
+                {state}
+              </option>
+            ))}
+          </select>
           {fieldErrors.state ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.state}</p> : null}
         </div>
         <div>
-          <input className="input" name="city" defaultValue={listing?.location.city} placeholder="City" />
+          <select
+            className="input"
+            name="city"
+            value={selectedLga}
+            disabled={!selectedState}
+            onChange={(event) => setSelectedLga(event.target.value)}
+          >
+            <option value="">{selectedState ? "Select LGA" : "Select state first"}</option>
+            {cityOptions.map((lga) => (
+              <option key={lga} value={lga}>
+                {lga}
+              </option>
+            ))}
+          </select>
           {fieldErrors.city ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.city}</p> : null}
         </div>
         <div>

@@ -1,6 +1,8 @@
 import Image from "next/image";
+import Link from "next/link";
 
 import { formatDate, formatPrice, whatsappLink } from "@/lib/format";
+import { AVAILABILITY_LABELS, getUnavailableBadge, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
 import { ListingRecord } from "@/lib/types";
 
 type Props = {
@@ -8,11 +10,18 @@ type Props = {
 };
 
 export function ListingDetail({ listing }: Props) {
+  const unavailableBadge = getUnavailableBadge(listing);
+
   return (
     <section className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
       <div className="space-y-4">
         <div className="relative h-72 overflow-hidden rounded-3xl bg-slate-100 md:h-[28rem]">
           <Image src={listing.imageUrls[0]} alt={listing.title} fill className="object-cover" />
+          {unavailableBadge ? (
+            <span className="absolute left-4 top-4 rounded-full bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm">
+              {unavailableBadge}
+            </span>
+          ) : null}
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           {listing.imageUrls.slice(1, 4).map((imageUrl) => (
@@ -35,18 +44,36 @@ export function ListingDetail({ listing }: Props) {
         <div className="mt-4 space-y-3">
           <a
             href={`tel:${listing.contactPhone}`}
+            target="_blank"
+            rel="noreferrer"
             className="flex w-full items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white"
           >
             Call {listing.contactPhone}
           </a>
           <a
             href={whatsappLink(listing.contactWhatsapp, listing.title)}
+            target="_blank"
+            rel="noreferrer"
             className="flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white"
           >
             Chat on WhatsApp
           </a>
+          <Link
+            href={`/agents/${listing.agentId}/listings`}
+            className="flex w-full items-center justify-center rounded-2xl bg-amber-100 px-4 py-3 text-sm font-medium text-amber-900"
+          >
+            View other properties from this agent
+          </Link>
         </div>
         <dl className="mt-6 space-y-4 text-sm text-slate-600">
+          <div className="flex justify-between gap-4">
+            <dt>Category</dt>
+            <dd className="font-medium text-slate-950">{LISTING_CATEGORY_LABELS[listing.listingCategory]}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt>Availability</dt>
+            <dd className="font-medium text-slate-950">{AVAILABILITY_LABELS[listing.availability]}</dd>
+          </div>
           <div className="flex justify-between gap-4">
             <dt>Type</dt>
             <dd className="font-medium text-slate-950">{listing.propertyType}</dd>

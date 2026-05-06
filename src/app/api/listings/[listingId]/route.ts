@@ -4,7 +4,7 @@ import { ZodError } from "zod";
 import { requireAuth, requireRole } from "@/lib/auth";
 import {
   ensureAgentOwnsListing,
-  getListingDetails,
+  getPublicListingDetails,
   removeAgentListing,
   updateAgentListing
 } from "@/modules/listings/listing.service";
@@ -44,7 +44,7 @@ type Props = {
 
 export async function GET(_: NextRequest, { params }: Props) {
   const { listingId } = await params;
-  const listing = await getListingDetails(listingId);
+  const listing = await getPublicListingDetails(listingId);
   if (!listing) {
     return NextResponse.json({ message: "Listing not found." }, { status: 404 });
   }
@@ -58,7 +58,7 @@ export async function PATCH(request: NextRequest, { params }: Props) {
     const { listingId } = await params;
     await ensureAgentOwnsListing(decoded.uid, listingId);
     const body = await request.json();
-    const listing = await updateAgentListing(listingId, body);
+    const listing = await updateAgentListing(decoded.uid, listingId, body);
     return NextResponse.json({ listing });
   } catch (error) {
     if (error instanceof ZodError) {
@@ -84,7 +84,7 @@ export async function DELETE(request: NextRequest, { params }: Props) {
     requireRole(decoded, "agent");
     const { listingId } = await params;
     await ensureAgentOwnsListing(decoded.uid, listingId);
-    await removeAgentListing(listingId);
+    await removeAgentListing(decoded.uid, listingId);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json(

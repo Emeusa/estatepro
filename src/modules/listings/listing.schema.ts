@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { isNigeriaLga, isNigeriaState } from "@/lib/nigeria-locations";
 import { normalizePhone, sanitizeText, slugifyLocation } from "@/lib/sanitize";
 
 const locationSchema = z
@@ -8,6 +9,24 @@ const locationSchema = z
     city: z.string().min(2).max(80),
     area: z.string().min(2).max(80)
   })
+  .superRefine((value, context) => {
+    if (!isNigeriaState(value.state)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select a valid Nigerian state.",
+        path: ["state"]
+      });
+      return;
+    }
+
+    if (!isNigeriaLga(value.state, value.city)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select a valid LGA for this state.",
+        path: ["city"]
+      });
+    }
+  })
   .transform((value) => ({
     state: sanitizeText(value.state),
     city: sanitizeText(value.city),
@@ -15,21 +34,72 @@ const locationSchema = z
     slug: slugifyLocation([value.state, value.city, value.area])
   }));
 
-export const listingInputSchema = z.object({
+const listingInputBaseSchema = z.object({
   title: z.string().min(8).max(120).transform(sanitizeText),
   description: z.string().min(20).max(1200).transform(sanitizeText),
   price: z.number().int().positive().max(5000000000),
   propertyType: z.enum(["apartment", "duplex", "land", "office", "shop"]),
+  listingCategory: z.enum(["for_sale", "for_rent", "short_let"]).default("for_sale"),
+  availability: z.enum(["available", "sold", "rented", "booked"]).default("available"),
   imageUrls: z.array(z.string().url()).min(1).max(12),
   contactPhone: z.string().min(10).max(20).transform(normalizePhone),
   contactWhatsapp: z.string().min(10).max(20).transform(normalizePhone),
   location: locationSchema
 });
 
+function validateAvailability(
+  value: { listingCategory?: "for_sale" | "for_rent" | "short_let"; availability?: "available" | "sold" | "rented" | "booked" },
+  context: z.RefinementCtx
+) {
+  if (!value.listingCategory || !value.availability) {
+    return;
+  }
+
+  const allowedAvailability = {
+    for_sale: ["available", "sold"],
+    for_rent: ["available", "rented"],
+    short_let: ["available", "booked"]
+  }[value.listingCategory];
+
+  if (!allowedAvailability.includes(value.availability)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Select a valid availability for this listing category.",
+      path: ["availability"]
+    });
+  }
+}
+
+export const listingInputSchema = listingInputBaseSchema.superRefine(validateAvailability);
+
+export const listingUpdateSchema = listingInputBaseSchema.partial().superRefine(validateAvailability);
+
 export const listingFilterSchema = z.object({
   location: z.string().optional(),
+  state: z.string().optional(),
+  city: z.string().optional(),
   propertyType: z.enum(["apartment", "duplex", "land", "office", "shop"]).optional(),
   maxPrice: z.coerce.number().int().positive().optional(),
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(20).default(12)
+}).superRefine((value, context) => {
+  if (value.state && !isNigeriaState(value.state)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Select a valid Nigerian state.",
+      path: ["state"]
+    });
+  }
+
+  if (value.city && (!value.state || !isNigeriaLga(value.state, value.city))) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Select a valid LGA for this state.",
+      path: ["city"]
+    });
+  }
+});
+
+export const listingModerationSchema = z.object({
+  status: z.enum(["pending", "active", "blocked"])
 });
