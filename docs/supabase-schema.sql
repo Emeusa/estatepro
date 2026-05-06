@@ -158,8 +158,6 @@ on conflict (id) do update set
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
-alter table storage.objects enable row level security;
-
 drop policy if exists "authenticated users can upload listing images" on storage.objects;
 drop policy if exists "public can view listing images" on storage.objects;
 drop policy if exists "authenticated users can upload verification docs" on storage.objects;
