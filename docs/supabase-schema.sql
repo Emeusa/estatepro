@@ -84,6 +84,16 @@ alter table public.agents enable row level security;
 alter table public.subscriptions enable row level security;
 alter table public.listings enable row level security;
 
+drop policy if exists "users can read own row" on public.users;
+drop policy if exists "users can update own row" on public.users;
+drop policy if exists "agents can read own profile" on public.agents;
+drop policy if exists "agents can update own docs" on public.agents;
+drop policy if exists "agents can read own subscription" on public.subscriptions;
+drop policy if exists "public can read active listings" on public.listings;
+drop policy if exists "agents can insert own listings" on public.listings;
+drop policy if exists "agents can update own listings" on public.listings;
+drop policy if exists "agents can delete own listings" on public.listings;
+
 create policy "users can read own row"
   on public.users for select
   using (auth.uid() = id);
@@ -122,15 +132,54 @@ create policy "public can read active listings"
 
 create policy "agents can insert own listings"
   on public.listings for insert
-  with check (auth.uid() = agent_id);
+  with check (
+    auth.uid() = agent_id
+    and status = 'pending'
+    and exists (
+      select 1
+      from public.agents
+      where agents.id = listings.agent_id
+        and agents.verification_status <> 'rejected'
+        and agents.is_blocked = false
+    )
+  );
 
 create policy "agents can update own listings"
   on public.listings for update
-  using (auth.uid() = agent_id);
+  using (
+    auth.uid() = agent_id
+    and exists (
+      select 1
+      from public.agents
+      where agents.id = listings.agent_id
+        and agents.verification_status <> 'rejected'
+        and agents.is_blocked = false
+    )
+  )
+  with check (
+    auth.uid() = agent_id
+    and status = 'pending'
+    and exists (
+      select 1
+      from public.agents
+      where agents.id = listings.agent_id
+        and agents.verification_status <> 'rejected'
+        and agents.is_blocked = false
+    )
+  );
 
 create policy "agents can delete own listings"
   on public.listings for delete
-  using (auth.uid() = agent_id);
+  using (
+    auth.uid() = agent_id
+    and exists (
+      select 1
+      from public.agents
+      where agents.id = listings.agent_id
+        and agents.verification_status <> 'rejected'
+        and agents.is_blocked = false
+    )
+  );
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (

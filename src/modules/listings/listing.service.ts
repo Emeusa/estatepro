@@ -3,6 +3,7 @@ import {
   activatePendingListingsForAgent,
   createListing,
   deleteListing,
+  getPublicAgentSummary,
   getListingById,
   listAgentListings,
   listListingsByAgentIds,
@@ -27,16 +28,25 @@ export async function getPublicListingDetails(listingId: string) {
     return null;
   }
 
-  const { agent } = await getAgentProfile(listing.agentId);
-  if (!agent || agent.verificationStatus !== "approved" || agent.isBlocked) {
+  const agent = await getPublicAgentSummary(listing.agentId);
+  if (!agent) {
     return null;
   }
 
-  return listing;
+  return { listing, agent };
 }
 
 export async function getPublicAgentListings(agentId: string) {
-  return listPublicListingsByAgent(agentId);
+  const [agent, listings] = await Promise.all([
+    getPublicAgentSummary(agentId),
+    listPublicListingsByAgent(agentId)
+  ]);
+
+  if (!agent || !listings.length) {
+    return null;
+  }
+
+  return { agent, listings };
 }
 
 export async function getAgentListings(agentId: string) {

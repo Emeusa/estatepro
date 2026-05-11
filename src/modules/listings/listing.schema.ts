@@ -1,7 +1,27 @@
 import { z } from "zod";
 
+import { toTitleCase } from "@/lib/format";
 import { isNigeriaLga, isNigeriaState } from "@/lib/nigeria-locations";
 import { normalizePhone, sanitizeText, slugifyLocation } from "@/lib/sanitize";
+
+function isAllowedListingImageUrl(value: string) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) {
+    return false;
+  }
+
+  try {
+    const configuredHost = new URL(supabaseUrl).hostname;
+    const imageUrl = new URL(value);
+    return (
+      imageUrl.protocol === "https:" &&
+      imageUrl.hostname === configuredHost &&
+      imageUrl.pathname.startsWith("/storage/v1/object/public/listing-images/")
+    );
+  } catch {
+    return false;
+  }
+}
 
 const locationSchema = z
   .object({
@@ -35,13 +55,20 @@ const locationSchema = z
   }));
 
 const listingInputBaseSchema = z.object({
-  title: z.string().min(8).max(120).transform(sanitizeText),
+  title: z.string().min(8).max(120).transform((value) => toTitleCase(sanitizeText(value))),
   description: z.string().min(20).max(1200).transform(sanitizeText),
   price: z.number().int().positive().max(5000000000),
   propertyType: z.enum(["apartment", "duplex", "land", "office", "shop"]),
   listingCategory: z.enum(["for_sale", "for_rent", "short_let"]).default("for_sale"),
   availability: z.enum(["available", "sold", "rented", "booked"]).default("available"),
-  imageUrls: z.array(z.string().url()).min(1).max(12),
+  imageUrls: z
+    .array(
+      z.string().url().refine(isAllowedListingImageUrl, {
+        message: "Listing images must be uploaded through this platform."
+      })
+    )
+    .min(1)
+    .max(12),
   contactPhone: z.string().min(10).max(20).transform(normalizePhone),
   contactWhatsapp: z.string().min(10).max(20).transform(normalizePhone),
   location: locationSchema

@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { toNameCase } from "@/lib/format";
 import { toListingRecord } from "@/lib/supabase-mappers";
-import { ListingFilters, ListingRecord, PaginatedResponse } from "@/lib/types";
+import { ListingFilters, ListingRecord, PaginatedResponse, PublicAgentSummary } from "@/lib/types";
 
 async function listPublicAgentIds() {
   const supabase = createServerSupabaseClient();
@@ -101,6 +102,29 @@ export async function listPublicListingsByAgent(agentId: string) {
   }
 
   return (data ?? []).map(toListingRecord);
+}
+
+export async function getPublicAgentSummary(agentId: string): Promise<PublicAgentSummary | null> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("agents")
+    .select("id, verification_status, is_blocked, users!inner(full_name)")
+    .eq("id", agentId)
+    .eq("verification_status", "approved")
+    .eq("is_blocked", false)
+    .single();
+
+  if (error || !data) {
+    return null;
+  }
+
+  const user = Array.isArray(data.users) ? data.users[0] : data.users;
+
+  return {
+    id: data.id,
+    fullName: toNameCase(user?.full_name ?? "Verified agent"),
+    isVerified: data.verification_status === "approved"
+  };
 }
 
 export async function listAgentListings(agentId: string) {

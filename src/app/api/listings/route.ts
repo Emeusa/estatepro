@@ -13,8 +13,11 @@ function mapListingErrors(error: ZodError) {
       fields.title = "Title must be at least 8 characters.";
     } else if (path === "description") {
       fields.description = "Description must be at least 20 characters.";
-    } else if (path === "imageUrls") {
-      fields.images = "Upload at least one property image.";
+    } else if (path.startsWith("imageUrls")) {
+      fields.images =
+        issue.code === "too_small"
+          ? "Upload at least one property image."
+          : "Images must be uploaded through this platform.";
     } else if (path === "price") {
       fields.price = "Enter a valid property price.";
     } else if (path === "contactPhone") {
@@ -38,6 +41,8 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const data = await getPublicListings({
       location: searchParams.get("location") ?? undefined,
+      state: searchParams.get("state") ?? undefined,
+      city: searchParams.get("city") ?? undefined,
       maxPrice: searchParams.get("maxPrice") ?? undefined,
       propertyType: searchParams.get("propertyType") ?? undefined,
       cursor: searchParams.get("cursor") ?? undefined,

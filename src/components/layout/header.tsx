@@ -68,7 +68,7 @@ export function Header() {
 
   return (
     <header className="site-header border-b border-white/10">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:gap-4 sm:py-4">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-0.5 sm:gap-4 sm:py-1">
         <Link href="/" className="brand-logo" aria-label="EstateHub home">
           <Image
             src="/platform-logo.jpeg"

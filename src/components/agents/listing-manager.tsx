@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { ListingForm } from "@/components/forms/listing-form";
 import { apiRequest } from "@/lib/api";
+import { formatPrice } from "@/lib/format";
 import { AVAILABILITY_LABELS, getUnavailableBadge, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
 import { ListingRecord } from "@/lib/types";
 
@@ -67,7 +68,7 @@ export function ListingManager({ token, initialListings }: Props) {
                     {getUnavailableBadge(listing) ?? AVAILABILITY_LABELS[listing.availability]}
                   </p>
                 </div>
-                <span className="text-sm text-slate-500">NGN {listing.price.toLocaleString()}</span>
+                <span className="text-sm text-slate-500">{formatPrice(listing.price)}</span>
               </div>
               <div className="mt-3 flex gap-2">
                 <button className="button-secondary" onClick={() => setSelected(listing)}>

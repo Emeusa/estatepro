@@ -19,7 +19,12 @@ const playfair = Playfair_Display({
 
 export const metadata: Metadata = {
   title: "EstatePro",
-  description: "Fast and mobile-first property listing marketplace."
+  description: "Fast and mobile-first property listing marketplace.",
+  icons: {
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
+    apple: "/favicon.png"
+  }
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

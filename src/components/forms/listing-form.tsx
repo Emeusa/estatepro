@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
 import { ApiRequestError, apiRequest } from "@/lib/api";
 import { AVAILABILITY_LABELS, CATEGORY_AVAILABILITY, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
@@ -22,10 +22,54 @@ export function ListingForm({ token, listing, onSaved }: Props) {
   const [selectedLga, setSelectedLga] = useState(listing?.location.city ?? "");
   const [listingCategory, setListingCategory] = useState<ListingCategory>(listing?.listingCategory ?? "for_sale");
   const [availability, setAvailability] = useState(listing?.availability ?? "available");
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [uploadThumbnailIndex, setUploadThumbnailIndex] = useState(0);
+  const [existingThumbnailIndex, setExistingThumbnailIndex] = useState(0);
 
   const lgas = getLgasForState(selectedState);
   const cityOptions = selectedLga && !lgas.includes(selectedLga) ? [selectedLga, ...lgas] : lgas;
   const availabilityOptions = CATEGORY_AVAILABILITY[listingCategory];
+  const formKey = listing?.id ?? "new-listing";
+
+  useEffect(() => {
+    setSelectedFiles([]);
+    setPreviewUrls([]);
+    setUploadThumbnailIndex(0);
+    setExistingThumbnailIndex(0);
+    setSelectedState(listing?.location.state ?? "");
+    setSelectedLga(listing?.location.city ?? "");
+    setListingCategory(listing?.listingCategory ?? "for_sale");
+    setAvailability(listing?.availability ?? "available");
+  }, [listing]);
+
+  useEffect(() => {
+    const urls = selectedFiles.map((file) => URL.createObjectURL(file));
+    setPreviewUrls(urls);
+
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [selectedFiles]);
+
+  function moveToFront<T>(items: T[], index: number) {
+    if (index <= 0 || index >= items.length) {
+      return items;
+    }
+
+    return [items[index], ...items.slice(0, index), ...items.slice(index + 1)];
+  }
+
+  function onImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []).slice(0, 12);
+    setSelectedFiles(files);
+    setUploadThumbnailIndex(0);
+    setFieldErrors((current) => {
+      const next = { ...current };
+      delete next.images;
+      return next;
+    });
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,9 +78,8 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     setFieldErrors({});
     setIsSubmitting(true);
     const form = new FormData(formElement);
-    const imageFiles = form.getAll("images").filter(
-      (value): value is File => value instanceof File && value.size > 0
-    );
+    const imageFiles = selectedFiles.filter((file) => file.size > 0);
+    const orderedExistingImages = moveToFront(listing?.imageUrls ?? [], existingThumbnailIndex);
     const payload = {
       title: form.get("title"),
       description: form.get("description"),
@@ -44,7 +87,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
       propertyType: form.get("propertyType"),
       listingCategory: form.get("listingCategory"),
       availability: form.get("availability"),
-      imageUrls: listing?.imageUrls ?? [],
+      imageUrls: orderedExistingImages,
       contactPhone: form.get("contactPhone"),
       contactWhatsapp: form.get("contactWhatsapp"),
       location: {
@@ -57,7 +100,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     try {
       if (imageFiles.length) {
         try {
-          payload.imageUrls = await uploadListingImages(imageFiles);
+          payload.imageUrls = await uploadListingImages(moveToFront(imageFiles, uploadThumbnailIndex));
         } catch (error) {
           setFieldErrors({ images: "Image upload failed. Supabase Storage may not be configured yet." });
           setMessage(error instanceof Error ? error.message : "Image upload failed.");
@@ -77,6 +120,10 @@ export function ListingForm({ token, listing, onSaved }: Props) {
       setFieldErrors({});
       if (!listing) {
         formElement.reset();
+        setSelectedFiles([]);
+        setPreviewUrls([]);
+        setUploadThumbnailIndex(0);
+        setExistingThumbnailIndex(0);
         setSelectedState("");
         setSelectedLga("");
         setListingCategory("for_sale");
@@ -95,7 +142,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-3 rounded-3xl bg-white p-5 shadow-sm">
+    <form key={formKey} onSubmit={onSubmit} className="grid gap-3 rounded-3xl bg-white p-5 shadow-sm">
       <div>
         <input className="input" name="title" defaultValue={listing?.title} placeholder="Listing title" />
         {fieldErrors.title ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.title}</p> : null}
@@ -153,9 +200,60 @@ export function ListingForm({ token, listing, onSaved }: Props) {
         </select>
       </div>
       <div>
-        <input className="input" name="images" type="file" multiple accept="image/*" />
+        <input className="input" name="images" type="file" multiple accept="image/*" onChange={onImageChange} />
         {fieldErrors.images ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.images}</p> : null}
       </div>
+      {previewUrls.length ? (
+        <div className="rounded-2xl border border-slate-200 p-3">
+          <p className="text-sm font-medium text-slate-950">Choose upload thumbnail</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            {previewUrls.map((url, index) => (
+              <button
+                key={url}
+                type="button"
+                className={`overflow-hidden rounded-2xl border text-left transition ${
+                  uploadThumbnailIndex === index ? "border-teal-600 ring-2 ring-teal-100" : "border-slate-200"
+                }`}
+                onClick={() => setUploadThumbnailIndex(index)}
+              >
+                <span
+                  aria-hidden="true"
+                  className="block h-28 w-full bg-cover bg-center"
+                  style={{ backgroundImage: `url("${url}")` }}
+                />
+                <span className="block px-3 py-2 text-xs font-medium text-slate-600">
+                  {uploadThumbnailIndex === index ? "Thumbnail selected" : "Use as thumbnail"}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : listing?.imageUrls.length ? (
+        <div className="rounded-2xl border border-slate-200 p-3">
+          <p className="text-sm font-medium text-slate-950">Current listing thumbnail</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            {listing.imageUrls.map((imageUrl, index) => (
+              <button
+                key={imageUrl}
+                type="button"
+                className={`overflow-hidden rounded-2xl border text-left transition ${
+                  existingThumbnailIndex === index ? "border-teal-600 ring-2 ring-teal-100" : "border-slate-200"
+                }`}
+                onClick={() => setExistingThumbnailIndex(index)}
+              >
+                <span
+                  aria-hidden="true"
+                  className="block h-28 w-full bg-cover bg-center"
+                  style={{ backgroundImage: `url("${imageUrl}")` }}
+                />
+                <span className="block px-3 py-2 text-xs font-medium text-slate-600">
+                  {existingThumbnailIndex === index ? "Thumbnail selected" : "Use as thumbnail"}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="grid gap-3 md:grid-cols-2">
         <div>
           <input className="input" name="contactPhone" defaultValue={listing?.contactPhone} placeholder="Contact phone" />

@@ -1,21 +1,24 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { VerifiedAgentName } from "@/components/agents/verified-agent-name";
 import { formatDate, formatPrice, whatsappLink } from "@/lib/format";
 import { AVAILABILITY_LABELS, getUnavailableBadge, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
-import { ListingRecord } from "@/lib/types";
+import { PublicListingDetails } from "@/lib/types";
 
 type Props = {
-  listing: ListingRecord;
+  details: PublicListingDetails;
 };
 
-export function ListingDetail({ listing }: Props) {
+export function ListingDetail({ details }: Props) {
+  const { agent, listing } = details;
   const unavailableBadge = getUnavailableBadge(listing);
 
   return (
-    <section className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
+    <section className="rounded-[2rem] bg-gradient-to-br from-stone-300 via-stone-200 to-slate-300 p-3 shadow-sm sm:p-5">
+      <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
       <div className="space-y-4">
-        <div className="relative h-72 overflow-hidden rounded-3xl bg-slate-100 md:h-[28rem]">
+        <div className="relative h-72 overflow-hidden rounded-3xl bg-stone-200 md:h-[28rem]">
           <Image src={listing.imageUrls[0]} alt={listing.title} fill className="object-cover" />
           {unavailableBadge ? (
             <span className="absolute left-4 top-4 rounded-full bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm">
@@ -25,22 +28,40 @@ export function ListingDetail({ listing }: Props) {
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           {listing.imageUrls.slice(1, 4).map((imageUrl) => (
-            <div key={imageUrl} className="relative h-28 overflow-hidden rounded-2xl bg-slate-100">
+            <div key={imageUrl} className="relative h-28 overflow-hidden rounded-2xl bg-stone-200">
               <Image src={imageUrl} alt={listing.title} fill className="object-cover" />
             </div>
           ))}
         </div>
-        <div className="rounded-3xl bg-white p-6 shadow-sm">
+        <div className="rounded-3xl bg-white/65 p-6 shadow-sm">
           <h1 className="text-2xl font-semibold text-slate-950">{listing.title}</h1>
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-sm text-slate-600">
             {listing.location.area}, {listing.location.city}, {listing.location.state}
           </p>
+          <p className="mt-3 text-sm text-slate-700">
+            Listed by{" "}
+            <VerifiedAgentName
+              fullName={agent.fullName}
+              isVerified={agent.isVerified}
+              className="font-medium text-slate-950"
+            />
+          </p>
           <p className="mt-4 text-lg font-semibold text-slate-950">{formatPrice(listing.price)}</p>
-          <p className="mt-6 text-sm leading-7 text-slate-700">{listing.description}</p>
+          <p className="mt-6 text-sm leading-7 text-slate-800">{listing.description}</p>
         </div>
       </div>
-      <aside className="rounded-3xl bg-white p-6 shadow-sm">
-        <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Contact agent</p>
+      <aside className="rounded-3xl bg-white/65 p-6 shadow-sm">
+        <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Contact agent</p>
+        <Link
+          href={`/agents/${listing.agentId}/listings`}
+          className="mt-3 block rounded-2xl bg-white/55 px-4 py-3 text-base text-slate-700 transition hover:bg-white/75 hover:text-slate-950"
+        >
+          <VerifiedAgentName
+            fullName={agent.fullName}
+            isVerified={agent.isVerified}
+            className="font-semibold text-slate-950"
+          />
+        </Link>
         <div className="mt-4 space-y-3">
           <a
             href={`tel:${listing.contactPhone}`}
@@ -65,7 +86,7 @@ export function ListingDetail({ listing }: Props) {
             View other properties from this agent
           </Link>
         </div>
-        <dl className="mt-6 space-y-4 text-sm text-slate-600">
+        <dl className="mt-6 space-y-4 text-sm text-slate-700">
           <div className="flex justify-between gap-4">
             <dt>Category</dt>
             <dd className="font-medium text-slate-950">{LISTING_CATEGORY_LABELS[listing.listingCategory]}</dd>
@@ -88,6 +109,7 @@ export function ListingDetail({ listing }: Props) {
           </div>
         </dl>
       </aside>
+      </div>
     </section>
   );
 }

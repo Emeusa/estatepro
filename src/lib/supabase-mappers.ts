@@ -1,3 +1,4 @@
+import { toNameCase, toTitleCase } from "@/lib/format";
 import {
   AgentProfile,
   ListingRecord,
@@ -52,7 +53,7 @@ export function toUserRecord(row: DatabaseUser): UserRecord {
   return {
     id: row.id,
     email: row.email,
-    fullName: row.full_name,
+    fullName: toNameCase(row.full_name),
     phone: row.phone,
     role: row.role,
     createdAt: row.created_at
@@ -82,7 +83,7 @@ export function toListingRecord(row: DatabaseListing): ListingRecord {
   return {
     id: row.id,
     agentId: row.agent_id,
-    title: row.title,
+    title: toTitleCase(row.title),
     description: row.description,
     price: row.price,
     propertyType: row.property_type,

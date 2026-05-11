@@ -16,6 +16,23 @@ export function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function capitalizeWord(value: string) {
+  return value ? `${value[0].toUpperCase()}${value.slice(1).toLowerCase()}` : value;
+}
+
+export function toTitleCase(value: string) {
+  return value
+    .trim()
+    .replace(/\s+/g, " ")
+    .split(" ")
+    .map((word) => word.split("-").map(capitalizeWord).join("-"))
+    .join(" ");
+}
+
+export function toNameCase(value: string) {
+  return toTitleCase(value);
+}
+
 export function whatsappLink(phone: string, title: string) {
   const message = encodeURIComponent(`Hello, I am interested in ${title}.`);
   return `https://wa.me/${phone.replace(/[^\d]/g, "")}?text=${message}`;

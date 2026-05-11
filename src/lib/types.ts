@@ -74,3 +74,14 @@ export type AdminAgentReview = {
   agent: AgentProfile;
   listings: ListingRecord[];
 };
+
+export type PublicAgentSummary = {
+  id: string;
+  fullName: string;
+  isVerified: boolean;
+};
+
+export type PublicListingDetails = {
+  listing: ListingRecord;
+  agent: PublicAgentSummary;
+};

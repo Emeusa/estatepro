@@ -18,8 +18,11 @@ function mapListingErrors(error: ZodError) {
       fields.title = "Title must be at least 8 characters.";
     } else if (path === "description") {
       fields.description = "Description must be at least 20 characters.";
-    } else if (path === "imageUrls") {
-      fields.images = "Upload at least one property image.";
+    } else if (path.startsWith("imageUrls")) {
+      fields.images =
+        issue.code === "too_small"
+          ? "Upload at least one property image."
+          : "Images must be uploaded through this platform.";
     } else if (path === "price") {
       fields.price = "Enter a valid property price.";
     } else if (path === "contactPhone") {
