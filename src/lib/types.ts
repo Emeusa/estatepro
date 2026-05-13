@@ -24,7 +24,7 @@ export type UserRecord = {
 export type AgentProfile = {
   id: string;
   verificationStatus: VerificationStatus;
-  verificationDocuments: string[];
+  ninNumber: string | null;
   isBlocked: boolean;
   trialEndsAt: string;
 };
@@ -55,6 +55,7 @@ export type SubscriptionRecord = {
 };
 
 export type ListingFilters = {
+  keyword?: string;
   location?: string;
   state?: string;
   city?: string;

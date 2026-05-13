@@ -184,25 +184,11 @@ export function AdminModeration({ token, agents }: Props) {
             </div>
           </dl>
 
-          <div className="mt-6">
-            <h2 className="text-sm font-semibold text-slate-950">Verification documents</h2>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {selected.agent.verificationDocuments.length ? (
-                selected.agent.verificationDocuments.map((documentPath, index) => (
-                  <a
-                    key={documentPath}
-                    className="button-secondary"
-                    href={documentPath}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Document {index + 1}
-                  </a>
-                ))
-              ) : (
-                <p className="text-sm text-slate-500">No documents uploaded.</p>
-              )}
-            </div>
+          <div className="mt-6 rounded-2xl bg-slate-50 p-4">
+            <h2 className="text-sm font-semibold text-slate-950">NIN details</h2>
+            <p className="mt-2 text-sm font-medium text-slate-700">
+              {selected.agent.ninNumber ?? "No NIN provided for this agent."}
+            </p>
           </div>
         </div>
 

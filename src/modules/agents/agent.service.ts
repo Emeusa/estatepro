@@ -11,8 +11,7 @@ import {
   registerAgent,
   setAgentBlockStatus,
   setVerificationStatus,
-  updateUserProfile,
-  updateVerificationDocuments
+  updateUserProfile
 } from "@/modules/agents/agent.repository";
 import { AdminAgentReview } from "@/lib/types";
 import { getListingsByAgentIds } from "@/modules/listings/listing.service";
@@ -78,8 +77,4 @@ export async function updateAgentVerification(
 
 export async function updateAgentBlockStatus(agentId: string, isBlocked: boolean) {
   return setAgentBlockStatus(agentId, isBlocked);
-}
-
-export async function saveAgentDocuments(agentId: string, verificationDocuments: string[]) {
-  return updateVerificationDocuments(agentId, verificationDocuments);
 }

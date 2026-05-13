@@ -110,6 +110,26 @@ export function ListingDetail({ details }: Props) {
         </dl>
       </aside>
       </div>
+      <div className="mt-6 space-y-2 px-1 text-xs leading-6 text-slate-700 sm:px-2">
+        <p className="font-semibold text-slate-900">Disclaimer</p>
+        <p>
+          The information displayed about this property comprises a property advertisement. C59 Estatehub makes no
+          warranty as to the accuracy or completeness of the advertisement or any linked or associated information, and
+          C59 Estatehub has no control over the content. This property listing does not constitute property particulars.
+          The information is provided and maintained by {agent.fullName}. C59 Estatehub shall not in any way be held
+          liable for the actions of any agent or property owner/landlord on or off this website.
+        </p>
+        <p className="pt-3 font-semibold text-slate-900">Safety Tips</p>
+        <ul className="space-y-1">
+          <li>Do not make any inspection fee without seeing the agent and property.</li>
+          <li>Only pay Rental fee, Sales fee or any upfront payment after you verify the Landlord.</li>
+          <li>Ensure you meet the Agent in an open location.</li>
+          <li>
+            The Agent does not represent C59 Estatehub and C59 Estatehub is not liable for any monetary transaction
+            between you and the Agent.
+          </li>
+        </ul>
+      </div>
     </section>
   );
 }

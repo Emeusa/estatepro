@@ -18,7 +18,7 @@ async function requireUserId() {
 async function upload(bucket: string, path: string, file: File) {
   const { error } = await supabase.storage.from(bucket).upload(path, file, {
     contentType: file.type,
-    upsert: true
+    upsert: false
   });
 
   if (error) {
@@ -26,30 +26,14 @@ async function upload(bucket: string, path: string, file: File) {
   }
 }
 
-function safeFileName(fileName: string) {
-  return fileName.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-").slice(0, 80);
-}
-
 export async function uploadListingImages(files: File[]) {
   const userId = await requireUserId();
 
   const uploads = files.slice(0, 12).map(async (file, index) => {
     const optimized = await compressImage(file);
-    const path = `${userId}/${Date.now()}-${index}.jpg`;
+    const path = `${userId}/${crypto.randomUUID()}-${index}.jpg`;
     await upload("listing-images", path, optimized);
     return supabase.storage.from("listing-images").getPublicUrl(path).data.publicUrl;
-  });
-
-  return Promise.all(uploads);
-}
-
-export async function uploadVerificationDocuments(files: File[]) {
-  const userId = await requireUserId();
-
-  const uploads = files.slice(0, 4).map(async (file, index) => {
-    const path = `${userId}/${Date.now()}-${index}-${safeFileName(file.name)}`;
-    await upload("verification-documents", path, file);
-    return path;
   });
 
   return Promise.all(uploads);

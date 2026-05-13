@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { createClientAccount } from "@/modules/agents/agent.service";
 
 function getFriendlyMessage(error: unknown) {
@@ -51,6 +52,11 @@ function getFriendlyMessage(error: unknown) {
 }
 
 export async function POST(request: NextRequest) {
+  const limited = enforceRateLimit(request, "client-register");
+  if (limited) {
+    return limited;
+  }
+
   try {
     const body = await request.json();
     const result = await createClientAccount(body);

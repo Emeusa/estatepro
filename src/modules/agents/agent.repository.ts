@@ -24,6 +24,10 @@ function mapSupabaseRegistrationError(message: string) {
     return "users table is missing or not initialized";
   }
 
+  if (value.includes("nin")) {
+    return "An agent with this NIN already exists.";
+  }
+
   if (value.includes("duplicate key value") || value.includes("already exists") || value.includes("user already registered")) {
     return "An account with this email already exists.";
   }
@@ -42,28 +46,6 @@ function mapSupabaseRegistrationError(message: string) {
 async function rollbackAuthUser(userId: string) {
   const supabase = createServerSupabaseClient();
   await supabase.auth.admin.deleteUser(userId);
-}
-
-async function getAdminDocumentUrl(path: string) {
-  if (path.startsWith("http://") || path.startsWith("https://") || path.includes("..")) {
-    return null;
-  }
-
-  const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase.storage
-    .from("verification-documents")
-    .createSignedUrl(path, 60 * 30);
-
-  return error || !data?.signedUrl ? null : data.signedUrl;
-}
-
-async function withAdminDocumentUrls(agent: AgentProfile): Promise<AgentProfile> {
-  return {
-    ...agent,
-    verificationDocuments: (
-      await Promise.all(agent.verificationDocuments.map((documentPath) => getAdminDocumentUrl(documentPath)))
-    ).filter((documentUrl): documentUrl is string => Boolean(documentUrl))
-  };
 }
 
 export async function registerClient(input: {
@@ -117,7 +99,7 @@ export async function registerAgent(input: {
   password: string;
   fullName: string;
   phone: string;
-  verificationDocuments: string[];
+  ninNumber: string;
 }) {
   const supabase = createServerSupabaseClient();
   const {
@@ -163,7 +145,7 @@ export async function registerAgent(input: {
     const agentRow = {
       id: user.id,
       verification_status: "pending" as const,
-      verification_documents: input.verificationDocuments,
+      nin_number: input.ninNumber,
       is_blocked: false,
       trial_ends_at: trialEndsAt
     };
@@ -266,7 +248,7 @@ export async function listAgentsForAdmin() {
   if (error) {
     throw new Error(error.message);
   }
-  return Promise.all((data ?? []).map(toAgentProfile).map(withAdminDocumentUrls));
+  return (data ?? []).map(toAgentProfile);
 }
 
 export async function listAgentUsersForAdmin(agentIds: string[]) {
@@ -304,17 +286,6 @@ export async function setVerificationStatus(
   const { error } = await supabase
     .from("agents")
     .update({ verification_status: verificationStatus })
-    .eq("id", agentId);
-  if (error) {
-    throw new Error(error.message);
-  }
-}
-
-export async function updateVerificationDocuments(agentId: string, verificationDocuments: string[]) {
-  const supabase = createServerSupabaseClient();
-  const { error } = await supabase
-    .from("agents")
-    .update({ verification_documents: verificationDocuments })
     .eq("id", agentId);
   if (error) {
     throw new Error(error.message);

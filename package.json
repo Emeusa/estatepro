@@ -10,10 +10,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit --project tsconfig.typecheck.json"
   },
   "dependencies": {
-    "next": "^15.3.0",
+    "next": "^15.5.18",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "@supabase/supabase-js": "^2.49.8",

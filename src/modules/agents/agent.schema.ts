@@ -8,7 +8,10 @@ export const agentRegistrationSchema = z.object({
   password: z.string().min(6).max(72),
   fullName: z.string().min(3).max(120).transform((value) => toNameCase(sanitizeText(value))),
   phone: z.string().min(10).max(20).transform(normalizePhone),
-  verificationDocuments: z.array(z.string().url()).max(4).default([])
+  ninNumber: z
+    .string()
+    .trim()
+    .regex(/^\d{11}$/, "NIN must be exactly 11 digits.")
 });
 
 export const clientRegistrationSchema = z.object({
@@ -53,21 +56,3 @@ export const agentModerationSchema = z.object({
   verificationStatus: z.enum(["approved", "rejected"]).optional(),
   isBlocked: z.boolean().optional()
 });
-
-export function parseVerificationDocuments(input: unknown, agentId: string) {
-  return z
-    .array(
-      z
-        .string()
-        .min(3)
-        .max(240)
-        .refine((value) => !value.startsWith("http://") && !value.startsWith("https://"), {
-          message: "Verification documents must be private storage paths."
-        })
-        .refine((value) => !value.includes("..") && value.startsWith(`${agentId}/`), {
-          message: "Verification documents must belong to your account."
-        })
-    )
-    .max(4)
-    .parse(input);
-}

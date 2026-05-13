@@ -5,13 +5,15 @@ import { FormEvent, useState } from "react";
 import { getLgasForState, NIGERIA_STATES } from "@/lib/nigeria-locations";
 
 type Props = {
+  initialKeyword?: string;
   initialState?: string;
   initialCity?: string;
   initialMaxPrice?: number;
   initialType?: string;
 };
 
-export function FilterBar({ initialState, initialCity, initialMaxPrice, initialType }: Props) {
+export function FilterBar({ initialKeyword, initialState, initialCity, initialMaxPrice, initialType }: Props) {
+  const [keyword, setKeyword] = useState(initialKeyword ?? "");
   const [state, setState] = useState(initialState ?? "");
   const [city, setCity] = useState(initialCity ?? "");
   const [maxPrice, setMaxPrice] = useState(initialMaxPrice?.toString() ?? "");
@@ -23,6 +25,7 @@ export function FilterBar({ initialState, initialCity, initialMaxPrice, initialT
     event.preventDefault();
     const params = new URLSearchParams();
 
+    if (keyword) params.set("q", keyword);
     if (state) params.set("state", state);
     if (city) params.set("city", city);
     if (maxPrice) params.set("maxPrice", maxPrice);
@@ -32,7 +35,13 @@ export function FilterBar({ initialState, initialCity, initialMaxPrice, initialT
   }
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-3 rounded-3xl bg-white p-4 shadow-sm md:grid-cols-5">
+    <form onSubmit={onSubmit} className="grid gap-3 rounded-3xl bg-white p-4 shadow-sm md:grid-cols-6">
+      <input
+        className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-0 md:col-span-2"
+        placeholder="Search by title, category, or keyword"
+        value={keyword}
+        onChange={(event) => setKeyword(event.target.value)}
+      />
       <select
         className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none ring-0"
         value={state}
@@ -80,9 +89,11 @@ export function FilterBar({ initialState, initialCity, initialMaxPrice, initialT
         <option value="office">Office</option>
         <option value="shop">Shop</option>
       </select>
-      <button className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white">
-        Apply filters
-      </button>
+      <div className="flex justify-center md:col-span-6">
+        <button className="min-w-44 rounded-2xl bg-slate-950 px-6 py-3 text-sm font-medium text-white">
+          Apply filters
+        </button>
+      </div>
     </form>
   );
 }

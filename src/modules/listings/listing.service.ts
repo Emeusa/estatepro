@@ -5,6 +5,7 @@ import {
   deleteListing,
   getPublicAgentSummary,
   getListingById,
+  getPublicListingById,
   listAgentListings,
   listListingsByAgentIds,
   listListingsForAdmin,
@@ -23,8 +24,8 @@ export async function getListingDetails(listingId: string) {
 }
 
 export async function getPublicListingDetails(listingId: string) {
-  const listing = await getListingById(listingId);
-  if (!listing || listing.status !== "active") {
+  const listing = await getPublicListingById(listingId);
+  if (!listing) {
     return null;
   }
 

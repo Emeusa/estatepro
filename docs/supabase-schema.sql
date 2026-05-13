@@ -1,4 +1,5 @@
 create extension if not exists pgcrypto;
+create extension if not exists pg_trgm;
 
 create table if not exists public.users (
   id uuid primary key references auth.users (id) on delete cascade,
@@ -12,7 +13,7 @@ create table if not exists public.users (
 create table if not exists public.agents (
   id uuid primary key references public.users (id) on delete cascade,
   verification_status text not null check (verification_status in ('pending', 'approved', 'rejected')),
-  verification_documents text[] not null default '{}',
+  nin_number text,
   is_blocked boolean not null default false,
   trial_ends_at timestamptz not null
 );
@@ -48,6 +49,9 @@ alter table public.listings
 alter table public.listings
   add column if not exists availability text not null default 'available';
 
+alter table public.agents
+  add column if not exists nin_number text;
+
 do $$
 begin
   if not exists (
@@ -65,6 +69,14 @@ begin
       add constraint listings_availability_check
       check (availability in ('available', 'sold', 'rented', 'booked'));
   end if;
+
+  if not exists (
+    select 1 from pg_constraint where conname = 'agents_nin_number_check'
+  ) then
+    alter table public.agents
+      add constraint agents_nin_number_check
+      check (nin_number is null or nin_number ~ '^[0-9]{11}$');
+  end if;
 end $$;
 
 create index if not exists listings_public_idx
@@ -76,8 +88,27 @@ create index if not exists listings_agent_idx
 create index if not exists listings_public_agent_idx
   on public.listings (agent_id, status, created_at desc);
 
+create index if not exists listings_title_search_idx
+  on public.listings using gin (title gin_trgm_ops);
+
+create index if not exists listings_keyword_category_idx
+  on public.listings (property_type, listing_category, status, created_at desc);
+
 create index if not exists agents_public_visibility_idx
   on public.agents (verification_status, is_blocked, id);
+
+create unique index if not exists agents_nin_number_unique_idx
+  on public.agents (nin_number)
+  where nin_number is not null;
+
+create or replace view public.public_listings as
+select listings.*
+from public.listings
+join public.agents
+  on agents.id = listings.agent_id
+where listings.status = 'active'
+  and agents.verification_status = 'approved'
+  and agents.is_blocked = false;
 
 alter table public.users enable row level security;
 alter table public.agents enable row level security;
@@ -98,16 +129,8 @@ create policy "users can read own row"
   on public.users for select
   using (auth.uid() = id);
 
-create policy "users can update own row"
-  on public.users for update
-  using (auth.uid() = id);
-
 create policy "agents can read own profile"
   on public.agents for select
-  using (auth.uid() = id);
-
-create policy "agents can update own docs"
-  on public.agents for update
   using (auth.uid() = id);
 
 create policy "agents can read own subscription"
@@ -194,19 +217,6 @@ on conflict (id) do update set
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
-insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values (
-  'verification-documents',
-  'verification-documents',
-  false,
-  5242880,
-  array['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
-)
-on conflict (id) do update set
-  public = excluded.public,
-  file_size_limit = excluded.file_size_limit,
-  allowed_mime_types = excluded.allowed_mime_types;
-
 drop policy if exists "authenticated users can upload listing images" on storage.objects;
 drop policy if exists "public can view listing images" on storage.objects;
 drop policy if exists "authenticated users can upload verification docs" on storage.objects;
@@ -224,17 +234,3 @@ create policy "authenticated users can upload listing images"
 create policy "public can view listing images"
   on storage.objects for select
   using (bucket_id = 'listing-images');
-
-create policy "authenticated users can upload verification docs"
-  on storage.objects for insert
-  to authenticated
-  with check (
-    bucket_id = 'verification-documents'
-    and auth.uid()::text = (storage.foldername(name))[1]
-    and lower(storage.extension(name)) in ('jpg', 'jpeg', 'png', 'webp', 'pdf')
-  );
-
-create policy "authenticated users can read own verification docs"
-  on storage.objects for select
-  to authenticated
-  using (bucket_id = 'verification-documents' and auth.uid()::text = (storage.foldername(name))[1]);

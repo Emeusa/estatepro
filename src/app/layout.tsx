@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Playfair_Display } from "next/font/google";
 
+import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
 
 import "./globals.css";
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body suppressHydrationWarning>
         <Header />
         <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+        <Footer />
       </body>
     </html>
   );

@@ -19,7 +19,7 @@ type DatabaseUser = {
 type DatabaseAgent = {
   id: string;
   verification_status: AgentProfile["verificationStatus"];
-  verification_documents: string[];
+  nin_number: string | null;
   is_blocked: boolean;
   trial_ends_at: string;
 };
@@ -64,7 +64,7 @@ export function toAgentProfile(row: DatabaseAgent): AgentProfile {
   return {
     id: row.id,
     verificationStatus: row.verification_status,
-    verificationDocuments: row.verification_documents ?? [],
+    ninNumber: row.nin_number ?? null,
     isBlocked: row.is_blocked,
     trialEndsAt: row.trial_ends_at
   };

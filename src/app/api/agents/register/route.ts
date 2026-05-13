@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { createAgentAccount } from "@/modules/agents/agent.service";
 
 function getFriendlyMessage(error: unknown) {
@@ -20,6 +21,10 @@ function getFriendlyMessage(error: unknown) {
 
     if (issue.path.includes("phone")) {
       return "Enter a valid phone number.";
+    }
+
+    if (issue.path.includes("ninNumber")) {
+      return "Your NIN must be exactly 11 digits.";
     }
 
     return "We could not create the agent account. Please check your details and try again.";
@@ -67,10 +72,19 @@ function getFriendlyMessage(error: unknown) {
     return "Enter a valid phone number.";
   }
 
+  if (message.includes("nin")) {
+    return error.message;
+  }
+
   return `Agent account creation failed: ${error.message}`;
 }
 
 export async function POST(request: NextRequest) {
+  const limited = enforceRateLimit(request, "agent-register");
+  if (limited) {
+    return limited;
+  }
+
   try {
     const body = await request.json();
     const result = await createAgentAccount(body);

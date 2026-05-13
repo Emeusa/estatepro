@@ -102,6 +102,7 @@ export const listingInputSchema = listingInputBaseSchema.superRefine(validateAva
 export const listingUpdateSchema = listingInputBaseSchema.partial().superRefine(validateAvailability);
 
 export const listingFilterSchema = z.object({
+  keyword: z.string().trim().max(120).optional(),
   location: z.string().optional(),
   state: z.string().optional(),
   city: z.string().optional(),

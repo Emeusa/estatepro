@@ -6,7 +6,6 @@ import { FormEvent, useState } from "react";
 import { ApiRequestError, apiRequest } from "@/lib/api";
 import { getFriendlyAuthMessage } from "@/lib/auth-messages";
 import { supabase } from "@/lib/supabase/client";
-import { uploadVerificationDocuments } from "@/lib/uploads";
 
 type AccountResponse = {
   user: {
@@ -247,9 +246,12 @@ export function AgentRegisterForm() {
 
     const form = new FormData(event.currentTarget);
     const email = form.get("email")?.toString().trim() ?? "";
-    const documentFiles = form.getAll("verificationDocuments").filter(
-      (value): value is File => value instanceof File && value.size > 0
-    );
+    const ninNumber = form.get("ninNumber")?.toString().trim() ?? "";
+    if (!/^\d{11}$/.test(ninNumber)) {
+      setMessage("Your NIN must be exactly 11 digits.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -261,21 +263,10 @@ export function AgentRegisterForm() {
           password,
           fullName: form.get("fullName"),
           phone: form.get("phone"),
-          verificationDocuments: []
+          ninNumber
         })
       });
       await signIn(email, password);
-      const uploadedDocuments = documentFiles.length
-        ? await uploadVerificationDocuments(documentFiles)
-        : [];
-      const token = await getAccessToken();
-      if (uploadedDocuments.length) {
-        await apiRequest("/api/agents/me/documents", {
-          method: "PATCH",
-          headers: { Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ verificationDocuments: uploadedDocuments })
-        });
-      }
       await redirectByRole();
     } catch (error) {
       if (error instanceof ApiRequestError) {
@@ -295,6 +286,7 @@ export function AgentRegisterForm() {
       <input className="input" name="fullName" placeholder="Full name" />
       <input className="input" name="email" placeholder="Email" />
       <input className="input" name="phone" placeholder="Phone e.g. 08031234567" />
+      <input className="input" name="ninNumber" inputMode="numeric" maxLength={11} placeholder="NIN number (11 digits)" />
       <PasswordField name="password" placeholder="Password" value={password} onChange={setPassword} />
       <PasswordField
         name="confirmPassword"
@@ -302,7 +294,6 @@ export function AgentRegisterForm() {
         value={confirmPassword}
         onChange={setConfirmPassword}
       />
-      <input className="input" name="verificationDocuments" type="file" multiple accept="image/*,application/pdf" />
       <button className="button-primary inline-flex w-full items-center justify-center gap-2" disabled={isSubmitting}>
         {isSubmitting ? <ButtonSpinner /> : null}
         {isSubmitting ? "Creating agent account..." : "Create agent account"}

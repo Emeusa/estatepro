@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const data = await getPublicListings({
+      keyword: searchParams.get("q") ?? undefined,
       location: searchParams.get("location") ?? undefined,
       state: searchParams.get("state") ?? undefined,
       city: searchParams.get("city") ?? undefined,

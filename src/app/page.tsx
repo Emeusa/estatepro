@@ -9,6 +9,7 @@ type Props = {
 export default async function HomePage({ searchParams }: Props) {
   const params = await searchParams;
   const listings = await getPublicListings({
+    keyword: typeof params.q === "string" ? params.q : undefined,
     state: typeof params.state === "string" ? params.state : undefined,
     city: typeof params.city === "string" ? params.city : undefined,
     maxPrice: typeof params.maxPrice === "string" ? Number(params.maxPrice) : undefined,
@@ -25,8 +26,8 @@ export default async function HomePage({ searchParams }: Props) {
           backgroundSize: "cover"
         }}
       >
-        <div className="absolute inset-0 bg-stone-950/85 mix-blend-multiply" aria-hidden="true" />
-        <div className="absolute inset-0 bg-slate-950/84" aria-hidden="true" />
+        <div className="absolute inset-0 bg-stone-950/75 mix-blend-multiply" aria-hidden="true" />
+        <div className="absolute inset-0 bg-slate-950/83" aria-hidden="true" />
         <div className="relative">
           <p className="text-[clamp(0.78rem,2.7vw,1.125rem)] font-semibold uppercase tracking-[0.24em] text-amber-200 sm:tracking-[0.34em]">
             Property search
@@ -48,6 +49,7 @@ export default async function HomePage({ searchParams }: Props) {
         </div>
       </section>
       <FilterBar
+        initialKeyword={typeof params.q === "string" ? params.q : undefined}
         initialState={typeof params.state === "string" ? params.state : undefined}
         initialCity={typeof params.city === "string" ? params.city : undefined}
         initialMaxPrice={typeof params.maxPrice === "string" ? Number(params.maxPrice) : undefined}
