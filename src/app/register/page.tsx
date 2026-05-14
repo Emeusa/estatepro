@@ -1,4 +1,14 @@
+import type { Metadata } from "next";
+
 import { ClientRegisterForm } from "@/components/forms/auth-forms";
+
+export const metadata: Metadata = {
+  title: "Create Account",
+  robots: {
+    index: false,
+    follow: false
+  }
+};
 
 export default function RegisterPage() {
   return (

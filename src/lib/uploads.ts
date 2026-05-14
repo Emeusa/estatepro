@@ -1,6 +1,7 @@
 "use client";
 
 import { compressImage } from "@/lib/image";
+import { MAX_LISTING_IMAGES, MAX_LISTING_IMAGE_BYTES, MAX_LISTING_IMAGE_MB } from "@/lib/image-limits";
 import { supabase } from "@/lib/supabase/client";
 
 async function requireUserId() {
@@ -28,8 +29,13 @@ async function upload(bucket: string, path: string, file: File) {
 
 export async function uploadListingImages(files: File[]) {
   const userId = await requireUserId();
+  const oversizedFile = files.find((file) => file.size > MAX_LISTING_IMAGE_BYTES);
 
-  const uploads = files.slice(0, 12).map(async (file, index) => {
+  if (oversizedFile) {
+    throw new Error(`Each property image must be ${MAX_LISTING_IMAGE_MB} MB or less.`);
+  }
+
+  const uploads = files.slice(0, MAX_LISTING_IMAGES).map(async (file, index) => {
     const optimized = await compressImage(file);
     const path = `${userId}/${crypto.randomUUID()}-${index}.jpg`;
     await upload("listing-images", path, optimized);

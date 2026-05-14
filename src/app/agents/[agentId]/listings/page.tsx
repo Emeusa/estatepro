@@ -1,16 +1,62 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 
 import { VerifiedAgentName } from "@/components/agents/verified-agent-name";
 import { ListingGrid } from "@/components/listings/listing-grid";
+import { SITE_NAME } from "@/lib/seo";
 import { getPublicAgentListings } from "@/modules/listings/listing.service";
 
 type Props = {
   params: Promise<{ agentId: string }>;
 };
 
+const getAgentListingsForPage = cache(getPublicAgentListings);
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { agentId } = await params;
+  const data = await getAgentListingsForPage(agentId);
+
+  if (!data) {
+    return {
+      title: {
+        absolute: `Agent Properties Not Found | ${SITE_NAME}`
+      },
+      robots: {
+        index: false,
+        follow: false
+      }
+    };
+  }
+
+  const title = `Properties from ${data.agent.fullName} | ${SITE_NAME}`;
+  const description = `Browse active verified property listings from ${data.agent.fullName} on ${SITE_NAME}.`;
+
+  return {
+    title: {
+      absolute: title
+    },
+    description,
+    alternates: {
+      canonical: `/agents/${agentId}/listings`
+    },
+    openGraph: {
+      title,
+      description,
+      url: `/agents/${agentId}/listings`,
+      type: "website"
+    },
+    twitter: {
+      card: "summary",
+      title,
+      description
+    }
+  };
+}
+
 export default async function AgentListingsPage({ params }: Props) {
   const { agentId } = await params;
-  const data = await getPublicAgentListings(agentId);
+  const data = await getAgentListingsForPage(agentId);
 
   if (!data) {
     notFound();

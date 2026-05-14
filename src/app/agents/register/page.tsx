@@ -1,4 +1,14 @@
+import type { Metadata } from "next";
+
 import { AgentRegisterForm } from "@/components/forms/auth-forms";
+
+export const metadata: Metadata = {
+  title: "Agent Registration",
+  robots: {
+    index: false,
+    follow: false
+  }
+};
 
 export default function AgentRegisterPage() {
   return (

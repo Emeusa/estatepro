@@ -3,6 +3,8 @@ import { toNameCase } from "@/lib/format";
 import { toListingRecord } from "@/lib/supabase-mappers";
 import { ListingCategory, ListingFilters, ListingRecord, PaginatedResponse, PropertyType, PublicAgentSummary } from "@/lib/types";
 
+const PUBLIC_FEED_LISTINGS_SOURCE = "public_feed_listings";
+
 type KeywordFilters = {
   state?: string;
   propertyType?: PropertyType;
@@ -75,7 +77,7 @@ export async function listPublicListings(
   const keywordFilters = parseKeywordFilters(filters.keyword);
 
   let query = supabase
-    .from("public_listings")
+    .from(PUBLIC_FEED_LISTINGS_SOURCE)
     .select("*")
     .order("created_at", { ascending: false })
     .limit(filters.limit ?? 12);
@@ -106,7 +108,7 @@ export async function listPublicListings(
   }
   if (filters.cursor) {
     const { data: cursorRow } = await supabase
-      .from("public_listings")
+      .from(PUBLIC_FEED_LISTINGS_SOURCE)
       .select("created_at")
       .eq("id", filters.cursor)
       .single();

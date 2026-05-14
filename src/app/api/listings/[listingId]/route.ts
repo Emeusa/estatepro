@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 
 import { requireAuth, requireRole } from "@/lib/auth";
+import { MAX_LISTING_IMAGES } from "@/lib/image-limits";
 import {
   ensureAgentOwnsListing,
   getPublicListingDetails,
@@ -22,6 +23,8 @@ function mapListingErrors(error: ZodError) {
       fields.images =
         issue.code === "too_small"
           ? "Upload at least one property image."
+          : issue.code === "too_big"
+            ? `Upload no more than ${MAX_LISTING_IMAGES} property images.`
           : "Images must be uploaded through this platform.";
     } else if (path === "price") {
       fields.price = "Enter a valid property price.";

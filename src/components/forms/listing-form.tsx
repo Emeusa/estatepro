@@ -3,6 +3,7 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
 import { ApiRequestError, apiRequest } from "@/lib/api";
+import { MAX_LISTING_IMAGES, MAX_LISTING_IMAGE_BYTES, MAX_LISTING_IMAGE_MB } from "@/lib/image-limits";
 import { AVAILABILITY_LABELS, CATEGORY_AVAILABILITY, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
 import { getLgasForState, NIGERIA_STATES } from "@/lib/nigeria-locations";
 import { ListingCategory, ListingRecord } from "@/lib/types";
@@ -61,14 +62,33 @@ export function ListingForm({ token, listing, onSaved }: Props) {
   }
 
   function onImageChange(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []).slice(0, 12);
-    setSelectedFiles(files);
+    const files = Array.from(event.target.files ?? []);
+    const oversizedFile = files.find((file) => file.size > MAX_LISTING_IMAGE_BYTES);
+
+    if (oversizedFile) {
+      event.target.value = "";
+      setSelectedFiles([]);
+      setPreviewUrls([]);
+      setUploadThumbnailIndex(0);
+      setFieldErrors((current) => ({
+        ...current,
+        images: `Each property image must be ${MAX_LISTING_IMAGE_MB} MB or less.`
+      }));
+      return;
+    }
+
+    const acceptedFiles = files.slice(0, MAX_LISTING_IMAGES);
     setUploadThumbnailIndex(0);
     setFieldErrors((current) => {
       const next = { ...current };
-      delete next.images;
+      if (files.length > MAX_LISTING_IMAGES) {
+        next.images = `Only the first ${MAX_LISTING_IMAGES} images will be uploaded.`;
+      } else {
+        delete next.images;
+      }
       return next;
     });
+    setSelectedFiles(acceptedFiles);
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -79,7 +99,10 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     setIsSubmitting(true);
     const form = new FormData(formElement);
     const imageFiles = selectedFiles.filter((file) => file.size > 0);
-    const orderedExistingImages = moveToFront(listing?.imageUrls ?? [], existingThumbnailIndex);
+    const orderedExistingImages = moveToFront(listing?.imageUrls ?? [], existingThumbnailIndex).slice(
+      0,
+      MAX_LISTING_IMAGES
+    );
     const payload = {
       title: form.get("title"),
       description: form.get("description"),
@@ -201,6 +224,9 @@ export function ListingForm({ token, listing, onSaved }: Props) {
       </div>
       <div>
         <input className="input" name="images" type="file" multiple accept="image/*" onChange={onImageChange} />
+        <p className="mt-1 text-xs text-slate-500">
+          Upload up to {MAX_LISTING_IMAGES} images. Each image must be {MAX_LISTING_IMAGE_MB} MB or less.
+        </p>
         {fieldErrors.images ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.images}</p> : null}
       </div>
       {previewUrls.length ? (

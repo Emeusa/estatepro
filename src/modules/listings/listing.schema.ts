@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-import { toTitleCase } from "@/lib/format";
+import { normalizeListingTitle } from "@/lib/format";
+import { MAX_LISTING_IMAGES } from "@/lib/image-limits";
 import { isNigeriaLga, isNigeriaState } from "@/lib/nigeria-locations";
 import { normalizePhone, sanitizeText, slugifyLocation } from "@/lib/sanitize";
 
@@ -55,7 +56,7 @@ const locationSchema = z
   }));
 
 const listingInputBaseSchema = z.object({
-  title: z.string().min(8).max(120).transform((value) => toTitleCase(sanitizeText(value))),
+  title: z.string().min(8).max(120).transform((value) => normalizeListingTitle(sanitizeText(value))),
   description: z.string().min(20).max(1200).transform(sanitizeText),
   price: z.number().int().positive().max(5000000000),
   propertyType: z.enum(["apartment", "duplex", "land", "office", "shop"]),
@@ -68,7 +69,7 @@ const listingInputBaseSchema = z.object({
       })
     )
     .min(1)
-    .max(12),
+    .max(MAX_LISTING_IMAGES),
   contactPhone: z.string().min(10).max(20).transform(normalizePhone),
   contactWhatsapp: z.string().min(10).max(20).transform(normalizePhone),
   location: locationSchema

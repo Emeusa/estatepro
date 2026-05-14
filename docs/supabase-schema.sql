@@ -94,6 +94,30 @@ create index if not exists listings_title_search_idx
 create index if not exists listings_keyword_category_idx
   on public.listings (property_type, listing_category, status, created_at desc);
 
+create index if not exists listings_feed_availability_idx
+  on public.listings (availability, status, created_at desc);
+
+create index if not exists listings_feed_category_idx
+  on public.listings (availability, property_type, listing_category, status, created_at desc);
+
+create index if not exists listings_location_state_idx
+  on public.listings ((location->>'state'));
+
+create index if not exists listings_location_city_idx
+  on public.listings ((location->>'city'));
+
+create index if not exists listings_location_slug_idx
+  on public.listings ((location->>'slug'));
+
+create index if not exists listings_feed_state_idx
+  on public.listings (availability, status, (location->>'state'), created_at desc);
+
+create index if not exists listings_feed_state_city_idx
+  on public.listings (availability, status, (location->>'state'), (location->>'city'), created_at desc);
+
+create index if not exists listings_feed_price_idx
+  on public.listings (availability, status, price, created_at desc);
+
 create index if not exists agents_public_visibility_idx
   on public.agents (verification_status, is_blocked, id);
 
@@ -107,6 +131,16 @@ from public.listings
 join public.agents
   on agents.id = listings.agent_id
 where listings.status = 'active'
+  and agents.verification_status = 'approved'
+  and agents.is_blocked = false;
+
+create or replace view public.public_feed_listings as
+select listings.*
+from public.listings
+join public.agents
+  on agents.id = listings.agent_id
+where listings.status = 'active'
+  and listings.availability = 'available'
   and agents.verification_status = 'approved'
   and agents.is_blocked = false;
 

@@ -20,6 +20,15 @@ function capitalizeWord(value: string) {
   return value ? `${value[0].toUpperCase()}${value.slice(1).toLowerCase()}` : value;
 }
 
+const listingTitleCorrections: Array<[RegExp, string]> = [
+  [/\bbed\s+room\b/gi, "bedroom"],
+  [/\bselfcontain\b/gi, "self contain"],
+  [/\btow\b/gi, "two"],
+  [/\bbedrom\b/gi, "bedroom"],
+  [/\bappartment\b/gi, "apartment"],
+  [/\bduplez\b/gi, "duplex"]
+];
+
 export function toTitleCase(value: string) {
   return value
     .trim()
@@ -31,6 +40,15 @@ export function toTitleCase(value: string) {
 
 export function toNameCase(value: string) {
   return toTitleCase(value);
+}
+
+export function normalizeListingTitle(value: string) {
+  const corrected = listingTitleCorrections.reduce(
+    (title, [pattern, replacement]) => title.replace(pattern, replacement),
+    value.trim().replace(/\s+/g, " ")
+  );
+
+  return toTitleCase(corrected);
 }
 
 export function whatsappLink(phone: string, title: string) {

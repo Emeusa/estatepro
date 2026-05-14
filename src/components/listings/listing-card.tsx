@@ -20,7 +20,8 @@ export function ListingCard({ listing }: Props) {
           alt={listing.title}
           fill
           className="object-cover"
-          sizes="(max-width: 768px) 100vw, 33vw"
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
+          quality={70}
         />
         {unavailableBadge ? (
           <span className="absolute left-3 top-3 rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white shadow-sm">

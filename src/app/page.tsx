@@ -1,6 +1,32 @@
+import type { Metadata } from "next";
+
 import { FilterBar } from "@/components/listings/filter-bar";
 import { ListingGrid } from "@/components/listings/listing-grid";
+import { DEFAULT_SITE_DESCRIPTION, SITE_NAME } from "@/lib/seo";
 import { getPublicListings } from "@/modules/listings/listing.service";
+
+const homeTitle = `Verified Property Listings in Nigeria | ${SITE_NAME}`;
+
+export const metadata: Metadata = {
+  title: {
+    absolute: homeTitle
+  },
+  description: DEFAULT_SITE_DESCRIPTION,
+  alternates: {
+    canonical: "/"
+  },
+  openGraph: {
+    title: homeTitle,
+    description: DEFAULT_SITE_DESCRIPTION,
+    url: "/",
+    type: "website"
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: homeTitle,
+    description: DEFAULT_SITE_DESCRIPTION
+  }
+};
 
 type Props = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;

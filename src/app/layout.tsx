@@ -3,6 +3,7 @@ import { Inter, Playfair_Display } from "next/font/google";
 
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
+import { DEFAULT_SITE_DESCRIPTION, getSiteUrl, SITE_NAME } from "@/lib/seo";
 
 import "./globals.css";
 
@@ -19,8 +20,23 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "EstatePro",
-  description: "Fast and mobile-first property listing marketplace.",
+  metadataBase: getSiteUrl(),
+  title: {
+    default: SITE_NAME,
+    template: `%s | ${SITE_NAME}`
+  },
+  description: DEFAULT_SITE_DESCRIPTION,
+  openGraph: {
+    title: SITE_NAME,
+    description: DEFAULT_SITE_DESCRIPTION,
+    siteName: SITE_NAME,
+    type: "website"
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_NAME,
+    description: DEFAULT_SITE_DESCRIPTION
+  },
   icons: {
     icon: "/favicon.png",
     shortcut: "/favicon.png",

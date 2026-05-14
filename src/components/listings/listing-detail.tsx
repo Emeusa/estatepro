@@ -19,7 +19,14 @@ export function ListingDetail({ details }: Props) {
       <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
       <div className="space-y-4">
         <div className="relative h-72 overflow-hidden rounded-3xl bg-stone-200 md:h-[28rem]">
-          <Image src={listing.imageUrls[0]} alt={listing.title} fill className="object-cover" />
+          <Image
+            src={listing.imageUrls[0]}
+            alt={listing.title}
+            fill
+            className="object-cover"
+            sizes="(max-width: 1024px) 100vw, 780px"
+            quality={78}
+          />
           {unavailableBadge ? (
             <span className="absolute left-4 top-4 rounded-full bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm">
               {unavailableBadge}
@@ -29,7 +36,14 @@ export function ListingDetail({ details }: Props) {
         <div className="grid gap-3 sm:grid-cols-3">
           {listing.imageUrls.slice(1, 4).map((imageUrl) => (
             <div key={imageUrl} className="relative h-28 overflow-hidden rounded-2xl bg-stone-200">
-              <Image src={imageUrl} alt={listing.title} fill className="object-cover" />
+              <Image
+                src={imageUrl}
+                alt={listing.title}
+                fill
+                className="object-cover"
+                sizes="(max-width: 640px) 100vw, 240px"
+                quality={70}
+              />
             </div>
           ))}
         </div>

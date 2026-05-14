@@ -1,4 +1,14 @@
+import type { Metadata } from "next";
+
 import { LoginForm } from "@/components/forms/auth-forms";
+
+export const metadata: Metadata = {
+  title: "Agent Login",
+  robots: {
+    index: false,
+    follow: false
+  }
+};
 
 export default function AgentLoginPage() {
   return (
