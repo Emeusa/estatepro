@@ -13,8 +13,8 @@ import {
   setVerificationStatus,
   updateUserProfile
 } from "@/modules/agents/agent.repository";
-import { AdminAgentReview } from "@/lib/types";
-import { getListingsByAgentIds } from "@/modules/listings/listing.service";
+import { AdminAgentDetails, AdminAgentReview, AdminAgentSummary } from "@/lib/types";
+import { getListingCountsByAgentIds, getListingsByAgentIds } from "@/modules/listings/listing.service";
 
 export async function createAgentAccount(input: unknown) {
   return registerAgent(agentRegistrationSchema.parse(input));
@@ -44,6 +44,26 @@ export async function getAgentsForAdmin() {
   return listAgentsForAdmin();
 }
 
+export async function getAgentSummariesForAdmin(): Promise<AdminAgentSummary[]> {
+  const agents = await listAgentsForAdmin();
+  const agentIds = agents.map((agent) => agent.id);
+  const [users, listingCounts] = await Promise.all([
+    listAgentUsersForAdmin(agentIds),
+    getListingCountsByAgentIds(agentIds)
+  ]);
+
+  return agents
+    .map((agent) => {
+      const user = users.find((candidate) => candidate.id === agent.id);
+      if (!user) {
+        return null;
+      }
+
+      return { user, agent, listingCount: listingCounts.get(agent.id) ?? 0 };
+    })
+    .filter((summary): summary is AdminAgentSummary => summary !== null);
+}
+
 export async function getAgentReviewsForAdmin(): Promise<AdminAgentReview[]> {
   const agents = await listAgentsForAdmin();
   const agentIds = agents.map((agent) => agent.id);
@@ -66,6 +86,26 @@ export async function getAgentReviewsForAdmin(): Promise<AdminAgentReview[]> {
       };
     })
     .filter((review): review is AdminAgentReview => review !== null);
+}
+
+export async function getAgentReviewForAdmin(agentId: string): Promise<AdminAgentDetails | null> {
+  const [{ agent, subscription }, user, listings] = await Promise.all([
+    getAgentProfile(agentId),
+    getUserProfile(agentId),
+    getListingsByAgentIds([agentId])
+  ]);
+
+  if (!agent || !user || user.role !== "agent") {
+    return null;
+  }
+
+  return {
+    user,
+    agent,
+    listingCount: listings.length,
+    subscription: subscription ?? null,
+    listings
+  };
 }
 
 export async function updateAgentVerification(

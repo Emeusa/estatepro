@@ -24,7 +24,13 @@ const listingTitleCorrections: Array<[RegExp, string]> = [
   [/\bbed\s+room\b/gi, "bedroom"],
   [/\bselfcontain\b/gi, "self contain"],
   [/\btow\b/gi, "two"],
+  [/\btree\b/gi, "three"],
+  [/\bther\b/gi, "three"],
+  [/\bthre\b/gi, "three"],
   [/\bbedrom\b/gi, "bedroom"],
+  [/\bapartmemts\b/gi, "apartments"],
+  [/\bapartmemt\b/gi, "apartment"],
+  [/\bappartments\b/gi, "apartments"],
   [/\bappartment\b/gi, "apartment"],
   [/\bduplez\b/gi, "duplex"]
 ];

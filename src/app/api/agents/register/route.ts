@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 
-import { enforceRateLimit } from "@/lib/rate-limit";
+import { assertBotProtection, botProtectionSchema } from "@/lib/security/bot";
+import { captureServerError } from "@/lib/security/logger";
+import { getClientIp } from "@/lib/security/request";
+import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
+import { agentRegistrationRequestSchema } from "@/modules/agents/agent.schema";
 import { createAgentAccount } from "@/modules/agents/agent.service";
 
 function getFriendlyMessage(error: unknown) {
@@ -80,16 +84,24 @@ function getFriendlyMessage(error: unknown) {
 }
 
 export async function POST(request: NextRequest) {
-  const limited = enforceRateLimit(request, "agent-register");
-  if (limited) {
-    return limited;
-  }
-
   try {
-    const body = await request.json();
-    const result = await createAgentAccount(body);
-    return NextResponse.json(result, { status: 201 });
+    const body = agentRegistrationRequestSchema.parse(await request.json());
+    const botFields = botProtectionSchema.parse(body);
+    const limited = await rateLimit(request, RATE_LIMITS.agentRegister, getClientIp(request));
+    if (!limited.allowed) {
+      return limited.response;
+    }
+    await assertBotProtection(request, botFields, "agent_registration");
+    const result = await createAgentAccount({
+      email: body.email,
+      password: body.password,
+      fullName: body.fullName,
+      phone: body.phone,
+      ninNumber: body.ninNumber
+    });
+    return withRateLimitHeaders(NextResponse.json(result, { status: 201 }), limited.headers);
   } catch (error) {
+    captureServerError(error, { route: "/api/agents/register" });
     return NextResponse.json(
       { message: getFriendlyMessage(error) },
       { status: 400 }

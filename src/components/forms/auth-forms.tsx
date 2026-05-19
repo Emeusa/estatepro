@@ -6,6 +6,7 @@ import { FormEvent, useState } from "react";
 import { ApiRequestError, apiRequest } from "@/lib/api";
 import { getFriendlyAuthMessage } from "@/lib/auth-messages";
 import { supabase } from "@/lib/supabase/client";
+import { TurnstileFields, readBotFields } from "@/components/security/turnstile-fields";
 
 type AccountResponse = {
   user: {
@@ -66,6 +67,10 @@ function ButtonSpinner() {
   );
 }
 
+function normalizeEmailInput(value: string) {
+  return value.trim().toLowerCase();
+}
+
 async function getAccessToken() {
   const {
     data: { session }
@@ -112,6 +117,29 @@ async function signIn(email: string, password: string) {
   }
 }
 
+async function signInWithBotFields(email: string, password: string, botFields: ReturnType<typeof readBotFields>) {
+  const response = await apiRequest<{
+    session: { accessToken: string; refreshToken: string };
+  }>("/api/auth/login", {
+    method: "POST",
+    retries: 0,
+    body: JSON.stringify({
+      email,
+      password,
+      ...botFields
+    })
+  });
+
+  const { error } = await supabase.auth.setSession({
+    access_token: response.session.accessToken,
+    refresh_token: response.session.refreshToken
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
 export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -125,9 +153,10 @@ export function LoginForm() {
     }
     setMessage("");
     setIsSubmitting(true);
+    const form = new FormData(event.currentTarget);
 
     try {
-      await signIn(email.trim(), password);
+      await signInWithBotFields(normalizeEmailInput(email), password, readBotFields(form));
       await redirectByRole();
     } catch (error) {
       setMessage(getFriendlyAuthMessage(error, "We could not sign you in. Please try again."));
@@ -137,8 +166,15 @@ export function LoginForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4 rounded-3xl bg-white p-6 shadow-sm">
-      <input className="input" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <input
+        className="input"
+        placeholder="Email"
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value.toLowerCase())}
+      />
       <PasswordField name="password" placeholder="Password" value={password} onChange={setPassword} />
+      <TurnstileFields />
       <button className="button-primary inline-flex w-full items-center justify-center gap-2" disabled={isSubmitting}>
         {isSubmitting ? <ButtonSpinner /> : null}
         {isSubmitting ? "Logging in..." : "Login"}
@@ -172,7 +208,7 @@ export function ClientRegisterForm() {
     }
 
     const form = new FormData(event.currentTarget);
-    const email = form.get("email")?.toString().trim() ?? "";
+    const email = normalizeEmailInput(form.get("email")?.toString() ?? "");
     setIsSubmitting(true);
 
     try {
@@ -183,7 +219,8 @@ export function ClientRegisterForm() {
           email,
           password,
           fullName: undefined,
-          phone: form.get("phone")?.toString().trim() || undefined
+          phone: form.get("phone")?.toString().trim() || undefined,
+          ...readBotFields(form)
         })
       });
       await signIn(email, password);
@@ -197,7 +234,15 @@ export function ClientRegisterForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4 rounded-3xl bg-white p-6 shadow-sm">
-      <input className="input" name="email" placeholder="Email" />
+      <input
+        className="input"
+        name="email"
+        placeholder="Email"
+        type="email"
+        onChange={(e) => {
+          e.currentTarget.value = e.currentTarget.value.toLowerCase();
+        }}
+      />
       <input className="input" name="phone" placeholder="Phone number (optional)" />
       <PasswordField name="password" placeholder="Password" value={password} onChange={setPassword} />
       <PasswordField
@@ -206,6 +251,7 @@ export function ClientRegisterForm() {
         value={confirmPassword}
         onChange={setConfirmPassword}
       />
+      <TurnstileFields />
       <button className="button-primary inline-flex w-full items-center justify-center gap-2" disabled={isSubmitting}>
         {isSubmitting ? <ButtonSpinner /> : null}
         {isSubmitting ? "Creating account..." : "Create account"}
@@ -245,7 +291,7 @@ export function AgentRegisterForm() {
     }
 
     const form = new FormData(event.currentTarget);
-    const email = form.get("email")?.toString().trim() ?? "";
+    const email = normalizeEmailInput(form.get("email")?.toString() ?? "");
     const ninNumber = form.get("ninNumber")?.toString().trim() ?? "";
     if (!/^\d{11}$/.test(ninNumber)) {
       setMessage("Your NIN must be exactly 11 digits.");
@@ -263,7 +309,8 @@ export function AgentRegisterForm() {
           password,
           fullName: form.get("fullName"),
           phone: form.get("phone"),
-          ninNumber
+          ninNumber,
+          ...readBotFields(form)
         })
       });
       await signIn(email, password);
@@ -284,7 +331,15 @@ export function AgentRegisterForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-4 rounded-3xl bg-white p-6 shadow-sm">
       <input className="input" name="fullName" placeholder="Full name" />
-      <input className="input" name="email" placeholder="Email" />
+      <input
+        className="input"
+        name="email"
+        placeholder="Email"
+        type="email"
+        onChange={(e) => {
+          e.currentTarget.value = e.currentTarget.value.toLowerCase();
+        }}
+      />
       <input className="input" name="phone" placeholder="Phone e.g. 08031234567" />
       <input className="input" name="ninNumber" inputMode="numeric" maxLength={11} placeholder="NIN number (11 digits)" />
       <PasswordField name="password" placeholder="Password" value={password} onChange={setPassword} />
@@ -294,6 +349,7 @@ export function AgentRegisterForm() {
         value={confirmPassword}
         onChange={setConfirmPassword}
       />
+      <TurnstileFields />
       <button className="button-primary inline-flex w-full items-center justify-center gap-2" disabled={isSubmitting}>
         {isSubmitting ? <ButtonSpinner /> : null}
         {isSubmitting ? "Creating agent account..." : "Create agent account"}

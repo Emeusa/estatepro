@@ -3,11 +3,19 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
 import { ApiRequestError, apiRequest } from "@/lib/api";
-import { MAX_LISTING_IMAGES, MAX_LISTING_IMAGE_BYTES, MAX_LISTING_IMAGE_MB } from "@/lib/image-limits";
+import {
+  isSupportedListingImageType,
+  MAX_LISTING_IMAGES,
+  MAX_LISTING_IMAGE_BYTES,
+  MAX_LISTING_IMAGE_MB,
+  SUPPORTED_LISTING_IMAGE_ACCEPT,
+  SUPPORTED_LISTING_IMAGE_LABEL
+} from "@/lib/image-limits";
 import { AVAILABILITY_LABELS, CATEGORY_AVAILABILITY, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
 import { getLgasForState, NIGERIA_STATES } from "@/lib/nigeria-locations";
 import { ListingCategory, ListingRecord } from "@/lib/types";
 import { uploadListingImages } from "@/lib/uploads";
+import { TurnstileFields, readBotFields } from "@/components/security/turnstile-fields";
 
 type Props = {
   token: string;
@@ -63,7 +71,20 @@ export function ListingForm({ token, listing, onSaved }: Props) {
 
   function onImageChange(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
+    const unsupportedFile = files.find((file) => !isSupportedListingImageType(file.type));
     const oversizedFile = files.find((file) => file.size > MAX_LISTING_IMAGE_BYTES);
+
+    if (unsupportedFile) {
+      event.target.value = "";
+      setSelectedFiles([]);
+      setPreviewUrls([]);
+      setUploadThumbnailIndex(0);
+      setFieldErrors((current) => ({
+        ...current,
+        images: `Only ${SUPPORTED_LISTING_IMAGE_LABEL} images are supported.`
+      }));
+      return;
+    }
 
     if (oversizedFile) {
       event.target.value = "";
@@ -91,6 +112,42 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     setSelectedFiles(acceptedFiles);
   }
 
+  function getUploadFailureMessage(error: unknown) {
+    if (!(error instanceof Error)) {
+      return "Image upload failed. Please try again.";
+    }
+
+    const message = error.message.toLowerCase();
+
+    if (message.includes("logged in") || message.includes("session") || message.includes("jwt")) {
+      return "Your session expired. Log in again before uploading images.";
+    }
+
+    if (message.includes("bucket") || message.includes("not found")) {
+      return 'Storage bucket "listing-images" is not configured. Run the Supabase schema.';
+    }
+
+    if (
+      message.includes("row-level security") ||
+      message.includes("rls") ||
+      message.includes("policy") ||
+      message.includes("permission") ||
+      message.includes("unauthorized")
+    ) {
+      return "Storage upload is blocked by Supabase policy. Run the latest storage policies.";
+    }
+
+    if (message.includes("mime") || message.includes("type") || message.includes("format") || message.includes("not allowed")) {
+      return `This image format is not supported. Use ${SUPPORTED_LISTING_IMAGE_LABEL}.`;
+    }
+
+    if (message.includes("size") || message.includes("too large")) {
+      return `Each property image must be ${MAX_LISTING_IMAGE_MB} MB or less.`;
+    }
+
+    return error.message;
+  }
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formElement = event.currentTarget;
@@ -98,6 +155,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     setFieldErrors({});
     setIsSubmitting(true);
     const form = new FormData(formElement);
+    const botFields = readBotFields(form);
     const imageFiles = selectedFiles.filter((file) => file.size > 0);
     const orderedExistingImages = moveToFront(listing?.imageUrls ?? [], existingThumbnailIndex).slice(
       0,
@@ -117,16 +175,18 @@ export function ListingForm({ token, listing, onSaved }: Props) {
         state: form.get("state"),
         city: form.get("city"),
         area: form.get("area")
-      }
+      },
+      ...botFields
     };
 
     try {
       if (imageFiles.length) {
         try {
-          payload.imageUrls = await uploadListingImages(moveToFront(imageFiles, uploadThumbnailIndex));
+          payload.imageUrls = await uploadListingImages(moveToFront(imageFiles, uploadThumbnailIndex), token);
         } catch (error) {
-          setFieldErrors({ images: "Image upload failed. Supabase Storage may not be configured yet." });
-          setMessage(error instanceof Error ? error.message : "Image upload failed.");
+          const uploadMessage = getUploadFailureMessage(error);
+          setFieldErrors({ images: uploadMessage });
+          setMessage(uploadMessage);
           return;
         }
       }
@@ -165,7 +225,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
   }
 
   return (
-    <form key={formKey} onSubmit={onSubmit} className="grid gap-3 rounded-3xl bg-white p-5 shadow-sm">
+    <form key={formKey} onSubmit={onSubmit} className="grid gap-3 rounded-2xl bg-white p-4 shadow-sm sm:rounded-3xl sm:p-5">
       <div>
         <input className="input" name="title" defaultValue={listing?.title} placeholder="Listing title" />
         {fieldErrors.title ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.title}</p> : null}
@@ -223,9 +283,17 @@ export function ListingForm({ token, listing, onSaved }: Props) {
         </select>
       </div>
       <div>
-        <input className="input" name="images" type="file" multiple accept="image/*" onChange={onImageChange} />
+        <input
+          className="input"
+          name="images"
+          type="file"
+          multiple
+          accept={SUPPORTED_LISTING_IMAGE_ACCEPT}
+          onChange={onImageChange}
+        />
         <p className="mt-1 text-xs text-slate-500">
-          Upload up to {MAX_LISTING_IMAGES} images. Each image must be {MAX_LISTING_IMAGE_MB} MB or less.
+          Upload up to {MAX_LISTING_IMAGES} {SUPPORTED_LISTING_IMAGE_LABEL} images. Each image must be{" "}
+          {MAX_LISTING_IMAGE_MB} MB or less.
         </p>
         {fieldErrors.images ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.images}</p> : null}
       </div>
@@ -339,6 +407,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
           {fieldErrors.area ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.area}</p> : null}
         </div>
       </div>
+      <TurnstileFields />
       <button className="button-primary" disabled={isSubmitting}>
         {isSubmitting ? "Saving..." : "Save listing"}
       </button>

@@ -43,6 +43,26 @@ create table if not exists public.listings (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
+create table if not exists public.security_events (
+  id uuid primary key default gen_random_uuid(),
+  request_id text not null,
+  route text not null,
+  action text not null,
+  result text not null check (result in ('allowed', 'blocked', 'failed', 'success')),
+  user_id uuid references public.users (id) on delete set null,
+  ip_hash text,
+  user_agent text,
+  metadata jsonb not null default '{}',
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.agent_quota_overrides (
+  agent_id uuid primary key references public.users (id) on delete cascade,
+  daily_listing_limit integer not null default 20 check (daily_listing_limit between 0 and 500),
+  hourly_image_limit integer not null default 30 check (hourly_image_limit between 0 and 1000),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
 alter table public.listings
   add column if not exists listing_category text not null default 'for_sale';
 
@@ -125,6 +145,18 @@ create unique index if not exists agents_nin_number_unique_idx
   on public.agents (nin_number)
   where nin_number is not null;
 
+create index if not exists security_events_created_at_idx
+  on public.security_events (created_at desc);
+
+create index if not exists security_events_action_idx
+  on public.security_events (action, created_at desc);
+
+create index if not exists security_events_user_idx
+  on public.security_events (user_id, created_at desc);
+
+create index if not exists security_events_ip_hash_idx
+  on public.security_events (ip_hash, created_at desc);
+
 create or replace view public.public_listings as
 select listings.*
 from public.listings
@@ -148,6 +180,8 @@ alter table public.users enable row level security;
 alter table public.agents enable row level security;
 alter table public.subscriptions enable row level security;
 alter table public.listings enable row level security;
+alter table public.security_events enable row level security;
+alter table public.agent_quota_overrides enable row level security;
 
 drop policy if exists "users can read own row" on public.users;
 drop policy if exists "users can update own row" on public.users;
@@ -158,6 +192,9 @@ drop policy if exists "public can read active listings" on public.listings;
 drop policy if exists "agents can insert own listings" on public.listings;
 drop policy if exists "agents can update own listings" on public.listings;
 drop policy if exists "agents can delete own listings" on public.listings;
+drop policy if exists "admins can read security events" on public.security_events;
+drop policy if exists "admins can read quota overrides" on public.agent_quota_overrides;
+drop policy if exists "admins can manage quota overrides" on public.agent_quota_overrides;
 
 create policy "users can read own row"
   on public.users for select
@@ -238,6 +275,43 @@ create policy "agents can delete own listings"
     )
   );
 
+create policy "admins can read security events"
+  on public.security_events for select
+  using (
+    exists (
+      select 1 from public.users
+      where users.id = auth.uid()
+        and users.role = 'admin'
+    )
+  );
+
+create policy "admins can read quota overrides"
+  on public.agent_quota_overrides for select
+  using (
+    exists (
+      select 1 from public.users
+      where users.id = auth.uid()
+        and users.role = 'admin'
+    )
+  );
+
+create policy "admins can manage quota overrides"
+  on public.agent_quota_overrides for all
+  using (
+    exists (
+      select 1 from public.users
+      where users.id = auth.uid()
+        and users.role = 'admin'
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.users
+      where users.id = auth.uid()
+        and users.role = 'admin'
+    )
+  );
+
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'listing-images',
@@ -268,3 +342,29 @@ create policy "authenticated users can upload listing images"
 create policy "public can view listing images"
   on storage.objects for select
   using (bucket_id = 'listing-images');
+
+-- One-time repair for pending listings created before approved-agent auto-activation:
+-- update public.listings
+-- set status = 'active',
+--     updated_at = timezone('utc', now())
+-- from public.agents
+-- where agents.id = listings.agent_id
+--   and agents.verification_status = 'approved'
+--   and agents.is_blocked = false
+--   and listings.status = 'pending';
+
+-- One-time repair for known listing title typos created before expanded title normalization:
+-- update public.listings
+-- set title = regexp_replace(title, '\ytree\y', 'three', 'gi'),
+--     updated_at = timezone('utc', now())
+-- where title ~* '\ytree\y';
+--
+-- update public.listings
+-- set title = regexp_replace(title, '\yapartmemts\y', 'apartments', 'gi'),
+--     updated_at = timezone('utc', now())
+-- where title ~* '\yapartmemts\y';
+--
+-- update public.listings
+-- set title = regexp_replace(title, '\yapartmemt\y', 'apartment', 'gi'),
+--     updated_at = timezone('utc', now())
+-- where title ~* '\yapartmemt\y';

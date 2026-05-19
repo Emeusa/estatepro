@@ -59,8 +59,10 @@ export type ListingFilters = {
   location?: string;
   state?: string;
   city?: string;
+  minPrice?: number;
   maxPrice?: number;
   propertyType?: PropertyType;
+  listingCategory?: ListingCategory;
   cursor?: string;
   limit?: number;
 };
@@ -74,6 +76,17 @@ export type AdminAgentReview = {
   user: UserRecord;
   agent: AgentProfile;
   listings: ListingRecord[];
+};
+
+export type AdminAgentSummary = {
+  user: UserRecord;
+  agent: AgentProfile;
+  listingCount: number;
+};
+
+export type AdminAgentDetails = AdminAgentSummary & {
+  listings: ListingRecord[];
+  subscription: SubscriptionRecord | null;
 };
 
 export type PublicAgentSummary = {

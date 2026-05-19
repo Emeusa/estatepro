@@ -30,7 +30,7 @@ export async function apiRequest<T>(url: string, options: Options = {}) {
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        const error = new ApiRequestError(body.message ?? "Request failed");
+        const error = new ApiRequestError(body.message ?? body.error ?? "Request failed");
         error.status = response.status;
         if (body.fields && typeof body.fields === "object") {
           error.fields = body.fields as Record<string, string>;

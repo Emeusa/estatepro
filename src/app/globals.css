@@ -45,6 +45,35 @@
   .site-header {
     background:
       linear-gradient(180deg, #128f87 0%, #118e85 48%, #0f877f 100%);
+    box-shadow: 0 6px 16px rgba(7, 54, 51, 0.1);
+  }
+
+  .market-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.2rem;
+    color: #fffdf3;
+    font-size: 0.98rem;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    line-height: 1;
+    text-shadow:
+      0 1px 0 rgba(92, 64, 6, 0.78),
+      0 0 1px rgba(255, 216, 123, 0.92),
+      0 7px 14px rgba(4, 33, 32, 0.4);
+    transition:
+      transform 160ms ease,
+      color 160ms ease,
+      text-shadow 160ms ease;
+  }
+
+  .market-link:hover {
+    color: #fde68a;
+    transform: translateY(-1px);
+    text-shadow:
+      0 1px 0 rgba(78, 50, 0, 0.82),
+      0 0 4px rgba(255, 224, 143, 0.74),
+      0 8px 16px rgba(4, 33, 32, 0.44);
   }
 
   .brand-logo {
@@ -114,12 +143,12 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 2.55rem;
+    min-height: 2.32rem;
     border-radius: 999px;
     border: 1px solid rgba(255, 255, 255, 0.16);
     background: rgba(255, 255, 255, 0.08);
-    padding: 0.68rem 1rem;
-    font-size: 0.86rem;
+    padding: 0.58rem 0.9rem;
+    font-size: 0.82rem;
     font-weight: 600;
     line-height: 1;
     white-space: nowrap;

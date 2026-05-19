@@ -38,8 +38,10 @@ export default async function HomePage({ searchParams }: Props) {
     keyword: typeof params.q === "string" ? params.q : undefined,
     state: typeof params.state === "string" ? params.state : undefined,
     city: typeof params.city === "string" ? params.city : undefined,
+    minPrice: typeof params.minPrice === "string" ? Number(params.minPrice) : undefined,
     maxPrice: typeof params.maxPrice === "string" ? Number(params.maxPrice) : undefined,
-    propertyType: typeof params.propertyType === "string" ? params.propertyType : undefined
+    propertyType: typeof params.propertyType === "string" ? params.propertyType : undefined,
+    listingCategory: typeof params.listingCategory === "string" ? params.listingCategory : undefined
   });
 
   return (
@@ -58,30 +60,25 @@ export default async function HomePage({ searchParams }: Props) {
           <p className="text-[clamp(0.78rem,2.7vw,1.125rem)] font-semibold uppercase tracking-[0.24em] text-amber-200 sm:tracking-[0.34em]">
             Property search
           </p>
-          <h1
-            className="mx-auto mt-3 max-w-3xl text-[clamp(1.55rem,7.2vw,3rem)] font-semibold leading-tight tracking-tight text-amber-50 sm:mt-4"
-            style={{
-              WebkitTextStroke: "0.65px rgba(214, 171, 76, 0.48)",
-              textShadow:
-                "0 3px 18px rgba(0, 0, 0, 0.72), 0 1px 2px rgba(92, 61, 7, 0.58), 0 0 22px rgba(214, 171, 76, 0.18)"
-            }}
-          >
-            Discover verified homes and commercial spaces without the hassle of property hunting. We&apos;re available in your
-            locality
-          </h1>
           <p className="mx-auto mt-4 max-w-2xl text-[clamp(0.82rem,3.4vw,0.95rem)] leading-6 text-stone-100 sm:mt-5 sm:leading-7">
             Built for mobile-first browsing, low bandwidth, and fast contact with verified agents.
           </p>
+          <div className="mx-auto mt-6 max-w-6xl text-left sm:mt-8">
+            <FilterBar
+              initialKeyword={typeof params.q === "string" ? params.q : undefined}
+              initialState={typeof params.state === "string" ? params.state : undefined}
+              initialCity={typeof params.city === "string" ? params.city : undefined}
+              initialMinPrice={typeof params.minPrice === "string" ? Number(params.minPrice) : undefined}
+              initialMaxPrice={typeof params.maxPrice === "string" ? Number(params.maxPrice) : undefined}
+              initialType={typeof params.propertyType === "string" ? params.propertyType : undefined}
+              initialCategory={typeof params.listingCategory === "string" ? params.listingCategory : undefined}
+            />
+          </div>
         </div>
       </section>
-      <FilterBar
-        initialKeyword={typeof params.q === "string" ? params.q : undefined}
-        initialState={typeof params.state === "string" ? params.state : undefined}
-        initialCity={typeof params.city === "string" ? params.city : undefined}
-        initialMaxPrice={typeof params.maxPrice === "string" ? Number(params.maxPrice) : undefined}
-        initialType={typeof params.propertyType === "string" ? params.propertyType : undefined}
-      />
-      <ListingGrid listings={listings.items} />
+      <section id="search-results" className="scroll-mt-24">
+        <ListingGrid listings={listings.items} />
+      </section>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import {
   getPublicListingById,
   listAgentListings,
   listListingsByAgentIds,
+  listListingCountsByAgentIds,
   listListingsForAdmin,
   listPublicListings,
   listPublicListingsByAgent,
@@ -62,6 +63,10 @@ export async function getListingsByAgentIds(agentIds: string[]) {
   return listListingsByAgentIds(agentIds);
 }
 
+export async function getListingCountsByAgentIds(agentIds: string[]) {
+  return listListingCountsByAgentIds(agentIds);
+}
+
 export async function approvePendingListingsForAgent(agentId: string) {
   return activatePendingListingsForAgent(agentId);
 }
@@ -96,9 +101,10 @@ export async function ensureAgentOwnsListing(agentId: string, listingId: string)
 }
 
 export async function createAgentListing(agentId: string, input: unknown) {
-  await ensureAgentCanManageListings(agentId);
+  const agent = await ensureAgentCanManageListings(agentId);
   const payload = listingInputSchema.parse(input);
-  return createListing(agentId, payload);
+  const initialStatus = agent.verificationStatus === "approved" ? "active" : "pending";
+  return createListing(agentId, payload, initialStatus);
 }
 
 export async function updateAgentListing(agentId: string, listingId: string, input: unknown) {

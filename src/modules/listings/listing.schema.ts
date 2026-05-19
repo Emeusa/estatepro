@@ -73,7 +73,7 @@ const listingInputBaseSchema = z.object({
   contactPhone: z.string().min(10).max(20).transform(normalizePhone),
   contactWhatsapp: z.string().min(10).max(20).transform(normalizePhone),
   location: locationSchema
-});
+}).strict();
 
 function validateAvailability(
   value: { listingCategory?: "for_sale" | "for_rent" | "short_let"; availability?: "available" | "sold" | "rented" | "booked" },
@@ -108,10 +108,12 @@ export const listingFilterSchema = z.object({
   state: z.string().optional(),
   city: z.string().optional(),
   propertyType: z.enum(["apartment", "duplex", "land", "office", "shop"]).optional(),
+  listingCategory: z.enum(["for_sale", "for_rent", "short_let"]).optional(),
+  minPrice: z.coerce.number().int().positive().optional(),
   maxPrice: z.coerce.number().int().positive().optional(),
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(20).default(12)
-}).superRefine((value, context) => {
+}).strict().superRefine((value, context) => {
   if (value.state && !isNigeriaState(value.state)) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
@@ -131,4 +133,4 @@ export const listingFilterSchema = z.object({
 
 export const listingModerationSchema = z.object({
   status: z.enum(["pending", "active", "blocked"])
-});
+}).strict();

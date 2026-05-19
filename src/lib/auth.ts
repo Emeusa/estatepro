@@ -9,10 +9,16 @@ type AuthUser = {
   role: "agent" | "client" | "admin";
 };
 
+export class AuthError extends Error {
+  constructor(message: string, public status = 401) {
+    super(message);
+  }
+}
+
 function readBearerToken(request: NextRequest) {
   const header = request.headers.get("authorization");
   if (!header?.startsWith("Bearer ")) {
-    throw new Error("Missing bearer token");
+    throw new AuthError("Missing bearer token");
   }
 
   return header.replace("Bearer ", "").trim();
@@ -27,7 +33,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthUser> {
   } = await supabase.auth.getUser(token);
 
   if (error || !user?.email) {
-    throw new Error("Invalid authentication session.");
+    throw new AuthError("Invalid authentication session.");
   }
 
   const { data: profile, error: profileError } = await supabase
@@ -37,7 +43,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthUser> {
     .single();
 
   if (profileError || !profile?.role) {
-    throw new Error("Account profile was not found.");
+    throw new AuthError("Account profile was not found.", 403);
   }
 
   return {
@@ -50,6 +56,18 @@ export async function requireAuth(request: NextRequest): Promise<AuthUser> {
 
 export function requireRole(decoded: AuthUser, role: "admin" | "agent") {
   if (decoded.role !== role && !(role === "agent" && decoded.role === "admin")) {
-    throw new Error("Insufficient permissions");
+    throw new AuthError("Insufficient permissions", 403);
   }
+}
+
+export async function requireAdmin(request: NextRequest) {
+  const decoded = await requireAuth(request);
+  requireRole(decoded, "admin");
+  return decoded;
+}
+
+export async function requireAgent(request: NextRequest) {
+  const decoded = await requireAuth(request);
+  requireRole(decoded, "agent");
+  return decoded;
 }

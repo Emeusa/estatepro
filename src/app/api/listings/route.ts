@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 
-import { requireAuth, requireRole } from "@/lib/auth";
+import { requireAgent } from "@/lib/auth";
 import { MAX_LISTING_IMAGES } from "@/lib/image-limits";
+import { assertBotProtection, botProtectionSchema } from "@/lib/security/bot";
+import { captureServerError } from "@/lib/security/logger";
+import { getAgentDailyListingLimit } from "@/lib/security/quotas";
+import { RATE_LIMITS, rateLimitByIp, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
 import { createAgentListing, getPublicListings } from "@/modules/listings/listing.service";
 
 function mapListingErrors(error: ZodError) {
@@ -41,20 +45,28 @@ function mapListingErrors(error: ZodError) {
 
 export async function GET(request: NextRequest) {
   try {
+    const limited = await rateLimitByIp(request, RATE_LIMITS.publicRead);
+    if (!limited.allowed) {
+      return limited.response;
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const data = await getPublicListings({
       keyword: searchParams.get("q") ?? undefined,
       location: searchParams.get("location") ?? undefined,
       state: searchParams.get("state") ?? undefined,
       city: searchParams.get("city") ?? undefined,
+      minPrice: searchParams.get("minPrice") ?? undefined,
       maxPrice: searchParams.get("maxPrice") ?? undefined,
       propertyType: searchParams.get("propertyType") ?? undefined,
+      listingCategory: searchParams.get("listingCategory") ?? undefined,
       cursor: searchParams.get("cursor") ?? undefined,
       limit: searchParams.get("limit") ?? undefined
     });
 
-    return NextResponse.json(data);
+    return withRateLimitHeaders(NextResponse.json(data), limited.headers);
   } catch (error) {
+    captureServerError(error, { route: "/api/listings", method: "GET" });
     return NextResponse.json(
       { message: error instanceof Error ? error.message : "Could not load listings." },
       { status: 400 }
@@ -64,13 +76,27 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const decoded = await requireAuth(request);
-    requireRole(decoded, "agent");
+    const decoded = await requireAgent(request);
+    const dailyLimit = await getAgentDailyListingLimit(decoded.uid);
+    const limited = await rateLimit(
+      request,
+      { ...RATE_LIMITS.listingCreate, limit: dailyLimit },
+      decoded.uid,
+      decoded.uid
+    );
+    if (!limited.allowed) {
+      return limited.response;
+    }
 
     const body = await request.json();
-    const listing = await createAgentListing(decoded.uid, body);
+    await assertBotProtection(request, botProtectionSchema.parse(body), "listing_create", decoded.uid);
+    const { website, formStartedAt, turnstileToken, ...listingInput } = body as Record<string, unknown>;
+    void website;
+    void formStartedAt;
+    void turnstileToken;
+    const listing = await createAgentListing(decoded.uid, listingInput);
 
-    return NextResponse.json({ listing }, { status: 201 });
+    return withRateLimitHeaders(NextResponse.json({ listing }, { status: 201 }), limited.headers);
   } catch (error) {
     if (error instanceof ZodError) {
       return NextResponse.json(

@@ -1,7 +1,15 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { toNameCase } from "@/lib/format";
 import { toListingRecord } from "@/lib/supabase-mappers";
-import { ListingCategory, ListingFilters, ListingRecord, PaginatedResponse, PropertyType, PublicAgentSummary } from "@/lib/types";
+import {
+  ListingCategory,
+  ListingFilters,
+  ListingRecord,
+  ListingStatus,
+  PaginatedResponse,
+  PropertyType,
+  PublicAgentSummary
+} from "@/lib/types";
 
 const PUBLIC_FEED_LISTINGS_SOURCE = "public_feed_listings";
 
@@ -84,6 +92,7 @@ export async function listPublicListings(
 
   const stateFilter = filters.state ?? keywordFilters.state;
   const propertyTypeFilter = filters.propertyType ?? keywordFilters.propertyType;
+  const listingCategoryFilter = filters.listingCategory ?? keywordFilters.listingCategory;
 
   if (stateFilter) {
     query = query.eq("location->>state", stateFilter);
@@ -97,11 +106,14 @@ export async function listPublicListings(
   if (propertyTypeFilter) {
     query = query.eq("property_type", propertyTypeFilter);
   }
-  if (keywordFilters.listingCategory) {
-    query = query.eq("listing_category", keywordFilters.listingCategory);
+  if (listingCategoryFilter) {
+    query = query.eq("listing_category", listingCategoryFilter);
   }
   if (keywordFilters.titleKeyword) {
     query = query.ilike("title", `%${keywordFilters.titleKeyword}%`);
+  }
+  if (filters.minPrice) {
+    query = query.gte("price", filters.minPrice);
   }
   if (filters.maxPrice) {
     query = query.lte("price", filters.maxPrice);
@@ -229,6 +241,25 @@ export async function listListingsByAgentIds(agentIds: string[]) {
   return (data ?? []).map(toListingRecord);
 }
 
+export async function listListingCountsByAgentIds(agentIds: string[]) {
+  if (!agentIds.length) {
+    return new Map<string, number>();
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.from("listings").select("agent_id").in("agent_id", agentIds);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []).reduce((counts, row) => {
+    const current = counts.get(row.agent_id) ?? 0;
+    counts.set(row.agent_id, current + 1);
+    return counts;
+  }, new Map<string, number>());
+}
+
 export async function activatePendingListingsForAgent(agentId: string) {
   const supabase = createServerSupabaseClient();
   const { error } = await supabase
@@ -244,7 +275,8 @@ export async function activatePendingListingsForAgent(agentId: string) {
 
 export async function createListing(
   agentId: string,
-  payload: Omit<ListingRecord, "id" | "status" | "createdAt" | "updatedAt" | "agentId">
+  payload: Omit<ListingRecord, "id" | "status" | "createdAt" | "updatedAt" | "agentId">,
+  initialStatus: Extract<ListingStatus, "active" | "pending">
 ) {
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase
@@ -257,7 +289,7 @@ export async function createListing(
       property_type: payload.propertyType,
       listing_category: payload.listingCategory,
       availability: payload.availability,
-      status: "pending",
+      status: initialStatus,
       image_urls: payload.imageUrls,
       contact_phone: payload.contactPhone,
       contact_whatsapp: payload.contactWhatsapp,

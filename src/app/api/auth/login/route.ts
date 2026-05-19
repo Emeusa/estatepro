@@ -1,0 +1,76 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+
+import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
+import { assertBotProtection, botProtectionSchema } from "@/lib/security/bot";
+import { hashValue, getClientIp } from "@/lib/security/request";
+import { logSecurityEvent, captureServerError } from "@/lib/security/logger";
+import { createServerSupabaseAuthClient } from "@/lib/supabase/server";
+
+const loginSchema = z.object({
+  email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
+  password: z.string().min(1).max(72),
+  ...botProtectionSchema.shape
+}).strict();
+
+export async function POST(request: NextRequest) {
+  let userEmailHash = "unknown";
+
+  try {
+    const body = loginSchema.parse(await request.json());
+    userEmailHash = hashValue(body.email);
+    const limited = await rateLimit(
+      request,
+      RATE_LIMITS.auth,
+      `${getClientIp(request)}:${userEmailHash}`
+    );
+    if (!limited.allowed) {
+      return limited.response;
+    }
+
+    await assertBotProtection(request, body, "login_attempt");
+
+    const supabase = createServerSupabaseAuthClient();
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: body.email,
+      password: body.password
+    });
+
+    if (error || !data.session) {
+      await logSecurityEvent({
+        request,
+        action: "login_attempt",
+        result: "failed",
+        metadata: { emailHash: userEmailHash }
+      });
+      return withRateLimitHeaders(
+        NextResponse.json({ message: "Invalid email or password." }, { status: 401 }),
+        limited.headers
+      );
+    }
+
+    await logSecurityEvent({
+      request,
+      action: "login_attempt",
+      result: "success",
+      userId: data.user?.id,
+      metadata: { emailHash: userEmailHash }
+    });
+
+    return withRateLimitHeaders(NextResponse.json({
+      session: {
+        accessToken: data.session.access_token,
+        refreshToken: data.session.refresh_token
+      }
+    }), limited.headers);
+  } catch (error) {
+    captureServerError(error, { route: "/api/auth/login", emailHash: userEmailHash });
+    await logSecurityEvent({
+      request,
+      action: "login_attempt",
+      result: "failed",
+      metadata: { emailHash: userEmailHash, reason: error instanceof Error ? error.message : "unknown" }
+    });
+    return NextResponse.json({ message: "Invalid email or password." }, { status: 400 });
+  }
+}
