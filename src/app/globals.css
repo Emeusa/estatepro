@@ -43,6 +43,8 @@
 
 @layer components {
   .site-header {
+    position: relative;
+    overflow: hidden;
     background:
       linear-gradient(180deg, #128f87 0%, #118e85 48%, #0f877f 100%);
     box-shadow: 0 6px 16px rgba(7, 54, 51, 0.1);
