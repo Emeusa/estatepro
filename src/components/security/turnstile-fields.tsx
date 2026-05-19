@@ -41,9 +41,14 @@ export function TurnstileFields() {
   const [status, setStatus] = useState<TurnstileStatus | null>(null);
 
   function removeWidget() {
-    if (widgetIdRef.current && window.turnstile?.remove) {
-      window.turnstile.remove(widgetIdRef.current);
+    try {
+      if (widgetIdRef.current && window.turnstile?.remove) {
+        window.turnstile.remove(widgetIdRef.current);
+      }
+    } catch {
+      // A failed cleanup should never crash the page.
     }
+
     widgetIdRef.current = null;
     if (containerRef.current) {
       containerRef.current.innerHTML = "";
@@ -55,8 +60,12 @@ export function TurnstileFields() {
     setToken("");
     setWidgetError("");
     setRenderAttempt((current) => current + 1);
-    if (window.turnstile) {
-      setScriptReady(true);
+    try {
+      if (window.turnstile) {
+        setScriptReady(true);
+      }
+    } catch {
+      setWidgetError(turnstileLoadMessage("retry-failed"));
     }
   }
 
@@ -123,10 +132,15 @@ export function TurnstileFields() {
       }
     }
 
-    if (window.turnstile.ready) {
-      window.turnstile.ready(renderWidget);
-    } else {
-      renderWidget();
+    try {
+      if (window.turnstile.ready) {
+        window.turnstile.ready(renderWidget);
+      } else {
+        renderWidget();
+      }
+    } catch {
+      setToken("");
+      setWidgetError(turnstileLoadMessage("ready-failed"));
     }
 
     return () => {
