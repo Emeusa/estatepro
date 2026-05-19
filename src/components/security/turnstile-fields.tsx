@@ -4,7 +4,6 @@ import Script from "next/script";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type TurnstileApi = {
-  ready?: (callback: () => void) => void;
   render: (
     container: HTMLElement,
     options: {
@@ -38,6 +37,7 @@ export function TurnstileFields() {
   const [token, setToken] = useState("");
   const [widgetError, setWidgetError] = useState("");
   const [renderAttempt, setRenderAttempt] = useState(0);
+  const [renderDelay, setRenderDelay] = useState(0);
   const [status, setStatus] = useState<TurnstileStatus | null>(null);
 
   function removeWidget() {
@@ -59,6 +59,7 @@ export function TurnstileFields() {
     removeWidget();
     setToken("");
     setWidgetError("");
+    setRenderDelay(0);
     setRenderAttempt((current) => current + 1);
     try {
       if (window.turnstile) {
@@ -98,7 +99,7 @@ export function TurnstileFields() {
   }, []);
 
   useEffect(() => {
-    if (!siteKey || !scriptReady || !containerRef.current || !window.turnstile || widgetIdRef.current) {
+    if (!siteKey || !scriptReady || !containerRef.current || widgetIdRef.current) {
       return;
     }
 
@@ -106,7 +107,22 @@ export function TurnstileFields() {
     const turnstileSiteKey = siteKey;
 
     function renderWidget() {
-      if (cancelled || !containerRef.current || !window.turnstile || widgetIdRef.current) {
+      if (cancelled || !containerRef.current || widgetIdRef.current) {
+        return;
+      }
+
+      if (!window.turnstile?.render) {
+        if (renderDelay < 5) {
+          window.setTimeout(() => {
+            if (!cancelled) {
+              setRenderDelay((current) => current + 1);
+            }
+          }, 250);
+          return;
+        }
+
+        setToken("");
+        setWidgetError(turnstileLoadMessage("api-not-ready"));
         return;
       }
 
@@ -132,22 +148,13 @@ export function TurnstileFields() {
       }
     }
 
-    try {
-      if (window.turnstile.ready) {
-        window.turnstile.ready(renderWidget);
-      } else {
-        renderWidget();
-      }
-    } catch {
-      setToken("");
-      setWidgetError(turnstileLoadMessage("ready-failed"));
-    }
+    renderWidget();
 
     return () => {
       cancelled = true;
       removeWidget();
     };
-  }, [renderAttempt, scriptReady, siteKey]);
+  }, [renderAttempt, renderDelay, scriptReady, siteKey]);
 
   return (
     <>
