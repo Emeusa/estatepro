@@ -12,6 +12,17 @@ export const botProtectionSchema = z.object({
 
 export type BotProtectionPayload = z.infer<typeof botProtectionSchema>;
 
+export class BotProtectionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BotProtectionError";
+  }
+}
+
+export function isBotProtectionError(error: unknown): error is BotProtectionError {
+  return error instanceof BotProtectionError;
+}
+
 export async function assertBotProtection(
   request: NextRequest,
   payload: BotProtectionPayload,
@@ -26,7 +37,7 @@ export async function assertBotProtection(
       userId,
       metadata: { reason: "honeypot" }
     });
-    throw new Error("Request blocked. Please refresh and try again.");
+    throw new BotProtectionError("Request blocked. Please refresh and try again.");
   }
 
   const minimumMs = 2500;
@@ -38,7 +49,7 @@ export async function assertBotProtection(
       userId,
       metadata: { reason: "too_fast" }
     });
-    throw new Error("Please wait a moment before submitting the form.");
+    throw new BotProtectionError("Please wait a moment before submitting the form.");
   }
 
   const turnstile = await verifyTurnstile(request, payload.turnstileToken);
@@ -50,6 +61,6 @@ export async function assertBotProtection(
       userId,
       metadata: { reason: "turnstile" }
     });
-    throw new Error(turnstile.message);
+    throw new BotProtectionError(turnstile.message);
   }
 }

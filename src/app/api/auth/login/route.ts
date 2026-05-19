@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
-import { assertBotProtection, botProtectionSchema } from "@/lib/security/bot";
+import { assertBotProtection, botProtectionSchema, isBotProtectionError } from "@/lib/security/bot";
 import { hashValue, getClientIp } from "@/lib/security/request";
 import { logSecurityEvent, captureServerError } from "@/lib/security/logger";
 import { createServerSupabaseAuthClient } from "@/lib/supabase/server";
@@ -71,6 +71,9 @@ export async function POST(request: NextRequest) {
       result: "failed",
       metadata: { emailHash: userEmailHash, reason: error instanceof Error ? error.message : "unknown" }
     });
+    if (isBotProtectionError(error)) {
+      return NextResponse.json({ message: error.message }, { status: 400 });
+    }
     return NextResponse.json({ message: "Invalid email or password." }, { status: 400 });
   }
 }
