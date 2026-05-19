@@ -4,16 +4,22 @@ import Script from "next/script";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type TurnstileApi = {
+  ready?: (callback: () => void) => void;
   render: (
     container: HTMLElement,
     options: {
       sitekey: string;
       callback: (token: string) => void;
       "expired-callback": () => void;
-      "error-callback": () => void;
+      "error-callback": (code?: string) => void;
     }
   ) => string;
   remove?: (widgetId: string) => void;
+};
+
+type TurnstileStatus = {
+  publicSiteKeyConfigured: boolean;
+  serverSecretConfigured: boolean;
 };
 
 declare global {
@@ -31,35 +37,103 @@ export function TurnstileFields() {
   const [scriptReady, setScriptReady] = useState(false);
   const [token, setToken] = useState("");
   const [widgetError, setWidgetError] = useState("");
+  const [renderAttempt, setRenderAttempt] = useState(0);
+  const [status, setStatus] = useState<TurnstileStatus | null>(null);
+
+  function removeWidget() {
+    if (widgetIdRef.current && window.turnstile?.remove) {
+      window.turnstile.remove(widgetIdRef.current);
+    }
+    widgetIdRef.current = null;
+    if (containerRef.current) {
+      containerRef.current.innerHTML = "";
+    }
+  }
+
+  function retryWidget() {
+    removeWidget();
+    setToken("");
+    setWidgetError("");
+    setRenderAttempt((current) => current + 1);
+    if (window.turnstile) {
+      setScriptReady(true);
+    }
+  }
+
+  function turnstileLoadMessage(code: string) {
+    return `Security verification could not load. Code: ${code}. Retry the security check or refresh the page.`;
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadStatus() {
+      try {
+        const response = await fetch("/api/security/turnstile-status", { cache: "no-store" });
+        if (!response.ok) {
+          return;
+        }
+        const nextStatus = (await response.json()) as TurnstileStatus;
+        if (!cancelled) {
+          setStatus(nextStatus);
+        }
+      } catch {
+        // Diagnostics are non-critical and must not block the form.
+      }
+    }
+
+    loadStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!siteKey || !scriptReady || !containerRef.current || !window.turnstile || widgetIdRef.current) {
       return;
     }
 
-    widgetIdRef.current = window.turnstile.render(containerRef.current, {
-      sitekey: siteKey,
-      callback: (value) => {
-        setToken(value);
-        setWidgetError("");
-      },
-      "expired-callback": () => {
-        setToken("");
-        setWidgetError("Security verification expired. Please complete it again.");
-      },
-      "error-callback": () => {
-        setToken("");
-        setWidgetError("Security verification could not load. Refresh the page and try again.");
+    let cancelled = false;
+    const turnstileSiteKey = siteKey;
+
+    function renderWidget() {
+      if (cancelled || !containerRef.current || !window.turnstile || widgetIdRef.current) {
+        return;
       }
-    });
+
+      try {
+        widgetIdRef.current = window.turnstile.render(containerRef.current, {
+          sitekey: turnstileSiteKey,
+          callback: (value) => {
+            setToken(value);
+            setWidgetError("");
+          },
+          "expired-callback": () => {
+            setToken("");
+            setWidgetError("Security verification expired. Please complete it again.");
+          },
+          "error-callback": (code) => {
+            setToken("");
+            setWidgetError(turnstileLoadMessage(code || "unknown"));
+          }
+        });
+      } catch {
+        setToken("");
+        setWidgetError(turnstileLoadMessage("render-failed"));
+      }
+    }
+
+    if (window.turnstile.ready) {
+      window.turnstile.ready(renderWidget);
+    } else {
+      renderWidget();
+    }
 
     return () => {
-      if (widgetIdRef.current && window.turnstile?.remove) {
-        window.turnstile.remove(widgetIdRef.current);
-      }
-      widgetIdRef.current = null;
+      cancelled = true;
+      removeWidget();
     };
-  }, [scriptReady, siteKey]);
+  }, [renderAttempt, scriptReady, siteKey]);
 
   return (
     <>
@@ -80,7 +154,7 @@ export function TurnstileFields() {
             strategy="afterInteractive"
             onLoad={() => setScriptReady(true)}
             onReady={() => setScriptReady(true)}
-            onError={() => setWidgetError("Security verification could not load. Refresh the page and try again.")}
+            onError={() => setWidgetError(turnstileLoadMessage("script-load-failed"))}
           />
           <div ref={containerRef} />
         </>
@@ -91,9 +165,22 @@ export function TurnstileFields() {
         </p>
       ) : null}
       {widgetError ? (
-        <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
-          {widgetError}
-        </p>
+        <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+          <p>{widgetError}</p>
+          {status ? (
+            <p>
+              Config check: browser key {status.publicSiteKeyConfigured ? "present" : "missing"}, server secret{" "}
+              {status.serverSecretConfigured ? "present" : "missing"}.
+            </p>
+          ) : null}
+          <button
+            className="rounded-full border border-amber-300 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-amber-950 transition hover:bg-amber-100"
+            type="button"
+            onClick={retryWidget}
+          >
+            Retry security check
+          </button>
+        </div>
       ) : null}
     </>
   );
