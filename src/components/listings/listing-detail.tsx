@@ -3,30 +3,107 @@ import Link from "next/link";
 
 import { VerifiedAgentName } from "@/components/agents/verified-agent-name";
 import { formatDate, formatPrice, whatsappLink } from "@/lib/format";
+import { getListingImages } from "@/lib/listing-images";
 import { AVAILABILITY_LABELS, getUnavailableBadge, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
+import {
+  FURNISHING_STATUS_LABELS,
+  LAND_SIZE_UNIT_LABELS,
+  PROPERTY_CONDITION_LABELS,
+  PROPERTY_SIZE_UNIT_LABELS,
+  ROAD_ACCESS_LABELS,
+  SERVICING_STATUS_LABELS,
+  TITLE_DOCUMENT_TYPE_LABELS,
+  ZONING_TYPE_LABELS,
+  formatCount,
+  formatSize
+} from "@/lib/listing-quality";
 import { PublicListingDetails } from "@/lib/types";
 
 type Props = {
   details: PublicListingDetails;
 };
 
+function DetailRow({ label, value }: { label: string; value: string | null }) {
+  if (!value) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-2xl bg-white/55 p-4">
+      <dt className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">{label}</dt>
+      <dd className="mt-1 text-sm font-semibold text-slate-950">{value}</dd>
+    </div>
+  );
+}
+
+function ChipSection({ title, values }: { title: string; values: string[] }) {
+  if (!values.length) {
+    return null;
+  }
+
+  return (
+    <div>
+      <h3 className="text-sm font-bold text-slate-950">{title}</h3>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {values.map((value) => (
+          <span key={value} className="rounded-full bg-slate-950/5 px-3 py-1 text-xs font-semibold text-slate-700">
+            {value}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function ListingDetail({ details }: Props) {
   const { agent, listing } = details;
+  const images = getListingImages(listing);
+  const heroImage = images[0];
   const unavailableBadge = getUnavailableBadge(listing);
+  const floorValue = listing.floorLevel
+    ? `${listing.floorLevel}${listing.totalFloors ? ` of ${listing.totalFloors}` : ""}`
+    : null;
+  const detailRows = [
+    ["Bedrooms", formatCount(listing.bedrooms, "bedroom", "bedrooms")],
+    ["Bathrooms", formatCount(listing.bathrooms, "bathroom", "bathrooms")],
+    ["Toilets", formatCount(listing.toilets, "toilet", "toilets")],
+    ["Parking", formatCount(listing.parkingSpaces, "space", "spaces")],
+    ["Property size", formatSize(listing.propertySize, listing.propertySizeUnit, PROPERTY_SIZE_UNIT_LABELS)],
+    ["Year built", listing.yearBuilt ? listing.yearBuilt.toString() : null],
+    ["Floor", floorValue],
+    ["Furnishing", listing.furnishingStatus ? FURNISHING_STATUS_LABELS[listing.furnishingStatus] : null],
+    ["Servicing", listing.servicingStatus ? SERVICING_STATUS_LABELS[listing.servicingStatus] : null],
+    ["Condition", listing.propertyCondition ? PROPERTY_CONDITION_LABELS[listing.propertyCondition] : null],
+    ["Land size", formatSize(listing.landSize, listing.landSizeUnit, LAND_SIZE_UNIT_LABELS)],
+    ["Title document", listing.titleDocumentType ? TITLE_DOCUMENT_TYPE_LABELS[listing.titleDocumentType] : null],
+    ["Zoning", listing.zoningType ? ZONING_TYPE_LABELS[listing.zoningType] : null],
+    ["Road access", listing.roadAccess ? ROAD_ACCESS_LABELS[listing.roadAccess] : null]
+  ] satisfies Array<[string, string | null]>;
+  const hasQualityDetails =
+    detailRows.some(([, value]) => Boolean(value)) ||
+    listing.amenities.length ||
+    listing.utilities.length ||
+    listing.safetyFeatures.length ||
+    listing.nearbyLandmarks.length ||
+    listing.extraFeatures.length;
 
   return (
     <section className="rounded-[2rem] bg-gradient-to-br from-stone-300 via-stone-200 to-slate-300 p-3 shadow-sm sm:p-5">
       <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
       <div className="space-y-4">
         <div className="relative h-72 overflow-hidden rounded-3xl bg-stone-200 md:h-[28rem]">
-          <Image
-            src={listing.imageUrls[0]}
-            alt={listing.title}
-            fill
-            className="object-cover"
-            sizes="(max-width: 1024px) 100vw, 780px"
-            quality={78}
-          />
+          {heroImage ? (
+            <Image
+              src={heroImage.heroUrl}
+              alt={listing.title}
+              fill
+              className="object-cover"
+              sizes="(max-width: 1024px) 100vw, 780px"
+              quality={78}
+              unoptimized={heroImage.isPreprocessed}
+              {...(heroImage.blurDataUrl ? { placeholder: "blur" as const, blurDataURL: heroImage.blurDataUrl } : {})}
+            />
+          ) : null}
           {unavailableBadge ? (
             <span className="absolute left-4 top-4 rounded-full bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm">
               {unavailableBadge}
@@ -34,15 +111,17 @@ export function ListingDetail({ details }: Props) {
           ) : null}
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
-          {listing.imageUrls.slice(1, 4).map((imageUrl) => (
-            <div key={imageUrl} className="relative h-28 overflow-hidden rounded-2xl bg-stone-200">
+          {images.slice(1, 4).map((image) => (
+            <div key={image.heroUrl} className="relative h-28 overflow-hidden rounded-2xl bg-stone-200">
               <Image
-                src={imageUrl}
+                src={image.cardUrl}
                 alt={listing.title}
                 fill
                 className="object-cover"
                 sizes="(max-width: 640px) 100vw, 240px"
                 quality={70}
+                unoptimized={image.isPreprocessed}
+                {...(image.blurDataUrl ? { placeholder: "blur" as const, blurDataURL: image.blurDataUrl } : {})}
               />
             </div>
           ))}
@@ -63,6 +142,25 @@ export function ListingDetail({ details }: Props) {
           <p className="mt-4 text-lg font-semibold text-slate-950">{formatPrice(listing.price)}</p>
           <p className="mt-6 text-sm leading-7 text-slate-800">{listing.description}</p>
         </div>
+        {hasQualityDetails ? (
+          <div className="rounded-3xl bg-white/65 p-6 shadow-sm">
+            <h2 className="text-xl font-semibold text-slate-950">Property details</h2>
+            {detailRows.some(([, value]) => Boolean(value)) ? (
+              <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                {detailRows.map(([label, value]) => (
+                  <DetailRow key={label} label={label} value={value} />
+                ))}
+              </dl>
+            ) : null}
+            <div className="mt-5 space-y-5">
+              <ChipSection title="Amenities" values={listing.amenities} />
+              <ChipSection title="Utilities" values={listing.utilities} />
+              <ChipSection title="Safety features" values={listing.safetyFeatures} />
+              <ChipSection title="Nearby landmarks" values={listing.nearbyLandmarks} />
+              <ChipSection title="Extra features" values={listing.extraFeatures} />
+            </div>
+          </div>
+        ) : null}
       </div>
       <aside className="rounded-3xl bg-white/65 p-6 shadow-sm">
         <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Contact agent</p>

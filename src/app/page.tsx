@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 
 import { FilterBar } from "@/components/listings/filter-bar";
 import { ListingGrid } from "@/components/listings/listing-grid";
@@ -40,6 +41,8 @@ export default async function HomePage({ searchParams }: Props) {
     city: typeof params.city === "string" ? params.city : undefined,
     minPrice: typeof params.minPrice === "string" ? Number(params.minPrice) : undefined,
     maxPrice: typeof params.maxPrice === "string" ? Number(params.maxPrice) : undefined,
+    bedrooms: typeof params.bedrooms === "string" ? Number(params.bedrooms) : undefined,
+    bathrooms: typeof params.bathrooms === "string" ? Number(params.bathrooms) : undefined,
     propertyType: typeof params.propertyType === "string" ? params.propertyType : undefined,
     listingCategory: typeof params.listingCategory === "string" ? params.listingCategory : undefined
   });
@@ -48,12 +51,16 @@ export default async function HomePage({ searchParams }: Props) {
     <div className="space-y-8">
       <section
         className="relative left-1/2 -mt-8 w-screen -translate-x-1/2 overflow-hidden bg-slate-950 px-4 py-1 text-center text-amber-50 sm:px-6 sm:py-3 lg:py-4"
-        style={{
-          backgroundImage: 'url("/pageima.PNG")',
-          backgroundPosition: "center",
-          backgroundSize: "cover"
-        }}
       >
+        <Image
+          src="/homepage-hero.webp"
+          alt="C59 Estatehub"
+          fill
+          priority
+          sizes="100vw"
+          quality={78}
+          className="object-cover"
+        />
         <div className="absolute inset-0 bg-stone-950/75 mix-blend-multiply" aria-hidden="true" />
         <div className="absolute inset-0 bg-slate-950/83" aria-hidden="true" />
         <div className="relative">
@@ -70,6 +77,8 @@ export default async function HomePage({ searchParams }: Props) {
               initialCity={typeof params.city === "string" ? params.city : undefined}
               initialMinPrice={typeof params.minPrice === "string" ? Number(params.minPrice) : undefined}
               initialMaxPrice={typeof params.maxPrice === "string" ? Number(params.maxPrice) : undefined}
+              initialBedrooms={typeof params.bedrooms === "string" ? Number(params.bedrooms) : undefined}
+              initialBathrooms={typeof params.bathrooms === "string" ? Number(params.bathrooms) : undefined}
               initialType={typeof params.propertyType === "string" ? params.propertyType : undefined}
               initialCategory={typeof params.listingCategory === "string" ? params.listingCategory : undefined}
             />

@@ -1,6 +1,6 @@
 "use client";
 
-import { compressImage } from "@/lib/image";
+import { processListingImage } from "@/lib/image";
 import { apiRequest } from "@/lib/api";
 import {
   isSupportedListingImageType,
@@ -10,6 +10,7 @@ import {
   SUPPORTED_LISTING_IMAGE_LABEL
 } from "@/lib/image-limits";
 import { supabase } from "@/lib/supabase/client";
+import { ListingImageVariant } from "@/lib/types";
 
 async function requireUserId() {
   const {
@@ -65,11 +66,25 @@ export async function uploadListingImages(files: File[], token: string) {
   const acceptedFiles = files.slice(0, MAX_LISTING_IMAGES);
   await authorizeListingImageUpload(acceptedFiles, token);
 
-  const uploads = acceptedFiles.map(async (file, index) => {
-    const optimized = await compressImage(file);
-    const path = `${userId}/${crypto.randomUUID()}-${index}.jpg`;
-    await upload("listing-images", path, optimized);
-    return supabase.storage.from("listing-images").getPublicUrl(path).data.publicUrl;
+  const uploads = acceptedFiles.map(async (file, index): Promise<ListingImageVariant> => {
+    const optimized = await processListingImage(file);
+    const imageId = crypto.randomUUID();
+    const heroPath = `${userId}/${imageId}-${index}-hero.webp`;
+    const cardPath = `${userId}/${imageId}-${index}-card.webp`;
+
+    await upload("listing-images", heroPath, optimized.hero);
+    await upload("listing-images", cardPath, optimized.card);
+
+    return {
+      heroUrl: supabase.storage.from("listing-images").getPublicUrl(heroPath).data.publicUrl,
+      cardUrl: supabase.storage.from("listing-images").getPublicUrl(cardPath).data.publicUrl,
+      blurDataUrl: optimized.blurDataUrl,
+      width: optimized.width,
+      height: optimized.height,
+      cardWidth: optimized.cardWidth,
+      cardHeight: optimized.cardHeight,
+      order: index
+    };
   });
 
   return Promise.all(uploads);

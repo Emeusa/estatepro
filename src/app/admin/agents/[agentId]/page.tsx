@@ -7,7 +7,11 @@ import { useEffect, useState } from "react";
 import { AdminIdentityCard, AdminShell, statusPillClass } from "@/components/admin/admin-shell";
 import { apiRequest } from "@/lib/api";
 import { formatDate, formatPrice } from "@/lib/format";
+import { getListingImageCount } from "@/lib/listing-images";
 import { AVAILABILITY_LABELS, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
+import { getListingQualityBadges } from "@/lib/listing-quality";
+import { formatPlanPrice, getPricingPlan } from "@/lib/pricing";
+import { getEffectivePlanSlug } from "@/lib/subscriptions";
 import { supabase } from "@/lib/supabase/client";
 import { AdminAgentDetails, AgentProfile, UserRecord } from "@/lib/types";
 
@@ -151,6 +155,7 @@ export default function AdminAgentDetailPage() {
   const adminName = account?.fullName ?? "Admin";
   const adminEmail = account?.email ?? "Admin account";
   const statusTone = verificationTone(review.agent.verificationStatus, review.agent.isBlocked);
+  const currentPlan = getPricingPlan(getEffectivePlanSlug(review.subscription));
 
   return (
     <AdminShell active="agents" adminName={adminName} adminEmail={adminEmail}>
@@ -250,7 +255,9 @@ export default function AdminAgentDetailPage() {
               <div className="rounded-2xl bg-slate-300/60 p-4">
                 <dt className="text-slate-500">Subscription</dt>
                 <dd className="mt-1 font-medium text-slate-950">
-                  {review.subscription?.isActive ? "Active" : "Inactive or unavailable"}
+                  {review.subscription?.isActive
+                    ? `${currentPlan.name} (${formatPlanPrice(currentPlan.priceMonthly)})`
+                    : "Inactive or unavailable"}
                 </dd>
               </div>
               <div className="rounded-2xl bg-slate-300/60 p-4">
@@ -303,12 +310,17 @@ export default function AdminAgentDetailPage() {
                       </div>
                     </div>
                     <p className="mt-3 text-sm font-semibold text-slate-950">{formatPrice(listing.price)}</p>
+                    {getListingQualityBadges(listing).length ? (
+                      <p className="mt-2 text-xs font-medium text-slate-600">
+                        {getListingQualityBadges(listing).slice(0, 5).join(" • ")}
+                      </p>
+                    ) : null}
                     <p className="mt-2 line-clamp-2 text-sm text-slate-600">{listing.description}</p>
                     <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2 lg:grid-cols-4">
                       <span>{LISTING_CATEGORY_LABELS[listing.listingCategory]}</span>
                       <span className="capitalize">{listing.propertyType}</span>
                       <span>Created: {formatDate(listing.createdAt)}</span>
-                      <span>Images: {listing.imageUrls.length}</span>
+                      <span>Images: {getListingImageCount(listing)}</span>
                     </div>
                   </article>
                 ))

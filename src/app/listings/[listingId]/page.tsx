@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 
 import { ListingDetail } from "@/components/listings/listing-detail";
+import { getListingHeroImage } from "@/lib/listing-images";
 import { buildListingMetaDescription, buildListingMetaTitle, SITE_NAME } from "@/lib/seo";
 import { getPublicListingDetails } from "@/modules/listings/listing.service";
 
@@ -31,7 +32,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { listing } = details;
   const title = buildListingMetaTitle(listing);
   const description = buildListingMetaDescription(listing);
-  const image = listing.imageUrls[0];
+  const image = getListingHeroImage(listing)?.heroUrl;
 
   return {
     title: {

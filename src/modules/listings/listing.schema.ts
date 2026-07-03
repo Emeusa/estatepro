@@ -2,10 +2,20 @@ import { z } from "zod";
 
 import { normalizeListingTitle } from "@/lib/format";
 import { MAX_LISTING_IMAGES } from "@/lib/image-limits";
+import {
+  FURNISHING_STATUSES,
+  LAND_SIZE_UNITS,
+  PROPERTY_CONDITIONS,
+  PROPERTY_SIZE_UNITS,
+  ROAD_ACCESS_TYPES,
+  SERVICING_STATUSES,
+  TITLE_DOCUMENT_TYPES,
+  ZONING_TYPES
+} from "@/lib/listing-quality";
 import { isNigeriaLga, isNigeriaState } from "@/lib/nigeria-locations";
 import { normalizePhone, sanitizeText, slugifyLocation } from "@/lib/sanitize";
 
-function isAllowedListingImageUrl(value: string) {
+function isAllowedListingImageUrl(value: string, options?: { webpOnly?: boolean }) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!supabaseUrl) {
     return false;
@@ -17,7 +27,8 @@ function isAllowedListingImageUrl(value: string) {
     return (
       imageUrl.protocol === "https:" &&
       imageUrl.hostname === configuredHost &&
-      imageUrl.pathname.startsWith("/storage/v1/object/public/listing-images/")
+      imageUrl.pathname.startsWith("/storage/v1/object/public/listing-images/") &&
+      (!options?.webpOnly || imageUrl.pathname.toLowerCase().endsWith(".webp"))
     );
   } catch {
     return false;
@@ -55,6 +66,66 @@ const locationSchema = z
     slug: slugifyLocation([value.state, value.city, value.area])
   }));
 
+function emptyToNull(value: unknown) {
+  return value === "" || value === null || value === undefined ? null : value;
+}
+
+function optionalPositiveInt(max: number) {
+  return z
+    .preprocess(emptyToNull, z.coerce.number().int().positive().max(max).nullable().optional())
+    .transform((value) => value ?? null);
+}
+
+function optionalEnum<T extends readonly [string, ...string[]]>(values: T) {
+  return z.preprocess(emptyToNull, z.enum(values).nullable().optional()).transform((value) => value ?? null);
+}
+
+function parseTextArray(value: unknown) {
+  if (value === "" || value === null || value === undefined) {
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    return value.split(/[\n,]/g);
+  }
+
+  return value;
+}
+
+const textArraySchema = z
+  .preprocess(
+    parseTextArray,
+    z
+      .array(z.string().trim().min(2).max(80).transform(sanitizeText))
+      .max(30)
+  )
+  .transform((values) => Array.from(new Set(values.filter(Boolean))));
+
+const imageVariantSchema = z
+  .object({
+    heroUrl: z.string().url().refine((value) => isAllowedListingImageUrl(value, { webpOnly: true }), {
+      message: "Hero images must be uploaded through this platform."
+    }),
+    cardUrl: z.string().url().refine((value) => isAllowedListingImageUrl(value, { webpOnly: true }), {
+      message: "Card images must be uploaded through this platform."
+    }),
+    blurDataUrl: z
+      .string()
+      .max(3000)
+      .regex(/^data:image\/webp;base64,[a-z0-9+/=]+$/i)
+      .nullable(),
+    width: z.number().int().positive().max(1200).nullable(),
+    height: z.number().int().positive().max(900).nullable(),
+    cardWidth: z.number().int().positive().max(600).nullable(),
+    cardHeight: z.number().int().positive().max(450).nullable(),
+    order: z.number().int().min(0).max(MAX_LISTING_IMAGES - 1)
+  })
+  .strict();
+
 const listingInputBaseSchema = z.object({
   title: z.string().min(8).max(120).transform((value) => normalizeListingTitle(sanitizeText(value))),
   description: z.string().min(20).max(1200).transform(sanitizeText),
@@ -70,9 +141,32 @@ const listingInputBaseSchema = z.object({
     )
     .min(1)
     .max(MAX_LISTING_IMAGES),
+  imageVariants: z.array(imageVariantSchema).max(MAX_LISTING_IMAGES).default([]),
   contactPhone: z.string().min(10).max(20).transform(normalizePhone),
   contactWhatsapp: z.string().min(10).max(20).transform(normalizePhone),
-  location: locationSchema
+  location: locationSchema,
+  bedrooms: optionalPositiveInt(100),
+  bathrooms: optionalPositiveInt(100),
+  toilets: optionalPositiveInt(100),
+  parkingSpaces: optionalPositiveInt(100),
+  propertySize: optionalPositiveInt(10000000),
+  propertySizeUnit: optionalEnum(PROPERTY_SIZE_UNITS),
+  yearBuilt: optionalPositiveInt(new Date().getFullYear() + 1),
+  floorLevel: optionalPositiveInt(300),
+  totalFloors: optionalPositiveInt(300),
+  furnishingStatus: optionalEnum(FURNISHING_STATUSES),
+  servicingStatus: optionalEnum(SERVICING_STATUSES),
+  propertyCondition: optionalEnum(PROPERTY_CONDITIONS),
+  amenities: textArraySchema.default([]),
+  utilities: textArraySchema.default([]),
+  safetyFeatures: textArraySchema.default([]),
+  nearbyLandmarks: textArraySchema.default([]),
+  extraFeatures: textArraySchema.default([]),
+  landSize: optionalPositiveInt(10000000),
+  landSizeUnit: optionalEnum(LAND_SIZE_UNITS),
+  titleDocumentType: optionalEnum(TITLE_DOCUMENT_TYPES),
+  zoningType: optionalEnum(ZONING_TYPES),
+  roadAccess: optionalEnum(ROAD_ACCESS_TYPES)
 }).strict();
 
 function validateAvailability(
@@ -111,6 +205,8 @@ export const listingFilterSchema = z.object({
   listingCategory: z.enum(["for_sale", "for_rent", "short_let"]).optional(),
   minPrice: z.coerce.number().int().positive().optional(),
   maxPrice: z.coerce.number().int().positive().optional(),
+  bedrooms: z.coerce.number().int().positive().max(100).optional(),
+  bathrooms: z.coerce.number().int().positive().max(100).optional(),
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(20).default(12)
 }).strict().superRefine((value, context) => {

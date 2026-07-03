@@ -5,8 +5,10 @@ import { useEffect, useMemo, useState } from "react";
 import { ListingManager } from "@/components/agents/listing-manager";
 import { VerifiedAgentName } from "@/components/agents/verified-agent-name";
 import { apiRequest } from "@/lib/api";
+import { formatPlanPrice, getPricingPlan, isPaidPricingPlanSlug, PRICING_PLANS } from "@/lib/pricing";
+import { getEffectivePlanSlug, isSubscriptionCurrentlyActive } from "@/lib/subscriptions";
 import { supabase } from "@/lib/supabase/client";
-import { ListingRecord, UserRecord } from "@/lib/types";
+import { ListingRecord, SubscriptionRecord, UserRecord } from "@/lib/types";
 
 type DashboardData = {
   user: UserRecord | null;
@@ -16,10 +18,7 @@ type DashboardData = {
       trialEndsAt: string;
       isBlocked: boolean;
     };
-    subscription?: {
-      isActive: boolean;
-      trialEndsAt: string;
-    };
+    subscription?: SubscriptionRecord;
   };
   listings: ListingRecord[];
   token: string;
@@ -71,6 +70,9 @@ function StatCard({ label, value, tone = "blue" }: StatCardProps) {
 export default function AgentDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [message, setMessage] = useState("Loading dashboard...");
+  const [billingMessage, setBillingMessage] = useState("");
+  const [busyBillingPlan, setBusyBillingPlan] = useState<string | null>(null);
+  const [cancellingBilling, setCancellingBilling] = useState(false);
   const [createRequestKey, setCreateRequestKey] = useState(0);
 
   useEffect(() => {
@@ -117,6 +119,15 @@ export default function AgentDashboardPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const billingResult = new URLSearchParams(window.location.search).get("billing");
+    if (billingResult === "success") {
+      setBillingMessage("Payment confirmed. Your plan has been updated.");
+    } else if (billingResult === "failed") {
+      setBillingMessage("Payment verification failed. If you were charged, contact support with your Paystack reference.");
+    }
+  }, []);
+
   const stats = useMemo(() => {
     const listings = data?.listings ?? [];
     return {
@@ -145,9 +156,67 @@ export default function AgentDashboardPage() {
   const isVerified = verificationStatus === "approved";
   const isBlocked = data.profile.agent?.isBlocked ?? false;
   const accountStatus = isBlocked ? "Blocked" : "Operational";
+  const currentSubscription = data.profile.subscription ?? null;
+  const currentPlan = getPricingPlan(getEffectivePlanSlug(currentSubscription));
+  const hasActivePaidPlan = currentPlan.priceMonthly !== null && currentPlan.priceMonthly > 0 && isSubscriptionCurrentlyActive(currentSubscription);
 
   function postProperty() {
     setCreateRequestKey((current) => current + 1);
+  }
+
+  async function startCheckout(planSlug: string) {
+    if (!data?.token || !isPaidPricingPlanSlug(planSlug)) {
+      return;
+    }
+
+    setBusyBillingPlan(planSlug);
+    setBillingMessage("");
+
+    try {
+      const response = await apiRequest<{ authorizationUrl: string }>("/api/billing/checkout", {
+        method: "POST",
+        retries: 0,
+        headers: { Authorization: `Bearer ${data.token}` },
+        body: JSON.stringify({ planSlug })
+      });
+      window.location.assign(response.authorizationUrl);
+    } catch (error) {
+      setBillingMessage(error instanceof Error ? error.message : "Could not start Paystack checkout.");
+      setBusyBillingPlan(null);
+    }
+  }
+
+  async function cancelSubscription() {
+    if (!data?.token) {
+      return;
+    }
+
+    setCancellingBilling(true);
+    setBillingMessage("");
+
+    try {
+      const response = await apiRequest<{ subscription: SubscriptionRecord }>("/api/billing/cancel", {
+        method: "POST",
+        retries: 0,
+        headers: { Authorization: `Bearer ${data.token}` }
+      });
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              profile: {
+                ...current.profile,
+                subscription: response.subscription
+              }
+            }
+          : current
+      );
+      setBillingMessage("Subscription renewal has been cancelled.");
+    } catch (error) {
+      setBillingMessage(error instanceof Error ? error.message : "Could not cancel subscription.");
+    } finally {
+      setCancellingBilling(false);
+    }
   }
 
   return (
@@ -247,11 +316,94 @@ export default function AgentDashboardPage() {
               </div>
               <div id="subscription" className="rounded-xl border border-slate-300/80 bg-slate-200 p-3 shadow-sm sm:rounded-3xl sm:p-5">
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Subscription</p>
-                <p className="mt-2 text-lg font-semibold text-slate-950 sm:mt-3 sm:text-xl">Coming Soon</p>
+                <p className="mt-2 text-lg font-semibold text-slate-950 sm:mt-3 sm:text-xl">{currentPlan.name}</p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">{formatPlanPrice(currentPlan.priceMonthly)}</p>
+                {currentSubscription?.cancelAtPeriodEnd ? (
+                  <p className="mt-1 text-xs font-bold text-amber-700">Renewal cancelled</p>
+                ) : null}
               </div>
               <div className="rounded-xl border border-slate-300/80 bg-slate-200 p-3 shadow-sm sm:rounded-3xl sm:p-5">
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Account Status</p>
                 <p className="mt-2 text-lg font-semibold text-slate-950 sm:mt-3 sm:text-xl">{accountStatus}</p>
+              </div>
+            </section>
+
+            <section className="px-3 sm:px-6">
+              <div className="rounded-2xl border border-slate-300/80 bg-slate-200 p-4 shadow-sm sm:rounded-3xl sm:p-5">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Launch pricing</p>
+                    <h2 className="mt-2 text-lg font-bold text-slate-950">Visibility plans</h2>
+                  </div>
+                  <p className="text-xs font-semibold text-slate-500">Secure checkout is handled by Paystack.</p>
+                </div>
+                {billingMessage ? (
+                  <p className="mt-3 rounded-2xl bg-slate-300/60 px-4 py-3 text-sm font-semibold text-slate-700">
+                    {billingMessage}
+                  </p>
+                ) : null}
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {PRICING_PLANS.slice(0, 5).map((plan) => (
+                    <article
+                      key={plan.slug}
+                      className={`rounded-2xl border p-4 ${
+                        plan.slug === currentPlan.slug
+                          ? "border-blue-500 bg-blue-50"
+                          : plan.isPopular
+                            ? "border-amber-300 bg-amber-50/80"
+                            : "border-slate-300 bg-slate-300/50"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-bold text-slate-950">{plan.name}</h3>
+                          <p className="mt-1 text-sm font-semibold text-slate-600">{formatPlanPrice(plan.priceMonthly)}</p>
+                        </div>
+                        {plan.slug === currentPlan.slug ? (
+                          <span className="rounded-full bg-blue-600 px-2.5 py-1 text-[11px] font-bold text-white">Current</span>
+                        ) : plan.isPopular ? (
+                          <span className="rounded-full bg-amber-500 px-2.5 py-1 text-[11px] font-bold text-white">Popular</span>
+                        ) : null}
+                      </div>
+                      <p className="mt-3 text-xs leading-5 text-slate-600">{plan.description}</p>
+                      <div className="mt-3 grid gap-1 text-xs font-semibold text-slate-700">
+                        <span>{plan.activeListings ?? "Custom"} active listings</span>
+                        <span>{plan.manualBoosts ?? "Custom"} boosts/month</span>
+                        <span>{plan.featuredCredits ?? "Custom"} featured credits/month</span>
+                      </div>
+                      <div className="mt-4">
+                        {plan.slug === currentPlan.slug ? (
+                          <button
+                            className="w-full rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-400"
+                            disabled
+                            type="button"
+                          >
+                            Current
+                          </button>
+                        ) : isPaidPricingPlanSlug(plan.slug) ? (
+                          <button
+                            className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={busyBillingPlan !== null}
+                            onClick={() => startCheckout(plan.slug)}
+                            type="button"
+                          >
+                            {busyBillingPlan === plan.slug ? "Opening Paystack..." : "Upgrade"}
+                          </button>
+                        ) : null}
+                        {plan.slug === currentPlan.slug && hasActivePaidPlan && !currentSubscription?.cancelAtPeriodEnd ? (
+                          <button
+                            className="mt-2 w-full rounded-xl border border-slate-400 px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={cancellingBilling}
+                            onClick={cancelSubscription}
+                            type="button"
+                          >
+                            {cancellingBilling ? "Cancelling..." : "Cancel renewal"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
+                </div>
               </div>
             </section>
 

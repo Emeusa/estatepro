@@ -12,6 +12,8 @@ type Props = {
   initialCity?: string;
   initialMinPrice?: number;
   initialMaxPrice?: number;
+  initialBedrooms?: number;
+  initialBathrooms?: number;
   initialType?: string;
   initialCategory?: string;
 };
@@ -68,6 +70,8 @@ export function FilterBar({
   initialCity,
   initialMinPrice,
   initialMaxPrice,
+  initialBedrooms,
+  initialBathrooms,
   initialType,
   initialCategory
 }: Props) {
@@ -76,6 +80,8 @@ export function FilterBar({
   const [city, setCity] = useState(initialCity ?? "");
   const [minPrice, setMinPrice] = useState(initialMinPrice?.toString() ?? "");
   const [maxPrice, setMaxPrice] = useState(initialMaxPrice?.toString() ?? "");
+  const [bedrooms, setBedrooms] = useState(initialBedrooms?.toString() ?? "");
+  const [bathrooms, setBathrooms] = useState(initialBathrooms?.toString() ?? "");
   const [propertyType, setPropertyType] = useState(initialType ?? "");
   const [listingCategory, setListingCategory] = useState(initialCategory ?? "");
   const [activeTab, setActiveTab] = useState(getInitialTab(initialCategory, initialType));
@@ -106,6 +112,8 @@ export function FilterBar({
     if (city) params.set("city", city);
     if (minPrice) params.set("minPrice", minPrice);
     if (maxPrice) params.set("maxPrice", maxPrice);
+    if (bedrooms) params.set("bedrooms", bedrooms);
+    if (bathrooms) params.set("bathrooms", bathrooms);
     if (propertyType) params.set("propertyType", propertyType);
     if (listingCategory) params.set("listingCategory", listingCategory);
 
@@ -240,6 +248,32 @@ export function FilterBar({
               {Object.entries(LISTING_CATEGORY_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
+                </option>
+              ))}
+            </select>
+            <SelectChevron />
+          </label>
+
+          <label className={fieldWrapClass}>
+            <span className="sr-only">Bedrooms</span>
+            <select className={selectClass} value={bedrooms} onChange={(event) => setBedrooms(event.target.value)}>
+              <option value="">Bedrooms</option>
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((value) => (
+                <option key={value} value={value}>
+                  {value}+ Beds
+                </option>
+              ))}
+            </select>
+            <SelectChevron />
+          </label>
+
+          <label className={fieldWrapClass}>
+            <span className="sr-only">Bathrooms</span>
+            <select className={selectClass} value={bathrooms} onChange={(event) => setBathrooms(event.target.value)}>
+              <option value="">Bathrooms</option>
+              {[1, 2, 3, 4, 5, 6].map((value) => (
+                <option key={value} value={value}>
+                  {value}+ Baths
                 </option>
               ))}
             </select>

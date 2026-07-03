@@ -21,7 +21,7 @@ function mapListingErrors(error: ZodError) {
       fields.title = "Title must be at least 8 characters.";
     } else if (path === "description") {
       fields.description = "Description must be at least 20 characters.";
-    } else if (path.startsWith("imageUrls")) {
+    } else if (path.startsWith("imageUrls") || path.startsWith("imageVariants")) {
       fields.images =
         issue.code === "too_small"
           ? "Upload at least one property image."
@@ -40,6 +40,37 @@ function mapListingErrors(error: ZodError) {
       fields.city = "Enter a valid city.";
     } else if (path === "location.area") {
       fields.area = "Enter a valid area.";
+    } else if (
+      [
+        "bedrooms",
+        "bathrooms",
+        "toilets",
+        "parkingSpaces",
+        "propertySize",
+        "yearBuilt",
+        "floorLevel",
+        "totalFloors",
+        "landSize"
+      ].includes(path)
+    ) {
+      fields.quality = "Enter valid optional property details.";
+    } else if (
+      [
+        "propertySizeUnit",
+        "landSizeUnit",
+        "furnishingStatus",
+        "servicingStatus",
+        "propertyCondition",
+        "titleDocumentType",
+        "zoningType",
+        "roadAccess"
+      ].includes(path)
+    ) {
+      fields.quality = "Select valid optional property detail options.";
+    } else if (
+      ["amenities", "utilities", "safetyFeatures", "nearbyLandmarks", "extraFeatures"].includes(path)
+    ) {
+      fields.quality = "Enter no more than 30 short items per feature list.";
     }
   }
 

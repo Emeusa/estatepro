@@ -2,7 +2,10 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { formatPrice } from "@/lib/format";
+import { getListingHeroImage } from "@/lib/listing-images";
+import { getListingPromotionBadge } from "@/lib/listing-visibility";
 import { getUnavailableBadge, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
+import { getListingQualityBadges } from "@/lib/listing-quality";
 import { ListingRecord } from "@/lib/types";
 
 type Props = {
@@ -11,21 +14,33 @@ type Props = {
 
 export function ListingCard({ listing }: Props) {
   const unavailableBadge = getUnavailableBadge(listing);
+  const qualityBadges = getListingQualityBadges(listing).slice(0, 4);
+  const image = getListingHeroImage(listing);
+  const promotionBadge = getListingPromotionBadge(listing);
 
   return (
     <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
       <div className="relative h-52 bg-slate-100">
-        <Image
-          src={listing.imageUrls[0]}
-          alt={listing.title}
-          fill
-          className="object-cover"
-          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
-          quality={70}
-        />
+        {image ? (
+          <Image
+            src={image.cardUrl}
+            alt={listing.title}
+            fill
+            className="object-cover"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
+            quality={70}
+            unoptimized={image.isPreprocessed}
+            {...(image.blurDataUrl ? { placeholder: "blur" as const, blurDataURL: image.blurDataUrl } : {})}
+          />
+        ) : null}
         {unavailableBadge ? (
           <span className="absolute left-3 top-3 rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white shadow-sm">
             {unavailableBadge}
+          </span>
+        ) : null}
+        {promotionBadge ? (
+          <span className="absolute right-3 top-3 rounded-full bg-amber-400 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-slate-950 shadow-sm">
+            {promotionBadge}
           </span>
         ) : null}
       </div>
@@ -46,6 +61,15 @@ export function ListingCard({ listing }: Props) {
             </span>
           </div>
         </div>
+        {qualityBadges.length ? (
+          <div className="flex flex-wrap gap-2">
+            {qualityBadges.map((badge) => (
+              <span key={badge} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                {badge}
+              </span>
+            ))}
+          </div>
+        ) : null}
         <p className="text-lg font-semibold text-slate-950">{formatPrice(listing.price)}</p>
         <Link
           href={`/listings/${listing.id}`}

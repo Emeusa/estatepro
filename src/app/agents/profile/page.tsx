@@ -5,8 +5,10 @@ import { FormEvent, useEffect, useState } from "react";
 import { VerifiedAgentName } from "@/components/agents/verified-agent-name";
 import { apiRequest } from "@/lib/api";
 import { formatDate } from "@/lib/format";
+import { formatPlanPrice, getPricingPlan } from "@/lib/pricing";
+import { getEffectivePlanSlug } from "@/lib/subscriptions";
 import { supabase } from "@/lib/supabase/client";
-import { UserRecord } from "@/lib/types";
+import { SubscriptionRecord, UserRecord } from "@/lib/types";
 
 type ProfileData = {
   user: UserRecord | null;
@@ -16,10 +18,7 @@ type ProfileData = {
       trialEndsAt: string;
       isBlocked: boolean;
     };
-    subscription?: {
-      isActive: boolean;
-      trialEndsAt: string;
-    };
+    subscription?: SubscriptionRecord;
   };
   listings: unknown[];
 };
@@ -161,6 +160,7 @@ export default function AgentProfilePage() {
   const verificationStatus = data.profile.agent?.verificationStatus ?? "pending";
   const isVerified = verificationStatus === "approved";
   const accountStatus = data.profile.agent?.isBlocked ? "Blocked" : "Operational";
+  const currentPlan = getPricingPlan(getEffectivePlanSlug(data.profile.subscription));
 
   return (
     <div className="relative left-1/2 -my-8 min-h-screen w-screen -translate-x-1/2 bg-[#d7dce4]">
@@ -301,7 +301,7 @@ export default function AgentProfilePage() {
                 <div className="mt-4 grid gap-5 border-t border-slate-300 pt-4">
                   <DetailCard label="Verification Status" value={verificationStatus} />
                   <DetailCard label="Account Status" value={accountStatus} />
-                  <DetailCard label="Subscription" value="Coming Soon" />
+                  <DetailCard label="Subscription" value={`${currentPlan.name} (${formatPlanPrice(currentPlan.priceMonthly)})`} />
                 </div>
               </div>
             </section>

@@ -7,6 +7,7 @@ import { ListingForm } from "@/components/forms/listing-form";
 import { apiRequest } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { AVAILABILITY_LABELS, getUnavailableBadge, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
+import { getListingQualityBadges } from "@/lib/listing-quality";
 import { ListingRecord } from "@/lib/types";
 
 type Props = {
@@ -158,11 +159,16 @@ export function ListingManager({
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-slate-950">{listing.title}</p>
-                    <p className="mt-1 text-xs capitalize text-slate-500 sm:text-sm">
-                      {listing.status} / {LISTING_CATEGORY_LABELS[listing.listingCategory]} /{" "}
-                      {getUnavailableBadge(listing) ?? AVAILABILITY_LABELS[listing.availability]}
+                  <p className="mt-1 text-xs capitalize text-slate-500 sm:text-sm">
+                    {listing.status} / {LISTING_CATEGORY_LABELS[listing.listingCategory]} /{" "}
+                    {getUnavailableBadge(listing) ?? AVAILABILITY_LABELS[listing.availability]}
+                  </p>
+                  {getListingQualityBadges(listing).length ? (
+                    <p className="mt-2 text-xs font-medium text-slate-600">
+                      {getListingQualityBadges(listing).slice(0, 4).join(" • ")}
                     </p>
-                  </div>
+                  ) : null}
+                </div>
                   <span className="shrink-0 text-sm font-semibold text-slate-700">{formatPrice(listing.price)}</span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">

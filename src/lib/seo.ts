@@ -1,6 +1,7 @@
 import { ListingCategory, ListingRecord } from "@/lib/types";
 
 export const SITE_NAME = "C59 Estatehub";
+export const PRODUCTION_SITE_URL = "https://c59estatehub.com";
 export const DEFAULT_SITE_DESCRIPTION =
   "Find verified homes, land, rentals, and commercial properties in Nigeria.";
 
@@ -13,6 +14,9 @@ const listingCategoryPhrases: Record<ListingCategory, string> = {
 export function getSiteUrl() {
   const rawUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   if (!rawUrl) {
+    if (process.env.NODE_ENV === "production") {
+      return new URL(PRODUCTION_SITE_URL);
+    }
     return new URL("http://localhost:3000");
   }
 
@@ -37,7 +41,7 @@ export function trimMetaDescription(value: string, maxLength = 155) {
     return normalized;
   }
 
-  return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+  return `${normalized.slice(0, maxLength - 3).trimEnd()}...`;
 }
 
 export function buildListingMetaTitle(listing: ListingRecord) {

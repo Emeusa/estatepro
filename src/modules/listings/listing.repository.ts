@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { toNameCase } from "@/lib/format";
+import { rankListingsForFeed } from "@/lib/listing-visibility";
 import { toListingRecord } from "@/lib/supabase-mappers";
 import {
   ListingCategory,
@@ -83,12 +84,14 @@ export async function listPublicListings(
 ): Promise<PaginatedResponse<ListingRecord>> {
   const supabase = createServerSupabaseClient();
   const keywordFilters = parseKeywordFilters(filters.keyword);
+  const requestedLimit = filters.limit ?? 12;
+  const candidateLimit = Math.min(Math.max(requestedLimit * 6, requestedLimit), 72);
 
   let query = supabase
     .from(PUBLIC_FEED_LISTINGS_SOURCE)
     .select("*")
     .order("created_at", { ascending: false })
-    .limit(filters.limit ?? 12);
+    .limit(candidateLimit);
 
   const stateFilter = filters.state ?? keywordFilters.state;
   const propertyTypeFilter = filters.propertyType ?? keywordFilters.propertyType;
@@ -118,6 +121,12 @@ export async function listPublicListings(
   if (filters.maxPrice) {
     query = query.lte("price", filters.maxPrice);
   }
+  if (filters.bedrooms) {
+    query = query.gte("bedrooms", filters.bedrooms);
+  }
+  if (filters.bathrooms) {
+    query = query.gte("bathrooms", filters.bathrooms);
+  }
   if (filters.cursor) {
     const { data: cursorRow } = await supabase
       .from(PUBLIC_FEED_LISTINGS_SOURCE)
@@ -134,8 +143,9 @@ export async function listPublicListings(
     throw new Error(error.message);
   }
 
-  const items = (data ?? []).map(toListingRecord);
-  const nextCursor = items.length === (filters.limit ?? 12) ? items.at(-1)?.id ?? null : null;
+  const candidates = (data ?? []).map(toListingRecord);
+  const items = rankListingsForFeed(candidates, requestedLimit);
+  const nextCursor = candidates.length === candidateLimit ? candidates.at(-1)?.id ?? null : null;
   return { items, nextCursor };
 }
 
@@ -260,6 +270,22 @@ export async function listListingCountsByAgentIds(agentIds: string[]) {
   }, new Map<string, number>());
 }
 
+export async function countActiveAvailableListingsForAgent(agentId: string) {
+  const supabase = createServerSupabaseClient();
+  const { count, error } = await supabase
+    .from("listings")
+    .select("id", { count: "exact", head: true })
+    .eq("agent_id", agentId)
+    .eq("status", "active")
+    .eq("availability", "available");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return count ?? 0;
+}
+
 export async function activatePendingListingsForAgent(agentId: string) {
   const supabase = createServerSupabaseClient();
   const { error } = await supabase
@@ -291,9 +317,32 @@ export async function createListing(
       availability: payload.availability,
       status: initialStatus,
       image_urls: payload.imageUrls,
+      image_variants: payload.imageVariants,
       contact_phone: payload.contactPhone,
       contact_whatsapp: payload.contactWhatsapp,
-      location: payload.location
+      location: payload.location,
+      bedrooms: payload.bedrooms,
+      bathrooms: payload.bathrooms,
+      toilets: payload.toilets,
+      parking_spaces: payload.parkingSpaces,
+      property_size: payload.propertySize,
+      property_size_unit: payload.propertySizeUnit,
+      year_built: payload.yearBuilt,
+      floor_level: payload.floorLevel,
+      total_floors: payload.totalFloors,
+      furnishing_status: payload.furnishingStatus,
+      servicing_status: payload.servicingStatus,
+      property_condition: payload.propertyCondition,
+      amenities: payload.amenities,
+      utilities: payload.utilities,
+      safety_features: payload.safetyFeatures,
+      nearby_landmarks: payload.nearbyLandmarks,
+      extra_features: payload.extraFeatures,
+      land_size: payload.landSize,
+      land_size_unit: payload.landSizeUnit,
+      title_document_type: payload.titleDocumentType,
+      zoning_type: payload.zoningType,
+      road_access: payload.roadAccess
     })
     .select("*")
     .single();
@@ -320,9 +369,32 @@ export async function updateListing(
   if (payload.availability !== undefined) updates.availability = payload.availability;
   if (payload.status !== undefined) updates.status = payload.status;
   if (payload.imageUrls !== undefined) updates.image_urls = payload.imageUrls;
+  if (payload.imageVariants !== undefined) updates.image_variants = payload.imageVariants;
   if (payload.contactPhone !== undefined) updates.contact_phone = payload.contactPhone;
   if (payload.contactWhatsapp !== undefined) updates.contact_whatsapp = payload.contactWhatsapp;
   if (payload.location !== undefined) updates.location = payload.location;
+  if (payload.bedrooms !== undefined) updates.bedrooms = payload.bedrooms;
+  if (payload.bathrooms !== undefined) updates.bathrooms = payload.bathrooms;
+  if (payload.toilets !== undefined) updates.toilets = payload.toilets;
+  if (payload.parkingSpaces !== undefined) updates.parking_spaces = payload.parkingSpaces;
+  if (payload.propertySize !== undefined) updates.property_size = payload.propertySize;
+  if (payload.propertySizeUnit !== undefined) updates.property_size_unit = payload.propertySizeUnit;
+  if (payload.yearBuilt !== undefined) updates.year_built = payload.yearBuilt;
+  if (payload.floorLevel !== undefined) updates.floor_level = payload.floorLevel;
+  if (payload.totalFloors !== undefined) updates.total_floors = payload.totalFloors;
+  if (payload.furnishingStatus !== undefined) updates.furnishing_status = payload.furnishingStatus;
+  if (payload.servicingStatus !== undefined) updates.servicing_status = payload.servicingStatus;
+  if (payload.propertyCondition !== undefined) updates.property_condition = payload.propertyCondition;
+  if (payload.amenities !== undefined) updates.amenities = payload.amenities;
+  if (payload.utilities !== undefined) updates.utilities = payload.utilities;
+  if (payload.safetyFeatures !== undefined) updates.safety_features = payload.safetyFeatures;
+  if (payload.nearbyLandmarks !== undefined) updates.nearby_landmarks = payload.nearbyLandmarks;
+  if (payload.extraFeatures !== undefined) updates.extra_features = payload.extraFeatures;
+  if (payload.landSize !== undefined) updates.land_size = payload.landSize;
+  if (payload.landSizeUnit !== undefined) updates.land_size_unit = payload.landSizeUnit;
+  if (payload.titleDocumentType !== undefined) updates.title_document_type = payload.titleDocumentType;
+  if (payload.zoningType !== undefined) updates.zoning_type = payload.zoningType;
+  if (payload.roadAccess !== undefined) updates.road_access = payload.roadAccess;
 
   const { data, error } = await supabase
     .from("listings")

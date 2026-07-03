@@ -4,12 +4,40 @@ export type ListingStatus = "pending" | "active" | "blocked";
 export type PropertyType = "apartment" | "duplex" | "land" | "office" | "shop";
 export type ListingCategory = "for_sale" | "for_rent" | "short_let";
 export type ListingAvailability = "available" | "sold" | "rented" | "booked";
+export type ListingPromotionType = "standard" | "premium" | "featured" | "sponsored";
+export type PropertySizeUnit = "sqm" | "sqft";
+export type LandSizeUnit = "sqm" | "plots" | "acres" | "hectares";
+export type FurnishingStatus = "unfurnished" | "semi_furnished" | "furnished";
+export type ServicingStatus = "unserviced" | "partly_serviced" | "serviced";
+export type PropertyCondition = "newly_built" | "renovated" | "fairly_used" | "needs_renovation";
+export type TitleDocumentType =
+  | "certificate_of_occupancy"
+  | "governors_consent"
+  | "registered_survey"
+  | "deed_of_assignment"
+  | "excision"
+  | "gazette"
+  | "receipt"
+  | "other";
+export type ZoningType = "residential" | "commercial" | "mixed_use" | "industrial" | "agricultural";
+export type RoadAccess = "tarred" | "untarred" | "estate_road" | "major_road" | "none";
 
 export type LocationValue = {
   state: string;
   city: string;
   area: string;
   slug: string;
+};
+
+export type ListingImageVariant = {
+  heroUrl: string;
+  cardUrl: string;
+  blurDataUrl: string | null;
+  width: number | null;
+  height: number | null;
+  cardWidth: number | null;
+  cardHeight: number | null;
+  order: number;
 };
 
 export type UserRecord = {
@@ -40,18 +68,57 @@ export type ListingRecord = {
   availability: ListingAvailability;
   status: ListingStatus;
   imageUrls: string[];
+  imageVariants: ListingImageVariant[];
+  promotionType?: ListingPromotionType | null;
+  boostedAt?: string | null;
+  lastRefreshedAt?: string | null;
+  expiresAt?: string | null;
+  featuredUntil?: string | null;
+  sponsoredUntil?: string | null;
+  photosVerifiedAt?: string | null;
   contactPhone: string;
   contactWhatsapp: string;
   location: LocationValue;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  toilets: number | null;
+  parkingSpaces: number | null;
+  propertySize: number | null;
+  propertySizeUnit: PropertySizeUnit | null;
+  yearBuilt: number | null;
+  floorLevel: number | null;
+  totalFloors: number | null;
+  furnishingStatus: FurnishingStatus | null;
+  servicingStatus: ServicingStatus | null;
+  propertyCondition: PropertyCondition | null;
+  amenities: string[];
+  utilities: string[];
+  safetyFeatures: string[];
+  nearbyLandmarks: string[];
+  extraFeatures: string[];
+  landSize: number | null;
+  landSizeUnit: LandSizeUnit | null;
+  titleDocumentType: TitleDocumentType | null;
+  zoningType: ZoningType | null;
+  roadAccess: RoadAccess | null;
   createdAt: string;
   updatedAt: string;
 };
 
 export type SubscriptionRecord = {
   agentId: string;
+  planSlug: string;
   trialStartsAt: string;
   trialEndsAt: string;
   isActive: boolean;
+  status: "trialing" | "active" | "past_due" | "cancelled" | "inactive";
+  paystackCustomerCode: string | null;
+  paystackSubscriptionCode: string | null;
+  paystackEmailToken: string | null;
+  paystackPlanCode: string | null;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
 };
 
 export type ListingFilters = {
@@ -61,6 +128,8 @@ export type ListingFilters = {
   city?: string;
   minPrice?: number;
   maxPrice?: number;
+  bedrooms?: number;
+  bathrooms?: number;
   propertyType?: PropertyType;
   listingCategory?: ListingCategory;
   cursor?: string;
