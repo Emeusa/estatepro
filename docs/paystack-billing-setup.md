@@ -31,9 +31,12 @@ PAYSTACK_PLAN_GROWTH_AGENT=PLN_...
 PAYSTACK_PLAN_PRO_AGENT=PLN_...
 PAYSTACK_PLAN_AGENCY_PLUS=PLN_...
 NEXT_PUBLIC_SITE_URL=https://c59estatehub.com
+BILLING_LIVE_ENABLED=false
 ```
 
 Use live keys only after the full test-mode flow works.
+
+Set `BILLING_LIVE_ENABLED=true` only after you have configured live Paystack keys, live plan codes, live webhook URL, and completed one controlled live payment test.
 
 ## 4. Configure Paystack Webhook
 

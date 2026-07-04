@@ -10,6 +10,7 @@ import {
   PaystackTransactionData,
   verifyPaystackTransaction
 } from "@/lib/paystack";
+import { isBillingLiveEnabled } from "@/lib/billing-config";
 import { getPlanAmountKobo, isPaidPricingPlanSlug } from "@/lib/pricing";
 import { getAgentProfile } from "@/modules/agents/agent.repository";
 import {
@@ -109,6 +110,10 @@ export async function startBillingCheckout(input: {
   email: string;
   planSlug: string;
 }) {
+  if (!isBillingLiveEnabled()) {
+    throw new Error("Paid billing is not live yet. Complete the live Paystack verification before accepting payments.");
+  }
+
   if (!isPaidPricingPlanSlug(input.planSlug)) {
     throw new Error("Select a paid monthly plan to continue.");
   }

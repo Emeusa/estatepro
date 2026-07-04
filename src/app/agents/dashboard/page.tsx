@@ -21,6 +21,9 @@ type DashboardData = {
     subscription?: SubscriptionRecord;
   };
   listings: ListingRecord[];
+  billing?: {
+    liveEnabled: boolean;
+  };
   token: string;
 };
 
@@ -159,6 +162,7 @@ export default function AgentDashboardPage() {
   const currentSubscription = data.profile.subscription ?? null;
   const currentPlan = getPricingPlan(getEffectivePlanSlug(currentSubscription));
   const hasActivePaidPlan = currentPlan.priceMonthly !== null && currentPlan.priceMonthly > 0 && isSubscriptionCurrentlyActive(currentSubscription);
+  const billingLiveEnabled = data.billing?.liveEnabled ?? false;
 
   function postProperty() {
     setCreateRequestKey((current) => current + 1);
@@ -335,7 +339,11 @@ export default function AgentDashboardPage() {
                     <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Launch pricing</p>
                     <h2 className="mt-2 text-lg font-bold text-slate-950">Visibility plans</h2>
                   </div>
-                  <p className="text-xs font-semibold text-slate-500">Secure checkout is handled by Paystack.</p>
+                  <p className="text-xs font-semibold text-slate-500">
+                    {billingLiveEnabled
+                      ? "Secure checkout is handled by Paystack."
+                      : "Live billing is locked until final Paystack verification is complete."}
+                  </p>
                 </div>
                 {billingMessage ? (
                   <p className="mt-3 rounded-2xl bg-slate-300/60 px-4 py-3 text-sm font-semibold text-slate-700">
@@ -380,7 +388,7 @@ export default function AgentDashboardPage() {
                           >
                             Current
                           </button>
-                        ) : isPaidPricingPlanSlug(plan.slug) ? (
+                        ) : isPaidPricingPlanSlug(plan.slug) && billingLiveEnabled ? (
                           <button
                             className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                             disabled={busyBillingPlan !== null}
@@ -389,6 +397,10 @@ export default function AgentDashboardPage() {
                           >
                             {busyBillingPlan === plan.slug ? "Opening Paystack..." : "Upgrade"}
                           </button>
+                        ) : isPaidPricingPlanSlug(plan.slug) ? (
+                          <p className="rounded-xl bg-slate-300/70 px-4 py-2.5 text-center text-xs font-bold text-slate-600">
+                            Billing opens soon
+                          </p>
                         ) : null}
                         {plan.slug === currentPlan.slug && hasActivePaidPlan && !currentSubscription?.cancelAtPeriodEnd ? (
                           <button
