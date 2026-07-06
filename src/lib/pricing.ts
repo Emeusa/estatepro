@@ -20,6 +20,13 @@ export type PricingPlan = {
   isPopular?: boolean;
 };
 
+export type PlanFeatureDisplayRow = {
+  key: string;
+  label: string;
+  value: string;
+  helpText: string;
+};
+
 export const PRICING_PLANS: PricingPlan[] = [
   {
     slug: "free_starter",
@@ -105,6 +112,144 @@ export const ADD_ON_PRICING = [
   { name: "Verified Photo Badge", price: "Free after admin confirmation" }
 ];
 
+const FEATURE_HELP = {
+  activeListings:
+    "The maximum number of available listings you can publish at the same time. Sold, rented, booked, or inactive listings stay in your account but do not count toward the main discovery feed.",
+  manualBoosts:
+    "A manual boost refreshes one listing's visibility signal so it can compete higher again without changing the original creation date. Use boosts on listings you want more people to see.",
+  autoRefresh:
+    "Auto refresh periodically renews eligible listings for you, so older active listings do not become buried as quickly. The shorter the interval, the more often the plan refreshes visibility.",
+  featuredCredits:
+    "Featured credits are used to give selected listings stronger visibility, such as future featured areas or highlighted placement. Listings must still be approved, active, available, and safe.",
+  sponsoredSlots:
+    "Sponsored search slots are paid, labelled placements for high-intent searches. They improve exposure but do not bypass agent approval, listing quality, availability, or safety checks.",
+  basicAnalytics:
+    "Basic analytics helps you understand interest in your listings, such as views, calls, WhatsApp clicks, and contact activity when tracking is available.",
+  priorityVerification:
+    "Priority verification moves your review ahead in the admin queue, but approval still depends on valid agent information and compliance with platform rules.",
+  prioritySupport:
+    "Priority support gives faster help with account, billing, listing visibility, and publishing issues.",
+  verifiedAgentEligibility:
+    "You can apply to become a verified agent. Verification helps users trust your listings and unlocks public visibility after admin approval.",
+  agentProfile:
+    "Your public agent profile lets property seekers browse your active listings and contact details from one place.",
+  directContact:
+    "Call and WhatsApp buttons let serious property seekers contact you quickly from listing pages.",
+  projectPages:
+    "Custom project pages are dedicated pages for estates, developments, or large property campaigns.",
+  homepageFeatures:
+    "Homepage features place selected projects or campaigns in premium homepage positions after manual approval.",
+  areaSponsorship:
+    "Area sponsorship gives a developer or agency premium visibility around a chosen city, LGA, or neighbourhood campaign.",
+  bulkUpload:
+    "Bulk upload support helps high-volume teams publish many listings faster without entering each property manually.",
+  bannerPlacements:
+    "Banner placements are custom advertising positions for larger campaigns and are configured manually with the C59 Estatehub team."
+} as const;
+
+const EXTRA_PLAN_FEATURES: Record<PricingPlanSlug, PlanFeatureDisplayRow[]> = {
+  free_starter: [
+    {
+      key: "verified-agent-eligibility",
+      label: "Verified agent eligibility",
+      value: "Included",
+      helpText: FEATURE_HELP.verifiedAgentEligibility
+    },
+    {
+      key: "agent-profile-page",
+      label: "Agent profile page",
+      value: "Included",
+      helpText: FEATURE_HELP.agentProfile
+    },
+    {
+      key: "direct-contact-links",
+      label: "Direct contact links",
+      value: "Included",
+      helpText: FEATURE_HELP.directContact
+    }
+  ],
+  starter_agent: [
+    {
+      key: "basic-analytics",
+      label: "Basic analytics",
+      value: "Included",
+      helpText: FEATURE_HELP.basicAnalytics
+    }
+  ],
+  growth_agent: [
+    {
+      key: "priority-verification",
+      label: "Priority verification",
+      value: "Included",
+      helpText: FEATURE_HELP.priorityVerification
+    }
+  ],
+  pro_agent: [
+    {
+      key: "basic-analytics",
+      label: "Analytics",
+      value: "Included",
+      helpText: FEATURE_HELP.basicAnalytics
+    }
+  ],
+  agency_plus: [
+    {
+      key: "priority-support",
+      label: "Priority support",
+      value: "Included",
+      helpText: FEATURE_HELP.prioritySupport
+    }
+  ],
+  developer_enterprise: [
+    {
+      key: "project-pages",
+      label: "Project pages",
+      value: "Custom",
+      helpText: FEATURE_HELP.projectPages
+    },
+    {
+      key: "homepage-features",
+      label: "Homepage features",
+      value: "Custom",
+      helpText: FEATURE_HELP.homepageFeatures
+    },
+    {
+      key: "area-sponsorship",
+      label: "Area sponsorship",
+      value: "Custom",
+      helpText: FEATURE_HELP.areaSponsorship
+    },
+    {
+      key: "bulk-upload",
+      label: "Bulk upload support",
+      value: "Custom",
+      helpText: FEATURE_HELP.bulkUpload
+    },
+    {
+      key: "banner-placements",
+      label: "Banner placements",
+      value: "Custom",
+      helpText: FEATURE_HELP.bannerPlacements
+    }
+  ]
+};
+
+function monthlyValue(value: number | null, unit: string) {
+  if (value === null) {
+    return "Custom";
+  }
+
+  return value > 0 ? `${value} ${unit}/month` : "Not included";
+}
+
+function autoRefreshValue(plan: PricingPlan) {
+  if (plan.autoRefreshDays === null) {
+    return plan.priceMonthly === null ? "Custom" : "Manual only";
+  }
+
+  return `Every ${plan.autoRefreshDays} days`;
+}
+
 export const PAID_PLAN_SLUGS = [
   "starter_agent",
   "growth_agent",
@@ -122,6 +267,43 @@ export function formatPlanPrice(price: number | null) {
   return price === null ? "Custom" : price === 0 ? "NGN 0/mo" : `NGN ${price.toLocaleString("en-NG")}/mo`;
 }
 
+export function getPlanFeatureRows(plan: PricingPlan): PlanFeatureDisplayRow[] {
+  const baseRows: PlanFeatureDisplayRow[] = [
+    {
+      key: "active-listings",
+      label: "Active listings",
+      value: plan.activeListings === null ? "Custom limit" : `${plan.activeListings} listings`,
+      helpText: FEATURE_HELP.activeListings
+    },
+    {
+      key: "manual-boosts",
+      label: "Manual boosts",
+      value: monthlyValue(plan.manualBoosts, "boosts"),
+      helpText: FEATURE_HELP.manualBoosts
+    },
+    {
+      key: "auto-refresh",
+      label: "Auto refresh",
+      value: autoRefreshValue(plan),
+      helpText: FEATURE_HELP.autoRefresh
+    },
+    {
+      key: "featured-credits",
+      label: "Featured credits",
+      value: monthlyValue(plan.featuredCredits, "credits"),
+      helpText: FEATURE_HELP.featuredCredits
+    },
+    {
+      key: "sponsored-slots",
+      label: "Sponsored search slots",
+      value: monthlyValue(plan.sponsoredSlots, "slots"),
+      helpText: FEATURE_HELP.sponsoredSlots
+    }
+  ];
+
+  return [...baseRows, ...EXTRA_PLAN_FEATURES[plan.slug]];
+}
+
 export function isPaidPricingPlanSlug(slug: string): slug is PaidPricingPlanSlug {
   return PAID_PLAN_SLUGS.includes(slug as PaidPricingPlanSlug);
 }
@@ -132,4 +314,26 @@ export function getActiveListingLimit(planSlug?: string | null) {
 
 export function getPlanAmountKobo(planSlug: PaidPricingPlanSlug) {
   return (getPricingPlan(planSlug).priceMonthly ?? 0) * 100;
+}
+
+const PLAN_RANKS: Record<PricingPlanSlug, number> = {
+  free_starter: 0,
+  starter_agent: 1,
+  growth_agent: 2,
+  pro_agent: 3,
+  agency_plus: 4,
+  developer_enterprise: 5
+};
+
+export function getPlanRank(planSlug?: string | null) {
+  const plan = getPricingPlan(planSlug);
+  return PLAN_RANKS[plan.slug];
+}
+
+export function isLowerPlan(currentPlanSlug: string | null | undefined, targetPlanSlug: string | null | undefined) {
+  return getPlanRank(targetPlanSlug) < getPlanRank(currentPlanSlug);
+}
+
+export function isHigherPlan(currentPlanSlug: string | null | undefined, targetPlanSlug: string | null | undefined) {
+  return getPlanRank(targetPlanSlug) > getPlanRank(currentPlanSlug);
 }

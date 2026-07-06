@@ -7,7 +7,8 @@ import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rat
 import { startBillingCheckout } from "@/modules/billing/billing.service";
 
 const checkoutSchema = z.object({
-  planSlug: z.string().trim()
+  planSlug: z.string().trim(),
+  provider: z.enum(["paystack", "opay"]).optional()
 });
 
 export async function POST(request: NextRequest) {
@@ -22,7 +23,8 @@ export async function POST(request: NextRequest) {
     const checkout = await startBillingCheckout({
       agentId: decoded.uid,
       email: decoded.email,
-      planSlug: body.planSlug
+      planSlug: body.planSlug,
+      provider: body.provider
     });
 
     await logSecurityEvent({
@@ -30,7 +32,7 @@ export async function POST(request: NextRequest) {
       action: "billing_checkout_initialized",
       result: "success",
       userId: decoded.uid,
-      metadata: { planSlug: body.planSlug, reference: checkout.reference }
+      metadata: { planSlug: body.planSlug, provider: body.provider ?? "paystack", reference: checkout.reference }
     });
 
     return withRateLimitHeaders(NextResponse.json(checkout), limited.headers);

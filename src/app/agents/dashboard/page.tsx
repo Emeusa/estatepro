@@ -4,11 +4,20 @@ import { useEffect, useMemo, useState } from "react";
 
 import { ListingManager } from "@/components/agents/listing-manager";
 import { VerifiedAgentName } from "@/components/agents/verified-agent-name";
+import { PlanFeatureRow } from "@/components/shared/plan-feature-row";
 import { apiRequest } from "@/lib/api";
-import { formatPlanPrice, getPricingPlan, isPaidPricingPlanSlug, PRICING_PLANS } from "@/lib/pricing";
+import {
+  formatPlanPrice,
+  getPlanFeatureRows,
+  getPricingPlan,
+  isHigherPlan,
+  isLowerPlan,
+  isPaidPricingPlanSlug,
+  PRICING_PLANS
+} from "@/lib/pricing";
 import { getEffectivePlanSlug, isSubscriptionCurrentlyActive } from "@/lib/subscriptions";
 import { supabase } from "@/lib/supabase/client";
-import { ListingRecord, SubscriptionRecord, UserRecord } from "@/lib/types";
+import { BillingProvider, ListingRecord, SubscriptionRecord, UserRecord } from "@/lib/types";
 
 type DashboardData = {
   user: UserRecord | null;
@@ -23,6 +32,7 @@ type DashboardData = {
   listings: ListingRecord[];
   billing?: {
     liveEnabled: boolean;
+    opayEnabled: boolean;
   };
   token: string;
 };
@@ -47,6 +57,26 @@ function initials(name: string) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join("") || "AG";
+}
+
+function checkoutBusyKey(planSlug: string, provider: BillingProvider) {
+  return `${planSlug}:${provider}`;
+}
+
+function readableDate(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-NG", {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  }).format(new Date(value));
+}
+
+function providerLabel(provider: BillingProvider) {
+  return provider === "opay" ? "OPay" : "Paystack";
 }
 
 function StatCard({ label, value, tone = "blue" }: StatCardProps) {
@@ -127,7 +157,7 @@ export default function AgentDashboardPage() {
     if (billingResult === "success") {
       setBillingMessage("Payment confirmed. Your plan has been updated.");
     } else if (billingResult === "failed") {
-      setBillingMessage("Payment verification failed. If you were charged, contact support with your Paystack reference.");
+      setBillingMessage("Payment verification failed. If you were charged, contact support with your payment reference.");
     }
   }, []);
 
@@ -161,19 +191,26 @@ export default function AgentDashboardPage() {
   const accountStatus = isBlocked ? "Blocked" : "Operational";
   const currentSubscription = data.profile.subscription ?? null;
   const currentPlan = getPricingPlan(getEffectivePlanSlug(currentSubscription));
-  const hasActivePaidPlan = currentPlan.priceMonthly !== null && currentPlan.priceMonthly > 0 && isSubscriptionCurrentlyActive(currentSubscription);
+  const subscriptionActive = isSubscriptionCurrentlyActive(currentSubscription);
+  const hasActivePaidPlan = currentPlan.priceMonthly !== null && currentPlan.priceMonthly > 0 && subscriptionActive;
+  const hasCancellablePaidPlan =
+    hasActivePaidPlan &&
+    currentSubscription?.paymentProvider === "paystack" &&
+    currentSubscription.billingMode === "recurring";
   const billingLiveEnabled = data.billing?.liveEnabled ?? false;
+  const opayEnabled = data.billing?.opayEnabled ?? false;
+  const currentPeriodEndLabel = readableDate(currentSubscription?.currentPeriodEnd);
 
   function postProperty() {
     setCreateRequestKey((current) => current + 1);
   }
 
-  async function startCheckout(planSlug: string) {
+  async function startCheckout(planSlug: string, provider: BillingProvider) {
     if (!data?.token || !isPaidPricingPlanSlug(planSlug)) {
       return;
     }
 
-    setBusyBillingPlan(planSlug);
+    setBusyBillingPlan(checkoutBusyKey(planSlug, provider));
     setBillingMessage("");
 
     try {
@@ -181,11 +218,12 @@ export default function AgentDashboardPage() {
         method: "POST",
         retries: 0,
         headers: { Authorization: `Bearer ${data.token}` },
-        body: JSON.stringify({ planSlug })
+        body: JSON.stringify({ planSlug, provider })
       });
-      window.location.assign(response.authorizationUrl);
+      window.open(response.authorizationUrl, "_blank", "noopener,noreferrer");
+      setBusyBillingPlan(null);
     } catch (error) {
-      setBillingMessage(error instanceof Error ? error.message : "Could not start Paystack checkout.");
+      setBillingMessage(error instanceof Error ? error.message : `Could not start ${providerLabel(provider)} checkout.`);
       setBusyBillingPlan(null);
     }
   }
@@ -322,6 +360,9 @@ export default function AgentDashboardPage() {
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Subscription</p>
                 <p className="mt-2 text-lg font-semibold text-slate-950 sm:mt-3 sm:text-xl">{currentPlan.name}</p>
                 <p className="mt-1 text-xs font-semibold text-slate-500">{formatPlanPrice(currentPlan.priceMonthly)}</p>
+                {hasActivePaidPlan && currentSubscription?.billingMode === "prepaid" && currentPeriodEndLabel ? (
+                  <p className="mt-1 text-xs font-bold text-emerald-700">Active until {currentPeriodEndLabel}</p>
+                ) : null}
                 {currentSubscription?.cancelAtPeriodEnd ? (
                   <p className="mt-1 text-xs font-bold text-amber-700">Renewal cancelled</p>
                 ) : null}
@@ -341,8 +382,10 @@ export default function AgentDashboardPage() {
                   </div>
                   <p className="text-xs font-semibold text-slate-500">
                     {billingLiveEnabled
-                      ? "Secure checkout is handled by Paystack."
-                      : "Live billing is locked until final Paystack verification is complete."}
+                      ? opayEnabled
+                        ? "Secure checkout is handled by Paystack and OPay."
+                        : "Paystack checkout is live. OPay appears after merchant keys are configured."
+                      : "Live billing is locked until final billing verification is complete."}
                   </p>
                 </div>
                 {billingMessage ? (
@@ -350,6 +393,10 @@ export default function AgentDashboardPage() {
                     {billingMessage}
                   </p>
                 ) : null}
+                <p className="mt-3 text-xs font-semibold leading-5 text-slate-500">
+                  What these features mean: hover, focus, or tap the helper icon beside each feature for a plain-language
+                  explanation before choosing a plan.
+                </p>
                 <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {PRICING_PLANS.slice(0, 5).map((plan) => (
                     <article
@@ -374,10 +421,10 @@ export default function AgentDashboardPage() {
                         ) : null}
                       </div>
                       <p className="mt-3 text-xs leading-5 text-slate-600">{plan.description}</p>
-                      <div className="mt-3 grid gap-1 text-xs font-semibold text-slate-700">
-                        <span>{plan.activeListings ?? "Custom"} active listings</span>
-                        <span>{plan.manualBoosts ?? "Custom"} boosts/month</span>
-                        <span>{plan.featuredCredits ?? "Custom"} featured credits/month</span>
+                      <div className="mt-3 grid gap-2">
+                        {getPlanFeatureRows(plan).map((feature) => (
+                          <PlanFeatureRow key={feature.key} feature={feature} />
+                        ))}
                       </div>
                       <div className="mt-4">
                         {plan.slug === currentPlan.slug ? (
@@ -388,21 +435,60 @@ export default function AgentDashboardPage() {
                           >
                             Current
                           </button>
+                        ) : hasActivePaidPlan && isLowerPlan(currentPlan.slug, plan.slug) ? (
+                          <p className="rounded-xl bg-slate-300/70 px-4 py-2.5 text-center text-xs font-bold text-slate-600">
+                            Available after current plan expires
+                          </p>
                         ) : isPaidPricingPlanSlug(plan.slug) && billingLiveEnabled ? (
-                          <button
-                            className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                            disabled={busyBillingPlan !== null}
-                            onClick={() => startCheckout(plan.slug)}
-                            type="button"
-                          >
-                            {busyBillingPlan === plan.slug ? "Opening Paystack..." : "Upgrade"}
-                          </button>
+                          <div className="grid gap-2">
+                            {(["paystack", "opay"] as BillingProvider[]).map((provider) => {
+                              const busyKey = checkoutBusyKey(plan.slug, provider);
+                              const opayUnavailable = provider === "opay" && !opayEnabled;
+                              const paystackToOpayBlocked =
+                                provider === "opay" &&
+                                hasActivePaidPlan &&
+                                currentSubscription?.paymentProvider === "paystack" &&
+                                currentSubscription.billingMode === "recurring" &&
+                                isHigherPlan(currentPlan.slug, plan.slug);
+                              const disabled = busyBillingPlan !== null || opayUnavailable || paystackToOpayBlocked;
+
+                              return (
+                                <button
+                                  key={provider}
+                                  className={`w-full rounded-xl px-4 py-2.5 text-xs font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                                    provider === "opay"
+                                      ? "bg-emerald-600 hover:bg-emerald-700"
+                                      : "bg-blue-600 hover:bg-blue-700"
+                                  }`}
+                                  disabled={disabled}
+                                  onClick={() => startCheckout(plan.slug, provider)}
+                                  type="button"
+                                >
+                                  {busyBillingPlan === busyKey
+                                    ? `Opening ${providerLabel(provider)}...`
+                                    : `Pay with ${providerLabel(provider)}`}
+                                </button>
+                              );
+                            })}
+                            {!opayEnabled ? (
+                              <p className="text-center text-[11px] font-semibold text-slate-500">
+                                OPay is hidden until merchant keys are configured.
+                              </p>
+                            ) : currentSubscription?.paymentProvider === "paystack" &&
+                              currentSubscription.billingMode === "recurring" &&
+                              hasActivePaidPlan &&
+                              isHigherPlan(currentPlan.slug, plan.slug) ? (
+                              <p className="text-center text-[11px] font-semibold text-slate-500">
+                                OPay switching is available after the current Paystack period expires.
+                              </p>
+                            ) : null}
+                          </div>
                         ) : isPaidPricingPlanSlug(plan.slug) ? (
                           <p className="rounded-xl bg-slate-300/70 px-4 py-2.5 text-center text-xs font-bold text-slate-600">
                             Billing opens soon
                           </p>
                         ) : null}
-                        {plan.slug === currentPlan.slug && hasActivePaidPlan && !currentSubscription?.cancelAtPeriodEnd ? (
+                        {plan.slug === currentPlan.slug && hasCancellablePaidPlan && !currentSubscription?.cancelAtPeriodEnd ? (
                           <button
                             className="mt-2 w-full rounded-xl border border-slate-400 px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
                             disabled={cancellingBilling}

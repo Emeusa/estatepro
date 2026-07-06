@@ -35,10 +35,14 @@ create table if not exists public.plans (
 create table if not exists public.subscriptions (
   agent_id uuid primary key references public.users (id) on delete cascade,
   plan_slug text not null default 'free_starter',
+  payment_provider text not null default 'paystack',
+  billing_mode text not null default 'recurring',
   paystack_customer_code text,
   paystack_subscription_code text,
   paystack_email_token text,
   paystack_plan_code text,
+  opay_order_no text,
+  opay_transaction_id text,
   current_period_start timestamptz,
   current_period_end timestamptz,
   cancel_at_period_end boolean not null default false,
@@ -53,7 +57,8 @@ create table if not exists public.billing_transactions (
   agent_id uuid not null references public.users (id) on delete cascade,
   reference text not null unique,
   plan_slug text not null references public.plans (slug),
-  paystack_plan_code text not null,
+  payment_provider text not null default 'paystack',
+  paystack_plan_code text,
   amount_kobo integer not null check (amount_kobo > 0),
   currency text not null default 'NGN',
   status text not null default 'pending' check (status in ('pending', 'success', 'failed', 'abandoned')),
@@ -62,6 +67,8 @@ create table if not exists public.billing_transactions (
   paystack_transaction_id text,
   paystack_customer_code text,
   paystack_subscription_code text,
+  opay_order_no text,
+  opay_transaction_id text,
   raw_response jsonb not null default '{}',
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
@@ -209,10 +216,29 @@ alter table public.subscriptions
   add column if not exists paystack_subscription_code text,
   add column if not exists paystack_email_token text,
   add column if not exists paystack_plan_code text,
+  add column if not exists payment_provider text not null default 'paystack',
+  add column if not exists billing_mode text not null default 'recurring',
+  add column if not exists opay_order_no text,
+  add column if not exists opay_transaction_id text,
   add column if not exists current_period_start timestamptz,
   add column if not exists current_period_end timestamptz,
   add column if not exists cancel_at_period_end boolean not null default false,
   add column if not exists status text not null default 'active';
+
+alter table public.billing_transactions
+  add column if not exists payment_provider text not null default 'paystack',
+  add column if not exists opay_order_no text,
+  add column if not exists opay_transaction_id text;
+
+alter table public.billing_transactions
+  alter column paystack_plan_code drop not null;
+
+update public.subscriptions
+set payment_provider = coalesce(payment_provider, 'paystack'),
+    billing_mode = coalesce(billing_mode, 'recurring');
+
+update public.billing_transactions
+set payment_provider = coalesce(payment_provider, 'paystack');
 
 alter table public.listings
   add column if not exists promotion_type text not null default 'standard',
@@ -382,6 +408,30 @@ begin
   end if;
 
   if not exists (
+    select 1 from pg_constraint where conname = 'subscriptions_payment_provider_check'
+  ) then
+    alter table public.subscriptions
+      add constraint subscriptions_payment_provider_check
+      check (payment_provider in ('paystack', 'opay'));
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint where conname = 'subscriptions_billing_mode_check'
+  ) then
+    alter table public.subscriptions
+      add constraint subscriptions_billing_mode_check
+      check (billing_mode in ('recurring', 'prepaid'));
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint where conname = 'billing_transactions_payment_provider_check'
+  ) then
+    alter table public.billing_transactions
+      add constraint billing_transactions_payment_provider_check
+      check (payment_provider in ('paystack', 'opay'));
+  end if;
+
+  if not exists (
     select 1 from pg_constraint where conname = 'listings_promotion_type_check'
   ) then
     alter table public.listings
@@ -468,6 +518,9 @@ create index if not exists listings_feed_expiry_idx
 create index if not exists subscriptions_plan_idx
   on public.subscriptions (plan_slug, is_active);
 
+create index if not exists subscriptions_provider_idx
+  on public.subscriptions (payment_provider, billing_mode, is_active);
+
 create index if not exists subscriptions_paystack_customer_idx
   on public.subscriptions (paystack_customer_code)
   where paystack_customer_code is not null;
@@ -476,14 +529,25 @@ create index if not exists subscriptions_paystack_subscription_idx
   on public.subscriptions (paystack_subscription_code)
   where paystack_subscription_code is not null;
 
+create index if not exists subscriptions_opay_order_idx
+  on public.subscriptions (opay_order_no)
+  where opay_order_no is not null;
+
 create index if not exists billing_transactions_agent_idx
   on public.billing_transactions (agent_id, created_at desc);
 
 create index if not exists billing_transactions_status_idx
   on public.billing_transactions (status, created_at desc);
 
+create index if not exists billing_transactions_provider_status_idx
+  on public.billing_transactions (payment_provider, status, created_at desc);
+
 create index if not exists billing_transactions_reference_idx
   on public.billing_transactions (reference);
+
+create index if not exists billing_transactions_opay_order_idx
+  on public.billing_transactions (opay_order_no)
+  where opay_order_no is not null;
 
 create index if not exists plans_active_idx
   on public.plans (is_active, monthly_price_naira);

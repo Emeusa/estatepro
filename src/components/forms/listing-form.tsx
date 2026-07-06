@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, ReactNode, useEffect, useState } from "react";
 
 import { ApiRequestError, apiRequest } from "@/lib/api";
 import {
@@ -42,14 +42,61 @@ type Props = {
   onSaved?: (listing: ListingRecord) => void;
 };
 
+function OptionalSection({
+  title,
+  helper,
+  defaultOpen = false,
+  muted = false,
+  children
+}: {
+  title: string;
+  helper: string;
+  defaultOpen?: boolean;
+  muted?: boolean;
+  children: ReactNode;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  useEffect(() => {
+    setIsOpen(defaultOpen);
+  }, [defaultOpen]);
+
+  return (
+    <details
+      className={`rounded-2xl border border-slate-200 bg-slate-50/70 p-3 ${muted ? "opacity-70" : ""}`}
+      open={isOpen}
+      onToggle={(event) => setIsOpen(event.currentTarget.open)}
+    >
+      <summary className="cursor-pointer list-none">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{title}</p>
+            <p className="mt-1 text-xs text-slate-500">{helper}</p>
+          </div>
+          <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600 ring-1 ring-slate-200">
+            Optional
+          </span>
+        </div>
+      </summary>
+      <div className="mt-3">{children}</div>
+    </details>
+  );
+}
+
 export function ListingForm({ token, listing, onSaved }: Props) {
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedState, setSelectedState] = useState(listing?.location.state ?? "");
   const [selectedLga, setSelectedLga] = useState(listing?.location.city ?? "");
+  const [propertyType, setPropertyType] = useState(listing?.propertyType ?? "apartment");
   const [listingCategory, setListingCategory] = useState<ListingCategory>(listing?.listingCategory ?? "for_sale");
   const [availability, setAvailability] = useState(listing?.availability ?? "available");
+  const [contactPhone, setContactPhone] = useState(listing?.contactPhone ?? "");
+  const [contactWhatsapp, setContactWhatsapp] = useState(listing?.contactWhatsapp ?? "");
+  const [whatsappSameAsPhone, setWhatsappSameAsPhone] = useState(
+    listing ? listing.contactPhone === listing.contactWhatsapp : true
+  );
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [uploadThumbnailIndex, setUploadThumbnailIndex] = useState(0);
@@ -68,8 +115,12 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     setExistingThumbnailIndex(0);
     setSelectedState(listing?.location.state ?? "");
     setSelectedLga(listing?.location.city ?? "");
+    setPropertyType(listing?.propertyType ?? "apartment");
     setListingCategory(listing?.listingCategory ?? "for_sale");
     setAvailability(listing?.availability ?? "available");
+    setContactPhone(listing?.contactPhone ?? "");
+    setContactWhatsapp(listing?.contactWhatsapp ?? "");
+    setWhatsappSameAsPhone(listing ? listing.contactPhone === listing.contactWhatsapp : true);
   }, [listing]);
 
   useEffect(() => {
@@ -272,8 +323,12 @@ export function ListingForm({ token, listing, onSaved }: Props) {
         setExistingThumbnailIndex(0);
         setSelectedState("");
         setSelectedLga("");
+        setPropertyType("apartment");
         setListingCategory("for_sale");
         setAvailability("available");
+        setContactPhone("");
+        setContactWhatsapp("");
+        setWhatsappSameAsPhone(true);
       }
     } catch (error) {
       if (error instanceof ApiRequestError && error.fields) {
@@ -286,6 +341,26 @@ export function ListingForm({ token, listing, onSaved }: Props) {
       setIsSubmitting(false);
     }
   }
+
+  const roomsDefaultOpen = Boolean(listing?.bedrooms || listing?.bathrooms || listing?.toilets || listing?.parkingSpaces);
+  const buildingDefaultOpen = Boolean(
+    listing?.propertySize ||
+      listing?.yearBuilt ||
+      listing?.floorLevel ||
+      listing?.totalFloors ||
+      listing?.furnishingStatus ||
+      listing?.servicingStatus ||
+      listing?.propertyCondition
+  );
+  const amenitiesDefaultOpen = Boolean(
+    listing?.amenities.length ||
+      listing?.utilities.length ||
+      listing?.safetyFeatures.length ||
+      listing?.nearbyLandmarks.length ||
+      listing?.extraFeatures.length
+  );
+  const landDefaultOpen = Boolean(listing?.landSize || listing?.titleDocumentType || listing?.zoningType || listing?.roadAccess);
+  const isLandType = propertyType === "land";
 
   return (
     <form key={formKey} onSubmit={onSubmit} className="grid gap-3 rounded-2xl bg-white p-4 shadow-sm sm:rounded-3xl sm:p-5">
@@ -306,7 +381,12 @@ export function ListingForm({ token, listing, onSaved }: Props) {
           {fieldErrors.price ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.price}</p> : null}
         </div>
         <div>
-          <select className="input" name="propertyType" defaultValue={listing?.propertyType}>
+          <select
+            className="input"
+            name="propertyType"
+            value={propertyType}
+            onChange={(event) => setPropertyType(event.target.value as typeof propertyType)}
+          >
             <option value="apartment">Apartment</option>
             <option value="duplex">Duplex</option>
             <option value="land">Land</option>
@@ -345,94 +425,92 @@ export function ListingForm({ token, listing, onSaved }: Props) {
           ))}
         </select>
       </div>
-      <fieldset className="rounded-2xl border border-slate-200 p-3">
-        <legend className="px-1 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Rooms</legend>
-        {fieldErrors.quality ? <p className="mb-2 text-sm text-rose-600">{fieldErrors.quality}</p> : null}
-        <div className="grid gap-3 md:grid-cols-4">
-          <input className="input" name="bedrooms" type="number" min={1} defaultValue={listing?.bedrooms ?? ""} placeholder="Bedrooms" />
-          <input className="input" name="bathrooms" type="number" min={1} defaultValue={listing?.bathrooms ?? ""} placeholder="Bathrooms" />
-          <input className="input" name="toilets" type="number" min={1} defaultValue={listing?.toilets ?? ""} placeholder="Toilets" />
-          <input className="input" name="parkingSpaces" type="number" min={1} defaultValue={listing?.parkingSpaces ?? ""} placeholder="Parking spaces" />
+      <div className="grid gap-3 md:grid-cols-3">
+        <div>
+          <select
+            className="input"
+            name="state"
+            value={selectedState}
+            onChange={(event) => {
+              setSelectedState(event.target.value);
+              setSelectedLga("");
+            }}
+          >
+            <option value="">Select state</option>
+            {NIGERIA_STATES.map((state) => (
+              <option key={state} value={state}>
+                {state}
+              </option>
+            ))}
+          </select>
+          {fieldErrors.state ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.state}</p> : null}
         </div>
-      </fieldset>
-      <fieldset className="rounded-2xl border border-slate-200 p-3">
-        <legend className="px-1 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Building details</legend>
-        <div className="grid gap-3 md:grid-cols-3">
-          <input className="input" name="propertySize" type="number" min={1} defaultValue={listing?.propertySize ?? ""} placeholder="Property size" />
-          <select className="input" name="propertySizeUnit" defaultValue={listing?.propertySizeUnit ?? ""}>
-            <option value="">Size unit</option>
-            {PROPERTY_SIZE_UNITS.map((value) => (
-              <option key={value} value={value}>{PROPERTY_SIZE_UNIT_LABELS[value]}</option>
+        <div>
+          <select
+            className="input"
+            name="city"
+            value={selectedLga}
+            disabled={!selectedState}
+            onChange={(event) => setSelectedLga(event.target.value)}
+          >
+            <option value="">{selectedState ? "Select city" : "Select state first"}</option>
+            {cityOptions.map((lga) => (
+              <option key={lga} value={lga}>
+                {lga}
+              </option>
             ))}
           </select>
-          <input className="input" name="yearBuilt" type="number" min={1800} defaultValue={listing?.yearBuilt ?? ""} placeholder="Year built" />
-          <input className="input" name="floorLevel" type="number" min={1} defaultValue={listing?.floorLevel ?? ""} placeholder="Floor level" />
-          <input className="input" name="totalFloors" type="number" min={1} defaultValue={listing?.totalFloors ?? ""} placeholder="Total floors" />
+          {fieldErrors.city ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.city}</p> : null}
         </div>
-      </fieldset>
-      <fieldset className="rounded-2xl border border-slate-200 p-3">
-        <legend className="px-1 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Condition</legend>
-        <div className="grid gap-3 md:grid-cols-3">
-          <select className="input" name="furnishingStatus" defaultValue={listing?.furnishingStatus ?? ""}>
-            <option value="">Furnishing</option>
-            {FURNISHING_STATUSES.map((value) => (
-              <option key={value} value={value}>{FURNISHING_STATUS_LABELS[value]}</option>
-            ))}
-          </select>
-          <select className="input" name="servicingStatus" defaultValue={listing?.servicingStatus ?? ""}>
-            <option value="">Servicing</option>
-            {SERVICING_STATUSES.map((value) => (
-              <option key={value} value={value}>{SERVICING_STATUS_LABELS[value]}</option>
-            ))}
-          </select>
-          <select className="input" name="propertyCondition" defaultValue={listing?.propertyCondition ?? ""}>
-            <option value="">Property condition</option>
-            {PROPERTY_CONDITIONS.map((value) => (
-              <option key={value} value={value}>{PROPERTY_CONDITION_LABELS[value]}</option>
-            ))}
-          </select>
+        <div>
+          <input className="input" name="area" defaultValue={listing?.location.area} placeholder="Area" />
+          {fieldErrors.area ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.area}</p> : null}
         </div>
-      </fieldset>
-      <fieldset className="rounded-2xl border border-slate-200 p-3">
-        <legend className="px-1 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Amenities and features</legend>
-        <div className="grid gap-3 md:grid-cols-2">
-          <textarea className="input min-h-24" name="amenities" defaultValue={arrayValue(listing?.amenities ?? [])} placeholder="Amenities, separated by commas" />
-          <textarea className="input min-h-24" name="utilities" defaultValue={arrayValue(listing?.utilities ?? [])} placeholder="Utilities, separated by commas" />
-          <textarea className="input min-h-24" name="safetyFeatures" defaultValue={arrayValue(listing?.safetyFeatures ?? [])} placeholder="Safety features, separated by commas" />
-          <textarea className="input min-h-24" name="nearbyLandmarks" defaultValue={arrayValue(listing?.nearbyLandmarks ?? [])} placeholder="Nearby landmarks, separated by commas" />
-          <textarea className="input min-h-24 md:col-span-2" name="extraFeatures" defaultValue={arrayValue(listing?.extraFeatures ?? [])} placeholder="Extra features, separated by commas" />
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <input
+            className="input"
+            name="contactPhone"
+            value={contactPhone}
+            placeholder="Contact phone"
+            onChange={(event) => {
+              setContactPhone(event.target.value);
+              if (whatsappSameAsPhone) {
+                setContactWhatsapp(event.target.value);
+              }
+            }}
+          />
+          {fieldErrors.contactPhone ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.contactPhone}</p> : null}
         </div>
-      </fieldset>
-      <fieldset className="rounded-2xl border border-slate-200 p-3">
-        <legend className="px-1 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Land and commercial details</legend>
-        <div className="grid gap-3 md:grid-cols-3">
-          <input className="input" name="landSize" type="number" min={1} defaultValue={listing?.landSize ?? ""} placeholder="Land size" />
-          <select className="input" name="landSizeUnit" defaultValue={listing?.landSizeUnit ?? ""}>
-            <option value="">Land size unit</option>
-            {LAND_SIZE_UNITS.map((value) => (
-              <option key={value} value={value}>{LAND_SIZE_UNIT_LABELS[value]}</option>
-            ))}
-          </select>
-          <select className="input" name="titleDocumentType" defaultValue={listing?.titleDocumentType ?? ""}>
-            <option value="">Title document</option>
-            {TITLE_DOCUMENT_TYPES.map((value) => (
-              <option key={value} value={value}>{TITLE_DOCUMENT_TYPE_LABELS[value]}</option>
-            ))}
-          </select>
-          <select className="input" name="zoningType" defaultValue={listing?.zoningType ?? ""}>
-            <option value="">Zoning</option>
-            {ZONING_TYPES.map((value) => (
-              <option key={value} value={value}>{ZONING_TYPE_LABELS[value]}</option>
-            ))}
-          </select>
-          <select className="input" name="roadAccess" defaultValue={listing?.roadAccess ?? ""}>
-            <option value="">Road access</option>
-            {ROAD_ACCESS_TYPES.map((value) => (
-              <option key={value} value={value}>{ROAD_ACCESS_LABELS[value]}</option>
-            ))}
-          </select>
+        <div>
+          <input
+            className="input"
+            name="contactWhatsapp"
+            value={contactWhatsapp}
+            readOnly={whatsappSameAsPhone}
+            placeholder="WhatsApp number"
+            onChange={(event) => setContactWhatsapp(event.target.value)}
+          />
+          <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-600">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300"
+              checked={whatsappSameAsPhone}
+              onChange={(event) => {
+                setWhatsappSameAsPhone(event.target.checked);
+                if (event.target.checked) {
+                  setContactWhatsapp(contactPhone);
+                }
+              }}
+            />
+            WhatsApp same as phone
+          </label>
+          {fieldErrors.contactWhatsapp ? (
+            <p className="mt-1 text-sm text-rose-600">{fieldErrors.contactWhatsapp}</p>
+          ) : null}
         </div>
-      </fieldset>
+      </div>
       <div>
         <input
           className="input"
@@ -444,7 +522,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
         />
         <p className="mt-1 text-xs text-slate-500">
           Upload up to {MAX_LISTING_IMAGES} {SUPPORTED_LISTING_IMAGE_LABEL} images. Each image must be{" "}
-          {MAX_LISTING_IMAGE_MB} MB or less.
+          {MAX_LISTING_IMAGE_MB} MB or less. The first selected image becomes the listing thumbnail.
         </p>
         {fieldErrors.images ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.images}</p> : null}
       </div>
@@ -499,65 +577,102 @@ export function ListingForm({ token, listing, onSaved }: Props) {
           </div>
         </div>
       ) : null}
-      <div className="grid gap-3 md:grid-cols-2">
-        <div>
-          <input className="input" name="contactPhone" defaultValue={listing?.contactPhone} placeholder="Contact phone" />
-          {fieldErrors.contactPhone ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.contactPhone}</p> : null}
+      <OptionalSection
+        title="Rooms"
+        helper={isLandType ? "Usually not needed for land listings." : "Add rooms to improve search matching."}
+        defaultOpen={roomsDefaultOpen}
+        muted={isLandType}
+      >
+        {fieldErrors.quality ? <p className="mb-2 text-sm text-rose-600">{fieldErrors.quality}</p> : null}
+        <div className="grid gap-3 md:grid-cols-4">
+          <input className="input" name="bedrooms" type="number" min={1} defaultValue={listing?.bedrooms ?? ""} placeholder="Bedrooms" />
+          <input className="input" name="bathrooms" type="number" min={1} defaultValue={listing?.bathrooms ?? ""} placeholder="Bathrooms" />
+          <input className="input" name="toilets" type="number" min={1} defaultValue={listing?.toilets ?? ""} placeholder="Toilets" />
+          <input className="input" name="parkingSpaces" type="number" min={1} defaultValue={listing?.parkingSpaces ?? ""} placeholder="Parking spaces" />
         </div>
-        <div>
-          <input
-            className="input"
-            name="contactWhatsapp"
-            defaultValue={listing?.contactWhatsapp}
-            placeholder="WhatsApp number"
-          />
-          {fieldErrors.contactWhatsapp ? (
-            <p className="mt-1 text-sm text-rose-600">{fieldErrors.contactWhatsapp}</p>
-          ) : null}
-        </div>
-      </div>
-      <div className="grid gap-3 md:grid-cols-3">
-        <div>
-          <select
-            className="input"
-            name="state"
-            value={selectedState}
-            onChange={(event) => {
-              setSelectedState(event.target.value);
-              setSelectedLga("");
-            }}
-          >
-            <option value="">Select state</option>
-            {NIGERIA_STATES.map((state) => (
-              <option key={state} value={state}>
-                {state}
-              </option>
+      </OptionalSection>
+      <OptionalSection
+        title="Building details"
+        helper="Optional, but improves listing quality."
+        defaultOpen={buildingDefaultOpen}
+      >
+        <div className="grid gap-3 md:grid-cols-3">
+          <input className="input" name="propertySize" type="number" min={1} defaultValue={listing?.propertySize ?? ""} placeholder="Property size" />
+          <select className="input" name="propertySizeUnit" defaultValue={listing?.propertySizeUnit ?? ""}>
+            <option value="">Size unit</option>
+            {PROPERTY_SIZE_UNITS.map((value) => (
+              <option key={value} value={value}>{PROPERTY_SIZE_UNIT_LABELS[value]}</option>
             ))}
           </select>
-          {fieldErrors.state ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.state}</p> : null}
-        </div>
-        <div>
-          <select
-            className="input"
-            name="city"
-            value={selectedLga}
-            disabled={!selectedState}
-            onChange={(event) => setSelectedLga(event.target.value)}
-          >
-            <option value="">{selectedState ? "Select LGA" : "Select state first"}</option>
-            {cityOptions.map((lga) => (
-              <option key={lga} value={lga}>
-                {lga}
-              </option>
+          <input className="input" name="yearBuilt" type="number" min={1800} defaultValue={listing?.yearBuilt ?? ""} placeholder="Year built" />
+          <input className="input" name="floorLevel" type="number" min={1} defaultValue={listing?.floorLevel ?? ""} placeholder="Floor level" />
+          <input className="input" name="totalFloors" type="number" min={1} defaultValue={listing?.totalFloors ?? ""} placeholder="Total floors" />
+          <select className="input" name="furnishingStatus" defaultValue={listing?.furnishingStatus ?? ""}>
+            <option value="">Furnishing</option>
+            {FURNISHING_STATUSES.map((value) => (
+              <option key={value} value={value}>{FURNISHING_STATUS_LABELS[value]}</option>
             ))}
           </select>
-          {fieldErrors.city ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.city}</p> : null}
+          <select className="input" name="servicingStatus" defaultValue={listing?.servicingStatus ?? ""}>
+            <option value="">Servicing</option>
+            {SERVICING_STATUSES.map((value) => (
+              <option key={value} value={value}>{SERVICING_STATUS_LABELS[value]}</option>
+            ))}
+          </select>
+          <select className="input" name="propertyCondition" defaultValue={listing?.propertyCondition ?? ""}>
+            <option value="">Property condition</option>
+            {PROPERTY_CONDITIONS.map((value) => (
+              <option key={value} value={value}>{PROPERTY_CONDITION_LABELS[value]}</option>
+            ))}
+          </select>
         </div>
-        <div>
-          <input className="input" name="area" defaultValue={listing?.location.area} placeholder="Area" />
-          {fieldErrors.area ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.area}</p> : null}
+      </OptionalSection>
+      <OptionalSection
+        title="Amenities and features"
+        helper="Use commas, for example: Air Conditioning, Balcony, Wardrobe."
+        defaultOpen={amenitiesDefaultOpen}
+      >
+        <div className="grid gap-3 md:grid-cols-2">
+          <textarea className="input min-h-24" name="amenities" defaultValue={arrayValue(listing?.amenities ?? [])} placeholder="Amenities, separated by commas" />
+          <textarea className="input min-h-24" name="utilities" defaultValue={arrayValue(listing?.utilities ?? [])} placeholder="Utilities, separated by commas" />
+          <textarea className="input min-h-24" name="safetyFeatures" defaultValue={arrayValue(listing?.safetyFeatures ?? [])} placeholder="Safety features, separated by commas" />
+          <textarea className="input min-h-24" name="nearbyLandmarks" defaultValue={arrayValue(listing?.nearbyLandmarks ?? [])} placeholder="Nearby landmarks, separated by commas" />
+          <textarea className="input min-h-24 md:col-span-2" name="extraFeatures" defaultValue={arrayValue(listing?.extraFeatures ?? [])} placeholder="Extra features, separated by commas" />
         </div>
-      </div>
+      </OptionalSection>
+      <OptionalSection
+        title="Land and commercial details"
+        helper="Useful for land, shops, offices, and commercial listings."
+        defaultOpen={landDefaultOpen || isLandType}
+      >
+        <div className="grid gap-3 md:grid-cols-3">
+          <input className="input" name="landSize" type="number" min={1} defaultValue={listing?.landSize ?? ""} placeholder="Land size" />
+          <select className="input" name="landSizeUnit" defaultValue={listing?.landSizeUnit ?? ""}>
+            <option value="">Land size unit</option>
+            {LAND_SIZE_UNITS.map((value) => (
+              <option key={value} value={value}>{LAND_SIZE_UNIT_LABELS[value]}</option>
+            ))}
+          </select>
+          <select className="input" name="titleDocumentType" defaultValue={listing?.titleDocumentType ?? ""}>
+            <option value="">Title document</option>
+            {TITLE_DOCUMENT_TYPES.map((value) => (
+              <option key={value} value={value}>{TITLE_DOCUMENT_TYPE_LABELS[value]}</option>
+            ))}
+          </select>
+          <select className="input" name="zoningType" defaultValue={listing?.zoningType ?? ""}>
+            <option value="">Zoning</option>
+            {ZONING_TYPES.map((value) => (
+              <option key={value} value={value}>{ZONING_TYPE_LABELS[value]}</option>
+            ))}
+          </select>
+          <select className="input" name="roadAccess" defaultValue={listing?.roadAccess ?? ""}>
+            <option value="">Road access</option>
+            {ROAD_ACCESS_TYPES.map((value) => (
+              <option key={value} value={value}>{ROAD_ACCESS_LABELS[value]}</option>
+            ))}
+          </select>
+        </div>
+      </OptionalSection>
       <TurnstileFields />
       <button className="button-primary" disabled={isSubmitting}>
         {isSubmitting ? "Saving..." : "Save listing"}

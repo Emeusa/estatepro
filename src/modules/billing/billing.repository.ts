@@ -1,14 +1,15 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { toSubscriptionRecord } from "@/lib/supabase-mappers";
 import { PaidPricingPlanSlug } from "@/lib/pricing";
-import { SubscriptionRecord } from "@/lib/types";
+import { BillingMode, BillingProvider, SubscriptionRecord } from "@/lib/types";
 
 export type BillingTransactionRecord = {
   id: string;
   agentId: string;
   reference: string;
   planSlug: PaidPricingPlanSlug;
-  paystackPlanCode: string;
+  paymentProvider: BillingProvider;
+  paystackPlanCode: string | null;
   amountKobo: number;
   currency: string;
   status: "pending" | "success" | "failed" | "abandoned";
@@ -17,6 +18,8 @@ export type BillingTransactionRecord = {
   paystackTransactionId: string | null;
   paystackCustomerCode: string | null;
   paystackSubscriptionCode: string | null;
+  opayOrderNo: string | null;
+  opayTransactionId: string | null;
 };
 
 type BillingTransactionRow = {
@@ -24,7 +27,8 @@ type BillingTransactionRow = {
   agent_id: string;
   reference: string;
   plan_slug: PaidPricingPlanSlug;
-  paystack_plan_code: string;
+  payment_provider?: BillingProvider | null;
+  paystack_plan_code: string | null;
   amount_kobo: number;
   currency: string;
   status: BillingTransactionRecord["status"];
@@ -33,6 +37,8 @@ type BillingTransactionRow = {
   paystack_transaction_id: string | null;
   paystack_customer_code: string | null;
   paystack_subscription_code: string | null;
+  opay_order_no?: string | null;
+  opay_transaction_id?: string | null;
 };
 
 function toBillingTransaction(row: BillingTransactionRow): BillingTransactionRecord {
@@ -41,6 +47,7 @@ function toBillingTransaction(row: BillingTransactionRow): BillingTransactionRec
     agentId: row.agent_id,
     reference: row.reference,
     planSlug: row.plan_slug,
+    paymentProvider: row.payment_provider ?? "paystack",
     paystackPlanCode: row.paystack_plan_code,
     amountKobo: row.amount_kobo,
     currency: row.currency,
@@ -49,7 +56,9 @@ function toBillingTransaction(row: BillingTransactionRow): BillingTransactionRec
     accessCode: row.access_code,
     paystackTransactionId: row.paystack_transaction_id,
     paystackCustomerCode: row.paystack_customer_code,
-    paystackSubscriptionCode: row.paystack_subscription_code
+    paystackSubscriptionCode: row.paystack_subscription_code,
+    opayOrderNo: row.opay_order_no ?? null,
+    opayTransactionId: row.opay_transaction_id ?? null
   };
 }
 
@@ -57,7 +66,8 @@ export async function createBillingTransaction(input: {
   agentId: string;
   reference: string;
   planSlug: PaidPricingPlanSlug;
-  paystackPlanCode: string;
+  paymentProvider: BillingProvider;
+  paystackPlanCode: string | null;
   amountKobo: number;
 }) {
   const supabase = createServerSupabaseClient();
@@ -67,6 +77,7 @@ export async function createBillingTransaction(input: {
       agent_id: input.agentId,
       reference: input.reference,
       plan_slug: input.planSlug,
+      payment_provider: input.paymentProvider,
       paystack_plan_code: input.paystackPlanCode,
       amount_kobo: input.amountKobo,
       currency: "NGN",
@@ -86,6 +97,7 @@ export async function updateBillingTransactionInitialized(input: {
   reference: string;
   authorizationUrl: string;
   accessCode: string;
+  opayOrderNo?: string | null;
 }) {
   const supabase = createServerSupabaseClient();
   await supabase
@@ -93,6 +105,7 @@ export async function updateBillingTransactionInitialized(input: {
     .update({
       authorization_url: input.authorizationUrl,
       access_code: input.accessCode,
+      ...(input.opayOrderNo !== undefined ? { opay_order_no: input.opayOrderNo } : {}),
       updated_at: new Date().toISOString()
     })
     .eq("reference", input.reference);
@@ -127,32 +140,42 @@ export async function markBillingTransactionFailed(reference: string, rawRespons
 
 export async function markBillingTransactionSuccess(input: {
   reference: string;
-  paystackTransactionId: string | null;
-  paystackCustomerCode: string | null;
-  paystackSubscriptionCode: string | null;
+  paystackTransactionId?: string | null;
+  paystackCustomerCode?: string | null;
+  paystackSubscriptionCode?: string | null;
+  opayTransactionId?: string | null;
+  opayOrderNo?: string | null;
   rawResponse: unknown;
 }) {
+  const payload: Record<string, unknown> = {
+    status: "success",
+    raw_response: input.rawResponse,
+    updated_at: new Date().toISOString()
+  };
+  if (input.paystackTransactionId !== undefined) payload.paystack_transaction_id = input.paystackTransactionId;
+  if (input.paystackCustomerCode !== undefined) payload.paystack_customer_code = input.paystackCustomerCode;
+  if (input.paystackSubscriptionCode !== undefined) payload.paystack_subscription_code = input.paystackSubscriptionCode;
+  if (input.opayTransactionId !== undefined) payload.opay_transaction_id = input.opayTransactionId;
+  if (input.opayOrderNo !== undefined) payload.opay_order_no = input.opayOrderNo;
+
   const supabase = createServerSupabaseClient();
   await supabase
     .from("billing_transactions")
-    .update({
-      status: "success",
-      paystack_transaction_id: input.paystackTransactionId,
-      paystack_customer_code: input.paystackCustomerCode,
-      paystack_subscription_code: input.paystackSubscriptionCode,
-      raw_response: input.rawResponse,
-      updated_at: new Date().toISOString()
-    })
+    .update(payload)
     .eq("reference", input.reference);
 }
 
 export async function upsertActiveSubscription(input: {
   agentId: string;
   planSlug: PaidPricingPlanSlug;
-  paystackPlanCode: string;
-  paystackCustomerCode: string | null;
-  paystackSubscriptionCode: string | null;
-  paystackEmailToken: string | null;
+  paymentProvider: BillingProvider;
+  billingMode: BillingMode;
+  paystackPlanCode?: string | null;
+  paystackCustomerCode?: string | null;
+  paystackSubscriptionCode?: string | null;
+  paystackEmailToken?: string | null;
+  opayOrderNo?: string | null;
+  opayTransactionId?: string | null;
   currentPeriodStart: string;
   currentPeriodEnd: string;
 }) {
@@ -163,10 +186,14 @@ export async function upsertActiveSubscription(input: {
       {
         agent_id: input.agentId,
         plan_slug: input.planSlug,
-        paystack_plan_code: input.paystackPlanCode,
-        paystack_customer_code: input.paystackCustomerCode,
-        paystack_subscription_code: input.paystackSubscriptionCode,
-        paystack_email_token: input.paystackEmailToken,
+        payment_provider: input.paymentProvider,
+        billing_mode: input.billingMode,
+        paystack_plan_code: input.paystackPlanCode ?? null,
+        paystack_customer_code: input.paystackCustomerCode ?? null,
+        paystack_subscription_code: input.paystackSubscriptionCode ?? null,
+        paystack_email_token: input.paystackEmailToken ?? null,
+        opay_order_no: input.opayOrderNo ?? null,
+        opay_transaction_id: input.opayTransactionId ?? null,
         current_period_start: input.currentPeriodStart,
         current_period_end: input.currentPeriodEnd,
         cancel_at_period_end: false,
@@ -228,6 +255,10 @@ export async function updateSubscriptionBillingState(
     paystackCustomerCode: string | null;
     paystackSubscriptionCode: string | null;
     paystackEmailToken: string | null;
+    paymentProvider: BillingProvider;
+    billingMode: BillingMode;
+    opayOrderNo: string | null;
+    opayTransactionId: string | null;
     status: SubscriptionRecord["status"];
     isActive: boolean;
     cancelAtPeriodEnd: boolean;
@@ -239,6 +270,10 @@ export async function updateSubscriptionBillingState(
   if (updates.paystackCustomerCode !== undefined) payload.paystack_customer_code = updates.paystackCustomerCode;
   if (updates.paystackSubscriptionCode !== undefined) payload.paystack_subscription_code = updates.paystackSubscriptionCode;
   if (updates.paystackEmailToken !== undefined) payload.paystack_email_token = updates.paystackEmailToken;
+  if (updates.paymentProvider !== undefined) payload.payment_provider = updates.paymentProvider;
+  if (updates.billingMode !== undefined) payload.billing_mode = updates.billingMode;
+  if (updates.opayOrderNo !== undefined) payload.opay_order_no = updates.opayOrderNo;
+  if (updates.opayTransactionId !== undefined) payload.opay_transaction_id = updates.opayTransactionId;
   if (updates.status !== undefined) payload.status = updates.status;
   if (updates.isActive !== undefined) payload.is_active = updates.isActive;
   if (updates.cancelAtPeriodEnd !== undefined) payload.cancel_at_period_end = updates.cancelAtPeriodEnd;

@@ -21,6 +21,8 @@ export type TitleDocumentType =
   | "other";
 export type ZoningType = "residential" | "commercial" | "mixed_use" | "industrial" | "agricultural";
 export type RoadAccess = "tarred" | "untarred" | "estate_road" | "major_road" | "none";
+export type BillingProvider = "paystack" | "opay";
+export type BillingMode = "recurring" | "prepaid";
 
 export type LocationValue = {
   state: string;
@@ -108,6 +110,8 @@ export type ListingRecord = {
 export type SubscriptionRecord = {
   agentId: string;
   planSlug: string;
+  paymentProvider: BillingProvider;
+  billingMode: BillingMode;
   trialStartsAt: string;
   trialEndsAt: string;
   isActive: boolean;
@@ -116,6 +120,8 @@ export type SubscriptionRecord = {
   paystackSubscriptionCode: string | null;
   paystackEmailToken: string | null;
   paystackPlanCode: string | null;
+  opayOrderNo: string | null;
+  opayTransactionId: string | null;
   currentPeriodStart: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;

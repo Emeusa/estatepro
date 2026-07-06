@@ -10,8 +10,19 @@ import {
   PaystackTransactionData,
   verifyPaystackTransaction
 } from "@/lib/paystack";
-import { isBillingLiveEnabled } from "@/lib/billing-config";
-import { getPlanAmountKobo, isPaidPricingPlanSlug } from "@/lib/pricing";
+import {
+  getOpayAmountKobo,
+  getOpayTransactionId,
+  initializeOpayPayment,
+  isSuccessfulOpayStatus,
+  OpayCallbackEvent,
+  OpayPaymentStatus,
+  verifyOpayPaymentStatus
+} from "@/lib/opay";
+import { isBillingLiveEnabled, isOpayConfigured } from "@/lib/billing-config";
+import { getEffectivePlanSlug, isSubscriptionCurrentlyActive } from "@/lib/subscriptions";
+import { getPlanAmountKobo, isHigherPlan, isLowerPlan, isPaidPricingPlanSlug } from "@/lib/pricing";
+import { BillingProvider, SubscriptionRecord } from "@/lib/types";
 import { getAgentProfile } from "@/modules/agents/agent.repository";
 import {
   createBillingTransaction,
@@ -30,6 +41,10 @@ type PaystackWebhookEvent = {
   event: string;
   data?: Record<string, unknown>;
 };
+
+function normalizeBillingProvider(provider?: string | null): BillingProvider {
+  return provider === "opay" ? "opay" : "paystack";
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
@@ -72,6 +87,47 @@ function transactionId(transaction: PaystackTransactionData) {
   return transaction.id === undefined ? null : String(transaction.id);
 }
 
+function assertBillingLive(provider: BillingProvider) {
+  if (!isBillingLiveEnabled()) {
+    throw new Error("Paid billing is not live yet. Complete final billing verification before accepting payments.");
+  }
+
+  if (provider === "opay" && !isOpayConfigured()) {
+    throw new Error("OPay is not configured yet. Add the OPay merchant keys in Vercel.");
+  }
+}
+
+function assertPlanTransitionAllowed(input: {
+  subscription?: SubscriptionRecord | null;
+  targetPlanSlug: string;
+  provider: BillingProvider;
+}) {
+  const { subscription, targetPlanSlug, provider } = input;
+  if (!subscription || !isSubscriptionCurrentlyActive(subscription)) {
+    return;
+  }
+
+  const currentPlanSlug = getEffectivePlanSlug(subscription);
+  const hasActivePaidPlan = isPaidPricingPlanSlug(currentPlanSlug);
+
+  if (subscription.planSlug === targetPlanSlug && subscription.isActive) {
+    throw new Error("You are already on this plan.");
+  }
+
+  if (hasActivePaidPlan && isLowerPlan(currentPlanSlug, targetPlanSlug)) {
+    throw new Error("Lower plans are available after your current plan expires.");
+  }
+
+  if (
+    hasActivePaidPlan &&
+    isHigherPlan(currentPlanSlug, targetPlanSlug) &&
+    subscription.paymentProvider === "paystack" &&
+    provider === "opay"
+  ) {
+    throw new Error("Wait until your current Paystack plan expires before switching to OPay.");
+  }
+}
+
 function assertSuccessfulTransaction(
   transaction: PaystackTransactionData,
   expected: {
@@ -109,14 +165,13 @@ export async function startBillingCheckout(input: {
   agentId: string;
   email: string;
   planSlug: string;
+  provider?: string;
 }) {
-  if (!isBillingLiveEnabled()) {
-    throw new Error("Paid billing is not live yet. Complete the live Paystack verification before accepting payments.");
-  }
-
   if (!isPaidPricingPlanSlug(input.planSlug)) {
     throw new Error("Select a paid monthly plan to continue.");
   }
+  const provider = normalizeBillingProvider(input.provider);
+  assertBillingLive(provider);
 
   const { agent, subscription } = await getAgentProfile(input.agentId);
   if (!agent) {
@@ -125,23 +180,43 @@ export async function startBillingCheckout(input: {
   if (agent.isBlocked || agent.verificationStatus !== "approved") {
     throw new Error("Your agent account must be approved and active before upgrading.");
   }
-  if (subscription?.planSlug === input.planSlug && subscription.isActive && !subscription.cancelAtPeriodEnd) {
-    throw new Error("You are already on this plan.");
-  }
+  assertPlanTransitionAllowed({ subscription, targetPlanSlug: input.planSlug, provider });
 
   const reference = createBillingReference();
-  const paystackPlanCode = getPaystackPlanCode(input.planSlug);
+  const paystackPlanCode = provider === "paystack" ? getPaystackPlanCode(input.planSlug) : null;
   const amountKobo = getPlanAmountKobo(input.planSlug);
 
   await createBillingTransaction({
     agentId: input.agentId,
     reference,
     planSlug: input.planSlug,
+    paymentProvider: provider,
     paystackPlanCode,
     amountKobo
   });
 
   try {
+    if (provider === "opay") {
+      const checkout = await initializeOpayPayment({
+        agentId: input.agentId,
+        email: input.email,
+        planSlug: input.planSlug,
+        reference
+      });
+
+      await updateBillingTransactionInitialized({
+        reference,
+        authorizationUrl: checkout.authorizationUrl,
+        accessCode: checkout.orderNo ?? checkout.reference,
+        opayOrderNo: checkout.orderNo
+      });
+
+      return {
+        authorizationUrl: checkout.authorizationUrl,
+        reference
+      };
+    }
+
     const checkout = await initializePaystackTransaction({
       email: input.email,
       planSlug: input.planSlug,
@@ -166,7 +241,8 @@ export async function startBillingCheckout(input: {
     };
   } catch (error) {
     await markBillingTransactionFailed(reference, {
-      message: error instanceof Error ? error.message : "Paystack checkout failed."
+      message: error instanceof Error ? error.message : "Billing checkout failed.",
+      provider
     });
     throw error;
   }
@@ -177,15 +253,18 @@ export async function applySuccessfulPaystackTransaction(reference: string) {
   if (!billingTransaction) {
     throw new Error("Billing transaction was not found.");
   }
+  if (billingTransaction.paymentProvider !== "paystack" || !billingTransaction.paystackPlanCode) {
+    throw new Error("This payment reference is not a Paystack transaction.");
+  }
 
   const transaction = await verifyPaystackTransaction(reference);
   try {
     assertSuccessfulTransaction(transaction, {
       reference,
-      amountKobo: billingTransaction.amountKobo,
-      currency: billingTransaction.currency,
-      planCode: billingTransaction.paystackPlanCode,
-      agentId: billingTransaction.agentId
+    amountKobo: billingTransaction.amountKobo,
+    currency: billingTransaction.currency,
+    planCode: billingTransaction.paystackPlanCode,
+    agentId: billingTransaction.agentId
     });
   } catch (error) {
     await markBillingTransactionFailed(reference, transaction);
@@ -199,6 +278,8 @@ export async function applySuccessfulPaystackTransaction(reference: string) {
   const subscription = await upsertActiveSubscription({
     agentId: billingTransaction.agentId,
     planSlug: billingTransaction.planSlug,
+    paymentProvider: "paystack",
+    billingMode: "recurring",
     paystackPlanCode: billingTransaction.paystackPlanCode,
     paystackCustomerCode: customerCode,
     paystackSubscriptionCode: subscriptionCode,
@@ -212,6 +293,72 @@ export async function applySuccessfulPaystackTransaction(reference: string) {
     paystackTransactionId: transactionId(transaction),
     paystackCustomerCode: customerCode,
     paystackSubscriptionCode: subscriptionCode,
+    rawResponse: transaction
+  });
+
+  return subscription;
+}
+
+function assertSuccessfulOpayTransaction(
+  transaction: OpayPaymentStatus,
+  expected: {
+    reference: string;
+    amountKobo: number;
+    currency: string;
+  }
+) {
+  if (!isSuccessfulOpayStatus(transaction.status)) {
+    throw new Error("OPay payment was not successful.");
+  }
+
+  if (transaction.reference && transaction.reference !== expected.reference) {
+    throw new Error("OPay payment reference mismatch.");
+  }
+
+  if (getOpayAmountKobo(transaction) !== expected.amountKobo || transaction.amount?.currency !== expected.currency) {
+    throw new Error("OPay payment amount mismatch.");
+  }
+}
+
+export async function applySuccessfulOpayTransaction(reference: string) {
+  const billingTransaction = await getBillingTransactionByReference(reference);
+  if (!billingTransaction) {
+    throw new Error("Billing transaction was not found.");
+  }
+  if (billingTransaction.paymentProvider !== "opay") {
+    throw new Error("This payment reference is not an OPay transaction.");
+  }
+
+  const transaction = await verifyOpayPaymentStatus(reference);
+  try {
+    assertSuccessfulOpayTransaction(transaction, {
+      reference,
+      amountKobo: billingTransaction.amountKobo,
+      currency: billingTransaction.currency
+    });
+  } catch (error) {
+    await markBillingTransactionFailed(reference, transaction);
+    throw error;
+  }
+
+  const now = new Date().toISOString();
+  const opayOrderNo = transaction.orderNo ?? billingTransaction.opayOrderNo;
+  const opayTransactionId = getOpayTransactionId(transaction);
+  const subscription = await upsertActiveSubscription({
+    agentId: billingTransaction.agentId,
+    planSlug: billingTransaction.planSlug,
+    paymentProvider: "opay",
+    billingMode: "prepaid",
+    opayOrderNo,
+    opayTransactionId,
+    currentPeriodStart: now,
+    currentPeriodEnd: getFallbackPeriodEnd(new Date(now))
+  });
+
+  await markBillingTransactionSuccess({
+    reference,
+    opayOrderNo,
+    opayTransactionId,
     rawResponse: transaction
   });
 
@@ -255,6 +402,8 @@ async function applyWebhookSubscriptionUpdate(data: Record<string, unknown>) {
   await upsertActiveSubscription({
     agentId,
     planSlug,
+    paymentProvider: "paystack",
+    billingMode: "recurring",
     paystackPlanCode: planCode,
     paystackCustomerCode: readCustomerCode(data),
     paystackSubscriptionCode: readSubscriptionCode(data),
@@ -303,8 +452,26 @@ export async function processPaystackWebhook(event: PaystackWebhookEvent) {
   }
 }
 
+export async function processOpayWebhook(event: OpayCallbackEvent) {
+  const payload = event.payload ?? {};
+  const reference = readString(payload.reference);
+  if (!reference) {
+    return;
+  }
+
+  if (!isSuccessfulOpayStatus(payload.status)) {
+    await markBillingTransactionFailed(reference, event);
+    return;
+  }
+
+  await applySuccessfulOpayTransaction(reference);
+}
+
 export async function cancelAgentSubscription(agentId: string) {
   const subscription = await getSubscriptionByAgentId(agentId);
+  if (subscription?.paymentProvider === "opay" || subscription?.billingMode === "prepaid") {
+    throw new Error("OPay prepaid plans do not renew automatically, so there is no renewal to cancel.");
+  }
   if (!subscription?.paystackSubscriptionCode || !subscription.paystackEmailToken) {
     throw new Error("This subscription cannot be cancelled automatically yet.");
   }

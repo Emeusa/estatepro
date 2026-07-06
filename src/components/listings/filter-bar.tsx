@@ -85,8 +85,22 @@ export function FilterBar({
   const [propertyType, setPropertyType] = useState(initialType ?? "");
   const [listingCategory, setListingCategory] = useState(initialCategory ?? "");
   const [activeTab, setActiveTab] = useState(getInitialTab(initialCategory, initialType));
+  const [showMoreFilters, setShowMoreFilters] = useState(
+    Boolean(initialCategory || initialMinPrice || initialMaxPrice || initialBedrooms || initialBathrooms)
+  );
 
   const lgas = getLgasForState(state);
+  const hasActiveFilters = Boolean(
+    keyword.trim() ||
+      state ||
+      city ||
+      minPrice ||
+      maxPrice ||
+      bedrooms ||
+      bathrooms ||
+      propertyType ||
+      listingCategory
+  );
 
   function applyTab(tab: FilterTab) {
     setActiveTab(tab.label);
@@ -120,10 +134,15 @@ export function FilterBar({
     window.location.href = params.toString() ? `/?${params.toString()}#search-results` : "/#search-results";
   }
 
+  function clearFilters() {
+    window.location.href = "/#search-results";
+  }
+
   const selectClass =
     "w-full cursor-pointer appearance-none bg-transparent py-3 pr-6 text-sm font-bold text-white outline-none disabled:cursor-not-allowed disabled:text-white/55 md:py-2 [&>option]:bg-white [&>option]:text-slate-950";
   const fieldWrapClass =
     "relative cursor-pointer border-b border-white/70 px-2 text-white md:border-b-0 md:border-r md:border-white/45 md:px-4 last:md:border-r-0";
+  const advancedFieldWrapClass = `${fieldWrapClass} ${showMoreFilters ? "block" : "hidden md:block"}`;
 
   return (
     <form
@@ -230,7 +249,7 @@ export function FilterBar({
             <SelectChevron />
           </label>
 
-          <label className={fieldWrapClass}>
+          <label className={advancedFieldWrapClass}>
             <span className="sr-only">Listing category</span>
             <select
               className={selectClass}
@@ -254,7 +273,7 @@ export function FilterBar({
             <SelectChevron />
           </label>
 
-          <label className={fieldWrapClass}>
+          <label className={advancedFieldWrapClass}>
             <span className="sr-only">Bedrooms</span>
             <select className={selectClass} value={bedrooms} onChange={(event) => setBedrooms(event.target.value)}>
               <option value="">Bedrooms</option>
@@ -267,7 +286,7 @@ export function FilterBar({
             <SelectChevron />
           </label>
 
-          <label className={fieldWrapClass}>
+          <label className={advancedFieldWrapClass}>
             <span className="sr-only">Bathrooms</span>
             <select className={selectClass} value={bathrooms} onChange={(event) => setBathrooms(event.target.value)}>
               <option value="">Bathrooms</option>
@@ -280,7 +299,7 @@ export function FilterBar({
             <SelectChevron />
           </label>
 
-          <label className={fieldWrapClass}>
+          <label className={advancedFieldWrapClass}>
             <span className="sr-only">Minimum price</span>
             <input
               className="w-full bg-transparent py-3 text-sm font-bold text-white outline-none placeholder:text-white md:py-2"
@@ -291,7 +310,7 @@ export function FilterBar({
             />
           </label>
 
-          <label className={fieldWrapClass}>
+          <label className={advancedFieldWrapClass}>
             <span className="sr-only">Maximum price</span>
             <input
               className="w-full bg-transparent py-3 text-sm font-bold text-white outline-none placeholder:text-white md:py-2"
@@ -302,9 +321,38 @@ export function FilterBar({
             />
           </label>
         </div>
-        <button className="min-h-10 cursor-pointer rounded-md bg-[#430078] px-8 text-sm font-bold text-white shadow-sm md:hidden">
-          Search
-        </button>
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div className="flex gap-2 md:hidden">
+            <button
+              className="flex-1 rounded-md border border-white/60 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-white/10"
+              type="button"
+              onClick={() => setShowMoreFilters((current) => !current)}
+            >
+              {showMoreFilters ? "Hide filters" : "More filters"}
+            </button>
+            {hasActiveFilters ? (
+              <button
+                className="rounded-md border border-white/60 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-white/10"
+                type="button"
+                onClick={clearFilters}
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
+          {hasActiveFilters ? (
+            <button
+              className="hidden rounded-md border border-white/50 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/10 md:inline-flex"
+              type="button"
+              onClick={clearFilters}
+            >
+              Clear filters
+            </button>
+          ) : <span className="hidden md:block" />}
+          <button className="min-h-10 cursor-pointer rounded-md bg-[#430078] px-8 text-sm font-bold text-white shadow-sm md:hidden">
+            Search
+          </button>
+        </div>
       </div>
       <div className="mt-6 hidden h-px w-full bg-white/40 md:block" aria-hidden="true" />
     </form>

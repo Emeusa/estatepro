@@ -28,10 +28,14 @@ type DatabaseAgent = {
 type DatabaseSubscription = {
   agent_id: string;
   plan_slug?: string | null;
+  payment_provider?: SubscriptionRecord["paymentProvider"] | null;
+  billing_mode?: SubscriptionRecord["billingMode"] | null;
   paystack_customer_code?: string | null;
   paystack_subscription_code?: string | null;
   paystack_email_token?: string | null;
   paystack_plan_code?: string | null;
+  opay_order_no?: string | null;
+  opay_transaction_id?: string | null;
   current_period_start?: string | null;
   current_period_end?: string | null;
   cancel_at_period_end?: boolean | null;
@@ -155,6 +159,8 @@ export function toSubscriptionRecord(row: DatabaseSubscription): SubscriptionRec
   return {
     agentId: row.agent_id,
     planSlug: row.plan_slug ?? "free_starter",
+    paymentProvider: row.payment_provider ?? "paystack",
+    billingMode: row.billing_mode ?? "recurring",
     trialStartsAt: row.trial_starts_at,
     trialEndsAt: row.trial_ends_at,
     isActive: row.is_active,
@@ -163,6 +169,8 @@ export function toSubscriptionRecord(row: DatabaseSubscription): SubscriptionRec
     paystackSubscriptionCode: row.paystack_subscription_code ?? null,
     paystackEmailToken: row.paystack_email_token ?? null,
     paystackPlanCode: row.paystack_plan_code ?? null,
+    opayOrderNo: row.opay_order_no ?? null,
+    opayTransactionId: row.opay_transaction_id ?? null,
     currentPeriodStart: row.current_period_start ?? null,
     currentPeriodEnd: row.current_period_end ?? null,
     cancelAtPeriodEnd: row.cancel_at_period_end ?? false

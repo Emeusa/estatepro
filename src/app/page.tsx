@@ -35,6 +35,17 @@ type Props = {
 
 export default async function HomePage({ searchParams }: Props) {
   const params = await searchParams;
+  const hasActiveFilters = [
+    "q",
+    "state",
+    "city",
+    "minPrice",
+    "maxPrice",
+    "bedrooms",
+    "bathrooms",
+    "propertyType",
+    "listingCategory"
+  ].some((key) => typeof params[key] === "string" && Boolean(params[key]));
   const listings = await getPublicListings({
     keyword: typeof params.q === "string" ? params.q : undefined,
     state: typeof params.state === "string" ? params.state : undefined,
@@ -68,7 +79,7 @@ export default async function HomePage({ searchParams }: Props) {
             Property search
           </p>
           <p className="mx-auto mt-4 max-w-2xl text-[clamp(0.82rem,3.4vw,0.95rem)] leading-6 text-stone-100 sm:mt-5 sm:leading-7">
-            Built for mobile-first browsing, low bandwidth, and fast contact with verified agents.
+            Built for fast contact with verified agents.
           </p>
           <div className="mx-auto mt-6 max-w-6xl text-left sm:mt-8">
             <FilterBar
@@ -86,7 +97,7 @@ export default async function HomePage({ searchParams }: Props) {
         </div>
       </section>
       <section id="search-results" className="scroll-mt-24">
-        <ListingGrid listings={listings.items} />
+        <ListingGrid listings={listings.items} hasActiveFilters={hasActiveFilters} />
       </section>
     </div>
   );

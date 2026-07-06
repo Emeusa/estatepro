@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { AuthError, requireAgent } from "@/lib/auth";
-import { isBillingLiveEnabled } from "@/lib/billing-config";
+import { isBillingLiveEnabled, isOpayConfigured } from "@/lib/billing-config";
 import { captureServerError } from "@/lib/security/logger";
 import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
 import { getAgentDashboardData, getUserAccount } from "@/modules/agents/agent.service";
@@ -27,7 +27,8 @@ export async function GET(request: NextRequest) {
         listings,
         user,
         billing: {
-          liveEnabled: isBillingLiveEnabled()
+          liveEnabled: isBillingLiveEnabled(),
+          opayEnabled: isOpayConfigured()
         }
       }),
       limited.headers

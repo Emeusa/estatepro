@@ -53,6 +53,9 @@ export function ListingCard({ listing }: Props) {
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
+            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+              Verified agent
+            </span>
             <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
               {LISTING_CATEGORY_LABELS[listing.listingCategory]}
             </span>
