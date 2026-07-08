@@ -9,6 +9,7 @@ export type BillingTransactionRecord = {
   reference: string;
   planSlug: PaidPricingPlanSlug;
   paymentProvider: BillingProvider;
+  billingMode: BillingMode;
   paystackPlanCode: string | null;
   amountKobo: number;
   currency: string;
@@ -28,6 +29,7 @@ type BillingTransactionRow = {
   reference: string;
   plan_slug: PaidPricingPlanSlug;
   payment_provider?: BillingProvider | null;
+  billing_mode?: BillingMode | null;
   paystack_plan_code: string | null;
   amount_kobo: number;
   currency: string;
@@ -48,6 +50,7 @@ function toBillingTransaction(row: BillingTransactionRow): BillingTransactionRec
     reference: row.reference,
     planSlug: row.plan_slug,
     paymentProvider: row.payment_provider ?? "paystack",
+    billingMode: row.billing_mode ?? "recurring",
     paystackPlanCode: row.paystack_plan_code,
     amountKobo: row.amount_kobo,
     currency: row.currency,
@@ -67,6 +70,7 @@ export async function createBillingTransaction(input: {
   reference: string;
   planSlug: PaidPricingPlanSlug;
   paymentProvider: BillingProvider;
+  billingMode: BillingMode;
   paystackPlanCode: string | null;
   amountKobo: number;
 }) {
@@ -78,6 +82,7 @@ export async function createBillingTransaction(input: {
       reference: input.reference,
       plan_slug: input.planSlug,
       payment_provider: input.paymentProvider,
+      billing_mode: input.billingMode,
       paystack_plan_code: input.paystackPlanCode,
       amount_kobo: input.amountKobo,
       currency: "NGN",

@@ -8,8 +8,10 @@ import {
   PricingPlanSlug
 } from "@/lib/pricing";
 import { getSiteUrl } from "@/lib/seo";
+import { PaystackCheckoutChannel } from "@/lib/types";
 
 const PAYSTACK_BASE_URL = "https://api.paystack.co";
+export const PAYSTACK_PREPAID_CHANNELS: PaystackCheckoutChannel[] = ["bank_transfer", "ussd", "bank"];
 
 const PLAN_ENV_KEYS: Record<PaidPricingPlanSlug, string> = {
   starter_agent: "PAYSTACK_PLAN_STARTER_AGENT",
@@ -125,9 +127,12 @@ export async function initializePaystackTransaction(input: {
   planSlug: PaidPricingPlanSlug;
   reference: string;
   metadata: BillingMetadata;
+  mode?: "recurring" | "prepaid";
+  channels?: PaystackCheckoutChannel[];
 }) {
   const plan = getPricingPlan(input.planSlug);
   const amount = getPlanAmountKobo(input.planSlug);
+  const mode = input.mode ?? "recurring";
 
   return paystackFetch<{
     authorization_url: string;
@@ -139,12 +144,14 @@ export async function initializePaystackTransaction(input: {
       email: input.email,
       amount,
       currency: "NGN",
-      plan: getPaystackPlanCode(input.planSlug),
+      ...(mode === "recurring" ? { plan: getPaystackPlanCode(input.planSlug) } : {}),
+      ...(mode === "prepaid" ? { channels: input.channels ?? PAYSTACK_PREPAID_CHANNELS } : {}),
       reference: input.reference,
       callback_url: getBillingCallbackUrl(input.reference),
       metadata: JSON.stringify({
         ...input.metadata,
-        planName: plan.name
+        planName: plan.name,
+        billingMode: mode
       })
     })
   });

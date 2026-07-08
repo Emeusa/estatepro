@@ -6,10 +6,13 @@
 2. Switch to Test Mode.
 3. Open `Settings > API Keys & Webhooks`.
 4. Copy the test secret key.
+5. Confirm these channels are enabled for your business:
+   - Card / Direct Debit for auto-renewing subscriptions.
+   - Bank Transfer, USSD, and Bank payment for prepaid monthly checkout.
 
 ## 2. Create Monthly Plans
 
-Create these Paystack plans with interval `monthly`:
+Create these Paystack plans with interval `monthly` for the `Auto-renew with Paystack` checkout:
 
 | C59 plan | Paystack amount |
 | --- | ---: |
@@ -19,6 +22,8 @@ Create these Paystack plans with interval `monthly`:
 | Agency Plus | 5990000 kobo |
 
 Copy each generated `plan_code`.
+
+The `Pay by Transfer / USSD` checkout does not use Paystack plan codes. It creates a normal one-month prepaid Paystack transaction using the same C59 plan prices.
 
 ## 3. Add Vercel Environment Variables
 
@@ -59,7 +64,7 @@ The app itself sends checkout callbacks to `/api/billing/verify` so payment is v
 Run the latest `docs/supabase-schema.sql` in Supabase SQL Editor before testing billing. Billing depends on:
 
 - `billing_transactions`
-- extended `subscriptions` Paystack columns
+- extended `subscriptions` Paystack columns and billing mode fields
 - billing RLS policies
 - plan seed rows
 
@@ -67,11 +72,12 @@ Run the latest `docs/supabase-schema.sql` in Supabase SQL Editor before testing 
 
 1. Log in as an approved, unblocked agent.
 2. Open `/agents/dashboard#subscription`.
-3. Click `Upgrade` on Growth Agent or another paid plan.
-4. Complete checkout with a Paystack test card.
+3. Click `Auto-renew with Paystack` on Growth Agent or another paid plan.
+4. Complete checkout with a Paystack test card or supported recurring method.
 5. Confirm the dashboard returns with `Payment confirmed. Your plan has been updated.`
 6. Confirm the `subscriptions` row has the paid `plan_slug`.
 7. Confirm Paystack webhook delivery shows `200`.
-8. Test invalid webhook signatures only in local/test tooling; forged webhooks should return `401`.
+8. Repeat with `Pay by Transfer / USSD` and confirm the plan activates for one month with `billing_mode = 'prepaid'`.
+9. Test invalid webhook signatures only in local/test tooling; forged webhooks should return `401`.
 
 Pending, rejected, or blocked agents cannot upgrade until admin approval.

@@ -149,7 +149,12 @@ export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetMessage, setResetMessage] = useState("");
+  const [resetMessageType, setResetMessageType] = useState<"error" | "success">("success");
+  const [showResetForm, setShowResetForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResetSubmitting, setIsResetSubmitting] = useState(false);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -169,23 +174,103 @@ export function LoginForm() {
     }
   }
 
+  async function onResetSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (isResetSubmitting) {
+      return;
+    }
+
+    setResetMessage("");
+    setResetMessageType("success");
+    setIsResetSubmitting(true);
+    const form = new FormData(event.currentTarget);
+    const targetEmail = normalizeEmailInput(resetEmail || email);
+
+    try {
+      const response = await apiRequest<{ message: string }>("/api/auth/password-reset", {
+        method: "POST",
+        retries: 0,
+        body: JSON.stringify({
+          email: targetEmail,
+          ...readBotFields(form)
+        })
+      });
+      setResetMessage(response.message);
+      setResetMessageType("success");
+    } catch (error) {
+      setResetMessage(getFriendlyAuthMessage(error, "We could not send reset instructions. Please try again."));
+      setResetMessageType("error");
+    } finally {
+      setIsResetSubmitting(false);
+    }
+  }
+
   return (
-    <form onSubmit={onSubmit} className="space-y-4 rounded-3xl bg-white p-6 shadow-sm">
-      <input
-        className="input"
-        placeholder="Email"
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value.toLowerCase())}
-      />
-      <PasswordField name="password" placeholder="Password" value={password} onChange={setPassword} />
-      <TurnstileFields />
-      <button className="button-primary inline-flex w-full items-center justify-center gap-2" disabled={isSubmitting}>
-        {isSubmitting ? <ButtonSpinner /> : null}
-        {isSubmitting ? "Logging in..." : "Login"}
-      </button>
-      {message ? <p className="text-sm text-rose-600">{message}</p> : null}
-    </form>
+    <div className="space-y-4 rounded-3xl bg-white p-6 shadow-sm">
+      <form onSubmit={onSubmit} className="space-y-4">
+        <input
+          className="input"
+          placeholder="Email"
+          type="email"
+          value={email}
+          onChange={(e) => {
+            const nextEmail = e.target.value.toLowerCase();
+            setEmail(nextEmail);
+            if (!resetEmail) {
+              setResetEmail(nextEmail);
+            }
+          }}
+        />
+        <PasswordField name="password" placeholder="Password" value={password} onChange={setPassword} />
+        <div className="flex justify-end">
+          <button
+            className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
+            type="button"
+            onClick={() => {
+              setShowResetForm((current) => !current);
+              setResetEmail((current) => current || email);
+              setResetMessage("");
+            }}
+          >
+            Forgot password?
+          </button>
+        </div>
+        <TurnstileFields />
+        <button className="button-primary inline-flex w-full items-center justify-center gap-2" disabled={isSubmitting}>
+          {isSubmitting ? <ButtonSpinner /> : null}
+          {isSubmitting ? "Logging in..." : "Login"}
+        </button>
+        {message ? <p className="text-sm text-rose-600">{message}</p> : null}
+      </form>
+
+      {showResetForm ? (
+        <form onSubmit={onResetSubmit} className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div>
+            <p className="text-sm font-bold text-slate-950">Reset your password</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Enter your account email. If it is registered, we will send a password reset link.
+            </p>
+          </div>
+          <input
+            className="input"
+            placeholder="Email"
+            type="email"
+            value={resetEmail}
+            onChange={(e) => setResetEmail(e.target.value.toLowerCase())}
+          />
+          <TurnstileFields />
+          <button className="button-primary inline-flex w-full items-center justify-center gap-2" disabled={isResetSubmitting}>
+            {isResetSubmitting ? <ButtonSpinner /> : null}
+            {isResetSubmitting ? "Sending..." : "Send reset link"}
+          </button>
+          {resetMessage ? (
+            <p className={`text-sm ${resetMessageType === "success" ? "text-emerald-700" : "text-rose-600"}`}>
+              {resetMessage}
+            </p>
+          ) : null}
+        </form>
+      ) : null}
+    </div>
   );
 }
 

@@ -23,6 +23,7 @@ export type ZoningType = "residential" | "commercial" | "mixed_use" | "industria
 export type RoadAccess = "tarred" | "untarred" | "estate_road" | "major_road" | "none";
 export type BillingProvider = "paystack" | "opay";
 export type BillingMode = "recurring" | "prepaid";
+export type PaystackCheckoutChannel = "bank_transfer" | "ussd" | "bank";
 
 export type LocationValue = {
   state: string;

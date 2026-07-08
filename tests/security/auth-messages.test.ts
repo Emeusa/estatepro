@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCheckEmailUrl, getLoginConfirmationMessage } from "../../src/lib/auth-confirmation";
+import {
+  buildCheckEmailUrl,
+  getLoginConfirmationMessage,
+  getPasswordResetCompleteMessage
+} from "../../src/lib/auth-confirmation";
 import { getFriendlyAuthMessage } from "../../src/lib/auth-messages";
 
 describe("getFriendlyAuthMessage", () => {
@@ -20,6 +24,12 @@ describe("getFriendlyAuthMessage", () => {
     expect(getLoginConfirmationMessage("1")).toBe("Email confirmed. You can now sign in.");
     expect(getLoginConfirmationMessage("0")).toBeNull();
     expect(getLoginConfirmationMessage(null)).toBeNull();
+  });
+
+  it("maps password reset query state to a success notice", () => {
+    expect(getPasswordResetCompleteMessage("1")).toBe("Password updated. You can now sign in.");
+    expect(getPasswordResetCompleteMessage("0")).toBeNull();
+    expect(getPasswordResetCompleteMessage(null)).toBeNull();
   });
 
   it("builds a confirmation page URL with email state", () => {

@@ -33,9 +33,11 @@ In Supabase Dashboard:
 3. Add redirect URLs:
    ```text
    https://c59estatehub.com/login
+   https://c59estatehub.com/auth/reset-password
    https://c59estatehub.com/dashboard
    https://c59estatehub.com/agents/dashboard
    http://localhost:3000/login
+   http://localhost:3000/auth/reset-password
    http://localhost:3000/dashboard
    http://localhost:3000/agents/dashboard
    ```
@@ -107,6 +109,6 @@ The app now checks both `public.users.email` and `auth.users.email` before signu
 7. Register an agent and confirm the registration-received email arrives.
 8. Approve/reject the agent in admin and confirm the status email arrives.
 9. Moderate a listing and confirm the listing status email arrives.
-10. Complete a Paystack/OPay subscription and confirm the subscription email arrives.
+10. Complete a Paystack subscription or prepaid transfer payment and confirm the subscription email arrives.
 
 If emails do not send, check `public.email_events` for `failed` or `skipped` status.

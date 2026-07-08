@@ -2,11 +2,13 @@
 
 import { useSearchParams } from "next/navigation";
 
-import { getLoginConfirmationMessage } from "@/lib/auth-confirmation";
+import { getLoginConfirmationMessage, getPasswordResetCompleteMessage } from "@/lib/auth-confirmation";
 
 export function LoginNotice() {
   const searchParams = useSearchParams();
-  const message = getLoginConfirmationMessage(searchParams.get("confirmed"));
+  const message =
+    getLoginConfirmationMessage(searchParams.get("confirmed")) ??
+    getPasswordResetCompleteMessage(searchParams.get("passwordReset"));
 
   if (!message) {
     return null;

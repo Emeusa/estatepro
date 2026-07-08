@@ -77,6 +77,7 @@ create table if not exists public.billing_transactions (
   reference text not null unique,
   plan_slug text not null references public.plans (slug),
   payment_provider text not null default 'paystack',
+  billing_mode text not null default 'recurring',
   paystack_plan_code text,
   amount_kobo integer not null check (amount_kobo > 0),
   currency text not null default 'NGN',
@@ -275,6 +276,7 @@ alter table public.subscriptions
 
 alter table public.billing_transactions
   add column if not exists payment_provider text not null default 'paystack',
+  add column if not exists billing_mode text not null default 'recurring',
   add column if not exists opay_order_no text,
   add column if not exists opay_transaction_id text;
 
@@ -286,7 +288,8 @@ set payment_provider = coalesce(payment_provider, 'paystack'),
     billing_mode = coalesce(billing_mode, 'recurring');
 
 update public.billing_transactions
-set payment_provider = coalesce(payment_provider, 'paystack');
+set payment_provider = coalesce(payment_provider, 'paystack'),
+    billing_mode = coalesce(billing_mode, 'recurring');
 
 alter table public.listings
   add column if not exists promotion_type text not null default 'standard',
@@ -480,6 +483,14 @@ begin
   end if;
 
   if not exists (
+    select 1 from pg_constraint where conname = 'billing_transactions_billing_mode_check'
+  ) then
+    alter table public.billing_transactions
+      add constraint billing_transactions_billing_mode_check
+      check (billing_mode in ('recurring', 'prepaid'));
+  end if;
+
+  if not exists (
     select 1 from pg_constraint where conname = 'listings_promotion_type_check'
   ) then
     alter table public.listings
@@ -589,6 +600,9 @@ create index if not exists billing_transactions_status_idx
 
 create index if not exists billing_transactions_provider_status_idx
   on public.billing_transactions (payment_provider, status, created_at desc);
+
+create index if not exists billing_transactions_provider_mode_status_idx
+  on public.billing_transactions (payment_provider, billing_mode, status, created_at desc);
 
 create index if not exists billing_transactions_reference_idx
   on public.billing_transactions (reference);

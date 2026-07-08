@@ -1,7 +1,7 @@
 import { createHmac } from "crypto";
 import { describe, expect, it } from "vitest";
 
-import { verifyPaystackWebhookSignature } from "../../src/lib/paystack";
+import { PAYSTACK_PREPAID_CHANNELS, verifyPaystackWebhookSignature } from "../../src/lib/paystack";
 
 describe("verifyPaystackWebhookSignature", () => {
   it("accepts the expected Paystack HMAC signature", () => {
@@ -11,5 +11,11 @@ describe("verifyPaystackWebhookSignature", () => {
 
     expect(verifyPaystackWebhookSignature(body, signature)).toBe(true);
     expect(verifyPaystackWebhookSignature(body, "bad-signature")).toBe(false);
+  });
+});
+
+describe("PAYSTACK_PREPAID_CHANNELS", () => {
+  it("allows no-card Paystack payment channels for prepaid checkout", () => {
+    expect(PAYSTACK_PREPAID_CHANNELS).toEqual(["bank_transfer", "ussd", "bank"]);
   });
 });

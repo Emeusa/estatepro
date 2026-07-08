@@ -8,7 +8,8 @@ import { startBillingCheckout } from "@/modules/billing/billing.service";
 
 const checkoutSchema = z.object({
   planSlug: z.string().trim(),
-  provider: z.enum(["paystack", "opay"]).optional()
+  provider: z.literal("paystack").optional(),
+  billingMode: z.enum(["recurring", "prepaid"]).optional()
 });
 
 export async function POST(request: NextRequest) {
@@ -24,7 +25,8 @@ export async function POST(request: NextRequest) {
       agentId: decoded.uid,
       email: decoded.email,
       planSlug: body.planSlug,
-      provider: body.provider
+      provider: body.provider,
+      billingMode: body.billingMode
     });
 
     await logSecurityEvent({
@@ -32,7 +34,12 @@ export async function POST(request: NextRequest) {
       action: "billing_checkout_initialized",
       result: "success",
       userId: decoded.uid,
-      metadata: { planSlug: body.planSlug, provider: body.provider ?? "paystack", reference: checkout.reference }
+      metadata: {
+        planSlug: body.planSlug,
+        provider: body.provider ?? "paystack",
+        billingMode: body.billingMode ?? "recurring",
+        reference: checkout.reference
+      }
     });
 
     return withRateLimitHeaders(NextResponse.json(checkout), limited.headers);
