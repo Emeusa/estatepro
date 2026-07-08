@@ -192,6 +192,35 @@ create table if not exists public.security_events (
   created_at timestamptz not null default timezone('utc', now())
 );
 
+create table if not exists public.email_events (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.users (id) on delete set null,
+  event_key text unique,
+  email_type text not null check (
+    email_type in (
+      'welcome',
+      'agent_registration_received',
+      'agent_verification_approved',
+      'agent_verification_rejected',
+      'listing_active',
+      'listing_rejected',
+      'subscription_activated',
+      'subscription_failed',
+      'subscription_cancelled',
+      'admin_alert'
+    )
+  ),
+  recipient_email text not null,
+  subject text not null,
+  provider text not null default 'zoho',
+  status text not null default 'pending' check (status in ('pending', 'sent', 'failed', 'skipped')),
+  error text,
+  metadata jsonb not null default '{}',
+  created_at timestamptz not null default timezone('utc', now()),
+  sent_at timestamptz,
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
 create table if not exists public.agent_quota_overrides (
   agent_id uuid primary key references public.users (id) on delete cascade,
   daily_listing_limit integer not null default 20 check (daily_listing_limit between 0 and 500),
@@ -595,6 +624,19 @@ create index if not exists security_events_user_idx
 create index if not exists security_events_ip_hash_idx
   on public.security_events (ip_hash, created_at desc);
 
+create index if not exists email_events_user_idx
+  on public.email_events (user_id, created_at desc);
+
+create index if not exists email_events_type_status_idx
+  on public.email_events (email_type, status, created_at desc);
+
+create index if not exists email_events_event_key_idx
+  on public.email_events (event_key)
+  where event_key is not null;
+
+create index if not exists email_events_recipient_idx
+  on public.email_events (recipient_email, created_at desc);
+
 create or replace view public.public_listings as
 select listings.*
 from public.listings
@@ -631,6 +673,7 @@ alter table public.listing_events enable row level security;
 alter table public.listing_reports enable row level security;
 alter table public.agent_daily_metrics enable row level security;
 alter table public.security_events enable row level security;
+alter table public.email_events enable row level security;
 alter table public.agent_quota_overrides enable row level security;
 
 drop policy if exists "users can read own row" on public.users;
@@ -659,6 +702,7 @@ drop policy if exists "admins can manage listing reports" on public.listing_repo
 drop policy if exists "agents can read own daily metrics" on public.agent_daily_metrics;
 drop policy if exists "admins can read daily metrics" on public.agent_daily_metrics;
 drop policy if exists "admins can read security events" on public.security_events;
+drop policy if exists "admins can read email events" on public.email_events;
 drop policy if exists "admins can read quota overrides" on public.agent_quota_overrides;
 drop policy if exists "admins can manage quota overrides" on public.agent_quota_overrides;
 
@@ -895,6 +939,16 @@ create policy "admins can read daily metrics"
 
 create policy "admins can read security events"
   on public.security_events for select
+  using (
+    exists (
+      select 1 from public.users
+      where users.id = auth.uid()
+        and users.role = 'admin'
+    )
+  );
+
+create policy "admins can read email events"
+  on public.email_events for select
   using (
     exists (
       select 1 from public.users

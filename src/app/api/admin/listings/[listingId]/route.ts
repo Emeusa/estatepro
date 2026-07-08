@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthError, requireAdmin } from "@/lib/auth";
 import { captureServerError, logSecurityEvent } from "@/lib/security/logger";
 import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
+import { sendListingModerationEmail } from "@/modules/email/email.service";
 import { updateListing } from "@/modules/listings/listing.repository";
 import { listingModerationSchema } from "@/modules/listings/listing.schema";
 
@@ -27,6 +28,7 @@ export async function PATCH(request: NextRequest, { params }: Props) {
       userId: decoded.uid,
       metadata: { listingId, status: body.status }
     });
+    await sendListingModerationEmail(listing);
     return withRateLimitHeaders(NextResponse.json({ listing }), limited.headers);
   } catch (error) {
     captureServerError(error, { route: "/api/admin/listings/[listingId]" });

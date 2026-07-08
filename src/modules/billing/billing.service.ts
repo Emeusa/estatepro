@@ -25,6 +25,11 @@ import { getPlanAmountKobo, isHigherPlan, isLowerPlan, isPaidPricingPlanSlug } f
 import { BillingProvider, SubscriptionRecord } from "@/lib/types";
 import { getAgentProfile } from "@/modules/agents/agent.repository";
 import {
+  sendSubscriptionActivatedEmail,
+  sendSubscriptionCancelledEmail,
+  sendSubscriptionFailedEmail
+} from "@/modules/email/email.service";
+import {
   createBillingTransaction,
   getBillingTransactionByReference,
   getSubscriptionByAgentId,
@@ -295,6 +300,12 @@ export async function applySuccessfulPaystackTransaction(reference: string) {
     paystackSubscriptionCode: subscriptionCode,
     rawResponse: transaction
   });
+  await sendSubscriptionActivatedEmail({
+    agentId: billingTransaction.agentId,
+    planSlug: billingTransaction.planSlug,
+    provider: "paystack",
+    reference
+  });
 
   return subscription;
 }
@@ -361,6 +372,12 @@ export async function applySuccessfulOpayTransaction(reference: string) {
     opayTransactionId,
     rawResponse: transaction
   });
+  await sendSubscriptionActivatedEmail({
+    agentId: billingTransaction.agentId,
+    planSlug: billingTransaction.planSlug,
+    provider: "opay",
+    reference
+  });
 
   return subscription;
 }
@@ -424,6 +441,11 @@ async function applyWebhookFailureOrDisable(data: Record<string, unknown>, statu
     isActive: false,
     cancelAtPeriodEnd: status === "cancelled"
   });
+  if (status === "past_due") {
+    await sendSubscriptionFailedEmail(agentId);
+  } else {
+    await sendSubscriptionCancelledEmail(agentId);
+  }
 }
 
 export async function processPaystackWebhook(event: PaystackWebhookEvent) {
@@ -460,7 +482,11 @@ export async function processOpayWebhook(event: OpayCallbackEvent) {
   }
 
   if (!isSuccessfulOpayStatus(payload.status)) {
+    const transaction = await getBillingTransactionByReference(reference);
     await markBillingTransactionFailed(reference, event);
+    if (transaction) {
+      await sendSubscriptionFailedEmail(transaction.agentId);
+    }
     return;
   }
 
@@ -481,9 +507,11 @@ export async function cancelAgentSubscription(agentId: string) {
     token: subscription.paystackEmailToken
   });
 
-  return updateSubscriptionBillingState(agentId, {
+  const updatedSubscription = await updateSubscriptionBillingState(agentId, {
     status: "cancelled",
     isActive: false,
     cancelAtPeriodEnd: true
   });
+  await sendSubscriptionCancelledEmail(agentId);
+  return updatedSubscription;
 }

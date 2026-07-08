@@ -22,6 +22,10 @@ export function getFriendlyAuthMessage(error: unknown, fallback: string) {
     return "Incorrect email or password.";
   }
 
+  if (message.includes("email not confirmed") || message.includes("email_not_confirmed") || message.includes("confirm your email")) {
+    return "Please confirm your email before signing in.";
+  }
+
   if (message.includes("auth/user-not-found") || message.includes("user not found")) {
     return "No account was found with that email.";
   }

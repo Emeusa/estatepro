@@ -106,17 +106,6 @@ async function redirectByRole() {
   window.location.assign("/dashboard");
 }
 
-async function signIn(email: string, password: string) {
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-}
-
 async function signInWithBotFields(email: string, password: string, botFields: ReturnType<typeof readBotFields>) {
   const response = await apiRequest<{
     session: { accessToken: string; refreshToken: string };
@@ -188,6 +177,7 @@ export function ClientRegisterForm() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState<"error" | "success">("error");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -196,6 +186,7 @@ export function ClientRegisterForm() {
       return;
     }
     setMessage("");
+    setMessageType("error");
 
     if (password.length < 6) {
       setMessage("Your password must be at least 6 characters long.");
@@ -223,8 +214,12 @@ export function ClientRegisterForm() {
           ...readBotFields(form)
         })
       });
-      await signIn(email, password);
-      await redirectByRole();
+      event.currentTarget.reset();
+      setPassword("");
+      setConfirmPassword("");
+      setMessageType("success");
+      setMessage("Account created. Check your email to confirm your account before signing in.");
+      setIsSubmitting(false);
     } catch (error) {
       const fallback = error instanceof Error ? error.message : "We could not create your account. Please try again.";
       setMessage(getFriendlyAuthMessage(error, fallback));
@@ -262,7 +257,7 @@ export function ClientRegisterForm() {
           Register as an agent
         </Link>
       </p>
-      {message ? <p className="text-sm text-rose-600">{message}</p> : null}
+      {message ? <p className={`text-sm ${messageType === "success" ? "text-emerald-700" : "text-rose-600"}`}>{message}</p> : null}
     </form>
   );
 }
@@ -271,6 +266,7 @@ export function AgentRegisterForm() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState<"error" | "success">("error");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -279,6 +275,7 @@ export function AgentRegisterForm() {
       return;
     }
     setMessage("");
+    setMessageType("error");
 
     if (password.length < 6) {
       setMessage("Your password must be at least 6 characters long.");
@@ -313,8 +310,12 @@ export function AgentRegisterForm() {
           ...readBotFields(form)
         })
       });
-      await signIn(email, password);
-      await redirectByRole();
+      event.currentTarget.reset();
+      setPassword("");
+      setConfirmPassword("");
+      setMessageType("success");
+      setMessage("Agent account created. Check your email to confirm your account while we review your agent details.");
+      setIsSubmitting(false);
     } catch (error) {
       if (error instanceof ApiRequestError) {
         setMessage(error.message);
@@ -354,7 +355,7 @@ export function AgentRegisterForm() {
         {isSubmitting ? <ButtonSpinner /> : null}
         {isSubmitting ? "Creating agent account..." : "Create agent account"}
       </button>
-      {message ? <p className="text-sm text-rose-600">{message}</p> : null}
+      {message ? <p className={`text-sm ${messageType === "success" ? "text-emerald-700" : "text-rose-600"}`}>{message}</p> : null}
     </form>
   );
 }

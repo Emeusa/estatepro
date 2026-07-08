@@ -15,9 +15,12 @@ import {
 } from "@/modules/agents/agent.repository";
 import { AdminAgentDetails, AdminAgentReview, AdminAgentSummary } from "@/lib/types";
 import { getListingCountsByAgentIds, getListingsByAgentIds } from "@/modules/listings/listing.service";
+import { sendAgentRegistrationReceivedEmail, sendAgentVerificationEmail } from "@/modules/email/email.service";
 
 export async function createAgentAccount(input: unknown) {
-  return registerAgent(agentRegistrationSchema.parse(input));
+  const result = await registerAgent(agentRegistrationSchema.parse(input));
+  await sendAgentRegistrationReceivedEmail(result.user.id);
+  return result;
 }
 
 export async function createClientAccount(input: unknown) {
@@ -112,7 +115,9 @@ export async function updateAgentVerification(
   agentId: string,
   verificationStatus: "approved" | "rejected"
 ) {
-  return setVerificationStatus(agentId, verificationStatus);
+  const result = await setVerificationStatus(agentId, verificationStatus);
+  await sendAgentVerificationEmail(agentId, verificationStatus);
+  return result;
 }
 
 export async function updateAgentBlockStatus(agentId: string, isBlocked: boolean) {

@@ -1,4 +1,5 @@
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getSiteUrl } from "@/lib/seo";
+import { createServerSupabaseAuthClient, createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   toAgentProfile,
   toSubscriptionRecord,
@@ -48,6 +49,36 @@ async function rollbackAuthUser(userId: string) {
   await supabase.auth.admin.deleteUser(userId);
 }
 
+async function createAuthUserWithConfirmation(input: {
+  email: string;
+  password: string;
+  fullName: string;
+  role: "client" | "agent";
+}) {
+  const supabase = createServerSupabaseAuthClient();
+  const { data, error } = await supabase.auth.signUp({
+    email: input.email,
+    password: input.password,
+    options: {
+      data: {
+        full_name: input.fullName,
+        role: input.role
+      },
+      emailRedirectTo: new URL("/login?confirmed=1", getSiteUrl()).toString()
+    }
+  });
+
+  if (error || !data.user?.id) {
+    throw new Error(error?.message ?? "Could not create account.");
+  }
+
+  if (Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+    throw new Error("An account with this email already exists.");
+  }
+
+  return data.user.id;
+}
+
 export async function registerClient(input: {
   email: string;
   password: string;
@@ -55,25 +86,15 @@ export async function registerClient(input: {
   phone: string | null;
 }) {
   const supabase = createServerSupabaseClient();
-  const {
-    data: { user },
-    error
-  } = await supabase.auth.admin.createUser({
+  const userId = await createAuthUserWithConfirmation({
     email: input.email,
     password: input.password,
-    email_confirm: true,
-    user_metadata: {
-      full_name: input.fullName,
-      role: "client"
-    }
+    fullName: input.fullName,
+    role: "client"
   });
 
-  if (error || !user?.id) {
-    throw new Error(error?.message ?? "Could not create account.");
-  }
-
   const userRecord = {
-    id: user.id,
+    id: userId,
     email: input.email,
     full_name: input.fullName,
     phone: input.phone,
@@ -87,7 +108,7 @@ export async function registerClient(input: {
     .single();
 
   if (insertError || !data) {
-    await rollbackAuthUser(user.id);
+    await rollbackAuthUser(userId);
     throw new Error(mapSupabaseRegistrationError(insertError?.message ?? "Could not save user profile."));
   }
 
@@ -102,22 +123,12 @@ export async function registerAgent(input: {
   ninNumber: string;
 }) {
   const supabase = createServerSupabaseClient();
-  const {
-    data: { user },
-    error
-  } = await supabase.auth.admin.createUser({
+  const userId = await createAuthUserWithConfirmation({
     email: input.email,
     password: input.password,
-    email_confirm: true,
-    user_metadata: {
-      full_name: input.fullName,
-      role: "agent"
-    }
+    fullName: input.fullName,
+    role: "agent"
   });
-
-  if (error || !user?.id) {
-    throw new Error(mapSupabaseRegistrationError(error?.message ?? "Could not create agent account."));
-  }
 
   const now = new Date();
   const trialStartsAt = now.toISOString();
@@ -125,7 +136,7 @@ export async function registerAgent(input: {
 
   try {
     const userRow = {
-      id: user.id,
+      id: userId,
       email: input.email,
       full_name: input.fullName,
       phone: input.phone,
@@ -143,7 +154,7 @@ export async function registerAgent(input: {
     }
 
     const agentRow = {
-      id: user.id,
+      id: userId,
       verification_status: "pending" as const,
       nin_number: input.ninNumber,
       is_blocked: false,
@@ -161,7 +172,7 @@ export async function registerAgent(input: {
     }
 
     const subscriptionRow = {
-      agent_id: user.id,
+      agent_id: userId,
       trial_starts_at: trialStartsAt,
       trial_ends_at: trialEndsAt,
       is_active: true
@@ -185,7 +196,7 @@ export async function registerAgent(input: {
       subscription: toSubscriptionRecord(subscriptionData)
     };
   } catch (error) {
-    await rollbackAuthUser(user.id);
+    await rollbackAuthUser(userId);
     throw error;
   }
 }

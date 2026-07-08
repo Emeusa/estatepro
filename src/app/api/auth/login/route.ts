@@ -6,6 +6,7 @@ import { assertBotProtection, botProtectionSchema, isBotProtectionError } from "
 import { hashValue, getClientIp } from "@/lib/security/request";
 import { logSecurityEvent, captureServerError } from "@/lib/security/logger";
 import { createServerSupabaseAuthClient } from "@/lib/supabase/server";
+import { sendWelcomeEmailForUser } from "@/modules/email/email.service";
 
 const loginSchema = z.object({
   email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
@@ -43,6 +44,13 @@ export async function POST(request: NextRequest) {
         result: "failed",
         metadata: { emailHash: userEmailHash }
       });
+      const message = error?.message.toLowerCase() ?? "";
+      if (message.includes("email not confirmed") || message.includes("email_not_confirmed")) {
+        return withRateLimitHeaders(
+          NextResponse.json({ message: "Please confirm your email before signing in." }, { status: 403 }),
+          limited.headers
+        );
+      }
       return withRateLimitHeaders(
         NextResponse.json({ message: "Invalid email or password." }, { status: 401 }),
         limited.headers
@@ -56,6 +64,9 @@ export async function POST(request: NextRequest) {
       userId: data.user?.id,
       metadata: { emailHash: userEmailHash }
     });
+    if (data.user?.id) {
+      await sendWelcomeEmailForUser(data.user.id);
+    }
 
     return withRateLimitHeaders(NextResponse.json({
       session: {
