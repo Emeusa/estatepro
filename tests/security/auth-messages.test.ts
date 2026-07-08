@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getLoginConfirmationMessage } from "../../src/lib/auth-confirmation";
+import { buildCheckEmailUrl, getLoginConfirmationMessage } from "../../src/lib/auth-confirmation";
 import { getFriendlyAuthMessage } from "../../src/lib/auth-messages";
 
 describe("getFriendlyAuthMessage", () => {
@@ -20,5 +20,11 @@ describe("getFriendlyAuthMessage", () => {
     expect(getLoginConfirmationMessage("1")).toBe("Email confirmed. You can now sign in.");
     expect(getLoginConfirmationMessage("0")).toBeNull();
     expect(getLoginConfirmationMessage(null)).toBeNull();
+  });
+
+  it("builds a confirmation page URL with email state", () => {
+    expect(buildCheckEmailUrl("USER@Example.COM", "agent")).toBe(
+      "/auth/check-email?email=user%40example.com&type=agent"
+    );
   });
 });

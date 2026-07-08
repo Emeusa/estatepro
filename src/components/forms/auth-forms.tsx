@@ -5,6 +5,7 @@ import { FormEvent, useState } from "react";
 
 import { ApiRequestError, apiRequest } from "@/lib/api";
 import {
+  buildCheckEmailUrl,
   CONFIRMATION_ACCOUNT_TYPE_STORAGE_KEY,
   CONFIRMATION_EMAIL_STORAGE_KEY,
   ConfirmationAccountType
@@ -83,7 +84,7 @@ function redirectToCheckEmail(email: string, accountType: ConfirmationAccountTyp
   } catch {
     // Users can still read the fallback instructions on the destination page.
   }
-  window.location.assign("/auth/check-email");
+  window.location.assign(buildCheckEmailUrl(email, accountType));
 }
 
 async function getAccessToken() {

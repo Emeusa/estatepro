@@ -84,6 +84,8 @@ export function ListingManager({
   }
 
   function upsertListing(next: ListingRecord) {
+    const keepEditingSavedListing = selected?.id === next.id;
+
     setListings((current) => {
       const index = current.findIndex((item) => item.id === next.id);
       if (index === -1) {
@@ -94,7 +96,7 @@ export function ListingManager({
       copy[index] = next;
       return copy;
     });
-    setSelected(next);
+    setSelected(keepEditingSavedListing ? next : undefined);
   }
 
   function listingEditControl(listing: ListingRecord) {

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import {
@@ -14,11 +15,21 @@ type ConfirmationState = {
   accountType: ConfirmationAccountType | null;
 };
 
-function readConfirmationState(): ConfirmationState {
+function normalizeAccountType(value: string | null): ConfirmationAccountType | null {
+  return value === "agent" || value === "client" ? value : null;
+}
+
+function readConfirmationState(searchParams: URLSearchParams): ConfirmationState {
+  const queryEmail = searchParams.get("email")?.trim() ?? "";
+  const queryType = normalizeAccountType(searchParams.get("type"));
+
+  if (queryEmail) {
+    return { email: queryEmail, accountType: queryType };
+  }
+
   try {
     const email = window.sessionStorage.getItem(CONFIRMATION_EMAIL_STORAGE_KEY)?.trim() ?? "";
-    const storedType = window.sessionStorage.getItem(CONFIRMATION_ACCOUNT_TYPE_STORAGE_KEY);
-    const accountType = storedType === "agent" || storedType === "client" ? storedType : null;
+    const accountType = normalizeAccountType(window.sessionStorage.getItem(CONFIRMATION_ACCOUNT_TYPE_STORAGE_KEY));
     return { email, accountType };
   } catch {
     return { email: "", accountType: null };
@@ -26,14 +37,15 @@ function readConfirmationState(): ConfirmationState {
 }
 
 export function CheckEmailClient() {
+  const searchParams = useSearchParams();
   const [state, setState] = useState<ConfirmationState>({ email: "", accountType: null });
 
   useEffect(() => {
-    setState(readConfirmationState());
-  }, []);
+    setState(readConfirmationState(searchParams));
+  }, [searchParams]);
 
   const registerHref = state.accountType === "agent" ? "/agents/register" : "/register";
-  const title = state.email ? `Check ${state.email}` : "Check your email";
+  const title = state.email ? `A confirmation link has been sent to ${state.email}` : "Check your email";
 
   return (
     <section className="mx-auto max-w-2xl px-4 py-10">

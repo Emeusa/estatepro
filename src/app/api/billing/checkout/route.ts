@@ -38,9 +38,15 @@ export async function POST(request: NextRequest) {
     return withRateLimitHeaders(NextResponse.json(checkout), limited.headers);
   } catch (error) {
     captureServerError(error, { route: "/api/billing/checkout" });
+    const status =
+      error instanceof AuthError
+        ? error.status
+        : error instanceof Error && error.name === "BillingApprovalRequiredError"
+          ? 403
+          : 400;
     return NextResponse.json(
       { message: error instanceof Error ? error.message : "Could not start billing checkout." },
-      { status: error instanceof AuthError ? error.status : 400 }
+      { status }
     );
   }
 }

@@ -3,7 +3,6 @@ import { ZodError } from "zod";
 
 import { requireAgent } from "@/lib/auth";
 import { MAX_LISTING_IMAGES } from "@/lib/image-limits";
-import { assertBotProtection, botProtectionSchema } from "@/lib/security/bot";
 import { captureServerError } from "@/lib/security/logger";
 import { getAgentDailyListingLimit } from "@/lib/security/quotas";
 import { RATE_LIMITS, rateLimitByIp, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
@@ -122,12 +121,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    await assertBotProtection(request, botProtectionSchema.parse(body), "listing_create", decoded.uid);
-    const { website, formStartedAt, turnstileToken, ...listingInput } = body as Record<string, unknown>;
-    void website;
-    void formStartedAt;
-    void turnstileToken;
-    const listing = await createAgentListing(decoded.uid, listingInput);
+    const listing = await createAgentListing(decoded.uid, body);
 
     return withRateLimitHeaders(NextResponse.json({ listing }, { status: 201 }), limited.headers);
   } catch (error) {

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import { CheckEmailClient } from "@/app/auth/check-email/check-email-client";
 
@@ -11,5 +12,9 @@ export const metadata: Metadata = {
 };
 
 export default function CheckEmailPage() {
-  return <CheckEmailClient />;
+  return (
+    <Suspense fallback={null}>
+      <CheckEmailClient />
+    </Suspense>
+  );
 }

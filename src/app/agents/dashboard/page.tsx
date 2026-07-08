@@ -188,6 +188,7 @@ export default function AgentDashboardPage() {
   const verificationStatus = data.profile.agent?.verificationStatus ?? "pending";
   const isVerified = verificationStatus === "approved";
   const isBlocked = data.profile.agent?.isBlocked ?? false;
+  const canUpgrade = isVerified && !isBlocked;
   const accountStatus = isBlocked ? "Blocked" : "Operational";
   const currentSubscription = data.profile.subscription ?? null;
   const currentPlan = getPricingPlan(getEffectivePlanSlug(currentSubscription));
@@ -393,6 +394,11 @@ export default function AgentDashboardPage() {
                     {billingMessage}
                   </p>
                 ) : null}
+                {!canUpgrade ? (
+                  <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+                    Your agent account must be approved before you can upgrade.
+                  </p>
+                ) : null}
                 <p className="mt-3 text-xs font-semibold leading-5 text-slate-500">
                   What these features mean: hover, focus, or tap the helper icon beside each feature for a plain-language
                   explanation before choosing a plan.
@@ -438,6 +444,10 @@ export default function AgentDashboardPage() {
                         ) : hasActivePaidPlan && isLowerPlan(currentPlan.slug, plan.slug) ? (
                           <p className="rounded-xl bg-slate-300/70 px-4 py-2.5 text-center text-xs font-bold text-slate-600">
                             Available after current plan expires
+                          </p>
+                        ) : isPaidPricingPlanSlug(plan.slug) && !canUpgrade ? (
+                          <p className="rounded-xl bg-slate-300/70 px-4 py-2.5 text-center text-xs font-bold text-slate-600">
+                            Approval required before upgrade
                           </p>
                         ) : isPaidPricingPlanSlug(plan.slug) && billingLiveEnabled ? (
                           <div className="grid gap-2">

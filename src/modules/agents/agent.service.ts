@@ -19,7 +19,14 @@ import { sendAgentRegistrationReceivedEmail, sendAgentVerificationEmail } from "
 
 export async function createAgentAccount(input: unknown) {
   const result = await registerAgent(agentRegistrationSchema.parse(input));
-  await sendAgentRegistrationReceivedEmail(result.user.id);
+  try {
+    await sendAgentRegistrationReceivedEmail(result.user.id);
+  } catch (error) {
+    console.error("Agent registration email failed", {
+      userId: result.user.id,
+      error: error instanceof Error ? error.message : "unknown"
+    });
+  }
   return result;
 }
 

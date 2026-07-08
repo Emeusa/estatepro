@@ -183,7 +183,9 @@ export async function startBillingCheckout(input: {
     throw new Error("Agent profile was not found.");
   }
   if (agent.isBlocked || agent.verificationStatus !== "approved") {
-    throw new Error("Your agent account must be approved and active before upgrading.");
+    const error = new Error("Your agent account must be approved and active before upgrading.");
+    error.name = "BillingApprovalRequiredError";
+    throw error;
   }
   assertPlanTransitionAllowed({ subscription, targetPlanSlug: input.planSlug, provider });
 

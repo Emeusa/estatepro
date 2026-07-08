@@ -18,6 +18,8 @@ import {
   FURNISHING_STATUSES,
   LAND_SIZE_UNIT_LABELS,
   LAND_SIZE_UNITS,
+  LISTING_FEATURE_GROUPS,
+  mergeListingFeatureValues,
   PROPERTY_CONDITION_LABELS,
   PROPERTY_CONDITIONS,
   PROPERTY_SIZE_UNIT_LABELS,
@@ -26,6 +28,7 @@ import {
   ROAD_ACCESS_TYPES,
   SERVICING_STATUS_LABELS,
   SERVICING_STATUSES,
+  splitListingFeatureValues,
   TITLE_DOCUMENT_TYPE_LABELS,
   TITLE_DOCUMENT_TYPES,
   ZONING_TYPE_LABELS,
@@ -34,7 +37,6 @@ import {
 import { getLgasForState, NIGERIA_STATES } from "@/lib/nigeria-locations";
 import { ListingCategory, ListingImageVariant, ListingRecord } from "@/lib/types";
 import { uploadListingImages } from "@/lib/uploads";
-import { TurnstileFields, readBotFields } from "@/components/security/turnstile-fields";
 
 type Props = {
   token: string;
@@ -149,8 +151,11 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     return form.get(name)?.toString().trim() || null;
   }
 
-  function arrayValue(values: string[]) {
-    return values.join(", ");
+  function featureValuesFromForm(form: FormData, key: string) {
+    const selectedValues = form.getAll(`${key}Selected`).map((value) => value.toString());
+    const customText = form.get(`${key}Custom`)?.toString() ?? "";
+
+    return mergeListingFeatureValues(selectedValues, customText);
   }
 
   function onImageChange(event: ChangeEvent<HTMLInputElement>) {
@@ -239,8 +244,13 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     setFieldErrors({});
     setIsSubmitting(true);
     const form = new FormData(formElement);
-    const botFields = readBotFields(form);
     const imageFiles = selectedFiles.filter((file) => file.size > 0);
+    const featurePayload: Record<string, string[]> = {};
+
+    for (const group of LISTING_FEATURE_GROUPS) {
+      featurePayload[group.key] = featureValuesFromForm(form, group.key);
+    }
+
     const orderedExistingVariants = listing?.imageVariants.length
       ? reorderListingImageVariants(moveToFront(listing.imageVariants, existingThumbnailIndex).slice(0, MAX_LISTING_IMAGES))
       : [];
@@ -278,17 +288,12 @@ export function ListingForm({ token, listing, onSaved }: Props) {
       furnishingStatus: optionalString(form, "furnishingStatus"),
       servicingStatus: optionalString(form, "servicingStatus"),
       propertyCondition: optionalString(form, "propertyCondition"),
-      amenities: form.get("amenities")?.toString() ?? "",
-      utilities: form.get("utilities")?.toString() ?? "",
-      safetyFeatures: form.get("safetyFeatures")?.toString() ?? "",
-      nearbyLandmarks: form.get("nearbyLandmarks")?.toString() ?? "",
-      extraFeatures: form.get("extraFeatures")?.toString() ?? "",
+      ...featurePayload,
       landSize: optionalNumber(form, "landSize"),
       landSizeUnit: optionalString(form, "landSizeUnit"),
       titleDocumentType: optionalString(form, "titleDocumentType"),
       zoningType: optionalString(form, "zoningType"),
-      roadAccess: optionalString(form, "roadAccess"),
-      ...botFields
+      roadAccess: optionalString(form, "roadAccess")
     };
 
     try {
@@ -313,7 +318,13 @@ export function ListingForm({ token, listing, onSaved }: Props) {
         }
       );
       onSaved?.(response.listing);
-      setMessage(listing ? "Listing updated." : "Listing submitted for review.");
+      setMessage(
+        listing
+          ? "Listing updated."
+          : response.listing.status === "active"
+            ? "Listing published successfully."
+            : "Listing submitted for review."
+      );
       setFieldErrors({});
       if (!listing) {
         formElement.reset();
@@ -629,15 +640,47 @@ export function ListingForm({ token, listing, onSaved }: Props) {
       </OptionalSection>
       <OptionalSection
         title="Amenities and features"
-        helper="Use commas, for example: Air Conditioning, Balcony, Wardrobe."
+        helper="Select common features quickly, or type anything missing."
         defaultOpen={amenitiesDefaultOpen}
       >
-        <div className="grid gap-3 md:grid-cols-2">
-          <textarea className="input min-h-24" name="amenities" defaultValue={arrayValue(listing?.amenities ?? [])} placeholder="Amenities, separated by commas" />
-          <textarea className="input min-h-24" name="utilities" defaultValue={arrayValue(listing?.utilities ?? [])} placeholder="Utilities, separated by commas" />
-          <textarea className="input min-h-24" name="safetyFeatures" defaultValue={arrayValue(listing?.safetyFeatures ?? [])} placeholder="Safety features, separated by commas" />
-          <textarea className="input min-h-24" name="nearbyLandmarks" defaultValue={arrayValue(listing?.nearbyLandmarks ?? [])} placeholder="Nearby landmarks, separated by commas" />
-          <textarea className="input min-h-24 md:col-span-2" name="extraFeatures" defaultValue={arrayValue(listing?.extraFeatures ?? [])} placeholder="Extra features, separated by commas" />
+        <div className="grid gap-4">
+          {LISTING_FEATURE_GROUPS.map((group) => {
+            const savedValues = listing ? listing[group.key] : [];
+            const { selected, customText } = splitListingFeatureValues(savedValues, group.options);
+            const selectedValues = new Set(selected);
+
+            return (
+              <div key={group.key} className="rounded-2xl border border-slate-200 bg-white p-3">
+                <div>
+                  <p className="text-sm font-bold text-slate-900">{group.title}</p>
+                  <p className="mt-1 text-xs text-slate-500">{group.helper}</p>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {group.options.map((option) => (
+                    <label key={option} className="inline-flex">
+                      <input
+                        className="peer sr-only"
+                        type="checkbox"
+                        name={`${group.key}Selected`}
+                        value={option}
+                        defaultChecked={selectedValues.has(option)}
+                      />
+                      <span className="cursor-pointer rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 transition peer-checked:border-teal-700 peer-checked:bg-teal-700 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-teal-200">
+                        {option}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <input
+                  className="input mt-3"
+                  name={`${group.key}Custom`}
+                  defaultValue={customText}
+                  placeholder={group.customPlaceholder}
+                />
+                {fieldErrors[group.key] ? <p className="mt-1 text-sm text-rose-600">{fieldErrors[group.key]}</p> : null}
+              </div>
+            );
+          })}
         </div>
       </OptionalSection>
       <OptionalSection
@@ -673,7 +716,6 @@ export function ListingForm({ token, listing, onSaved }: Props) {
           </select>
         </div>
       </OptionalSection>
-      <TurnstileFields />
       <button className="button-primary" disabled={isSubmitting}>
         {isSubmitting ? "Saving..." : "Save listing"}
       </button>
