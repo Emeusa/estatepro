@@ -4,6 +4,11 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 
 import { ApiRequestError, apiRequest } from "@/lib/api";
+import {
+  CONFIRMATION_ACCOUNT_TYPE_STORAGE_KEY,
+  CONFIRMATION_EMAIL_STORAGE_KEY,
+  ConfirmationAccountType
+} from "@/lib/auth-confirmation";
 import { getFriendlyAuthMessage } from "@/lib/auth-messages";
 import { supabase } from "@/lib/supabase/client";
 import { TurnstileFields, readBotFields } from "@/components/security/turnstile-fields";
@@ -69,6 +74,16 @@ function ButtonSpinner() {
 
 function normalizeEmailInput(value: string) {
   return value.trim().toLowerCase();
+}
+
+function redirectToCheckEmail(email: string, accountType: ConfirmationAccountType) {
+  try {
+    window.sessionStorage.setItem(CONFIRMATION_EMAIL_STORAGE_KEY, email);
+    window.sessionStorage.setItem(CONFIRMATION_ACCOUNT_TYPE_STORAGE_KEY, accountType);
+  } catch {
+    // Users can still read the fallback instructions on the destination page.
+  }
+  window.location.assign("/auth/check-email");
 }
 
 async function getAccessToken() {
@@ -217,9 +232,7 @@ export function ClientRegisterForm() {
       event.currentTarget.reset();
       setPassword("");
       setConfirmPassword("");
-      setMessageType("success");
-      setMessage("Account created. Check your email to confirm your account before signing in.");
-      setIsSubmitting(false);
+      redirectToCheckEmail(email, "client");
     } catch (error) {
       const fallback = error instanceof Error ? error.message : "We could not create your account. Please try again.";
       setMessage(getFriendlyAuthMessage(error, fallback));
@@ -313,9 +326,7 @@ export function AgentRegisterForm() {
       event.currentTarget.reset();
       setPassword("");
       setConfirmPassword("");
-      setMessageType("success");
-      setMessage("Agent account created. Check your email to confirm your account while we review your agent details.");
-      setIsSubmitting(false);
+      redirectToCheckEmail(email, "agent");
     } catch (error) {
       if (error instanceof ApiRequestError) {
         setMessage(error.message);

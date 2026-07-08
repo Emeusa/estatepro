@@ -78,14 +78,28 @@ Run the latest `docs/supabase-schema.sql` in Supabase SQL Editor before relying 
 
 The schema adds:
 
+- `public.auth_email_exists(check_email text)` so the server can detect Supabase Auth-only duplicate emails before sending another confirmation email
 - `public.email_events`
 - admin-only read policy for email events
 - indexes for email status, type, recipient, and idempotency keys
 
-## 5. Manual Tests
+## 5. Orphan Auth User Troubleshooting
+
+Supabase Auth users and the app's `public.users` table are separate. If a registration attempt creates an Auth user but the app profile insert fails, the email may exist in `Authentication -> Users` while missing from `public.users`.
+
+To fix a test orphan:
+
+1. Open Supabase Dashboard -> `Authentication` -> `Users`.
+2. Search for the email.
+3. If it is a failed test account with no matching `public.users` row, delete the Auth user and register again.
+4. If it is a real user, repair the missing `public.users` row manually instead of deleting the Auth user.
+
+The app now checks both `public.users.email` and `auth.users.email` before signup, so these orphan records should return a clear duplicate-email message instead of sending another confirmation email.
+
+## 6. Manual Tests
 
 1. Register a client account.
-2. Confirm the UI says to check email.
+2. Confirm the UI redirects to `/auth/check-email`.
 3. Confirm the Supabase confirmation email arrives.
 4. Try logging in before confirmation; it should say to confirm email.
 5. Confirm the email, then log in.

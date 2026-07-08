@@ -7,6 +7,12 @@ import {
 } from "@/lib/supabase-mappers";
 import { AgentProfile } from "@/lib/types";
 
+const DUPLICATE_EMAIL_MESSAGE = "An account with this email already exists. Please log in or reset your password.";
+
+export class RegistrationConflictError extends Error {
+  status = 409;
+}
+
 function mapSupabaseRegistrationError(message: string) {
   const value = message.toLowerCase();
 
@@ -30,7 +36,7 @@ function mapSupabaseRegistrationError(message: string) {
   }
 
   if (value.includes("duplicate key value") || value.includes("already exists") || value.includes("user already registered")) {
-    return "An account with this email already exists.";
+    return DUPLICATE_EMAIL_MESSAGE;
   }
 
   if (value.includes("violates foreign key constraint")) {
@@ -47,6 +53,60 @@ function mapSupabaseRegistrationError(message: string) {
 async function rollbackAuthUser(userId: string) {
   const supabase = createServerSupabaseClient();
   await supabase.auth.admin.deleteUser(userId);
+}
+
+async function assertEmailAvailable(email: string) {
+  const supabase = createServerSupabaseClient();
+  const normalizedEmail = email.toLowerCase();
+  const { data: appUser, error: appUserError } = await supabase
+    .from("users")
+    .select("id")
+    .eq("email", normalizedEmail)
+    .maybeSingle();
+
+  if (appUserError) {
+    throw new Error(mapSupabaseRegistrationError(appUserError.message));
+  }
+
+  if (appUser) {
+    throw new RegistrationConflictError(DUPLICATE_EMAIL_MESSAGE);
+  }
+
+  const { data: authEmailExists, error: authEmailError } = await supabase.rpc("auth_email_exists", {
+    check_email: normalizedEmail
+  });
+
+  if (authEmailError) {
+    throw new Error("Supabase setup is incomplete: auth email availability helper is missing or not initialized.");
+  }
+
+  if (authEmailExists) {
+    throw new RegistrationConflictError(DUPLICATE_EMAIL_MESSAGE);
+  }
+}
+
+async function assertNinAvailable(ninNumber: string) {
+  const supabase = createServerSupabaseClient();
+  const { data: existingAgent, error } = await supabase
+    .from("agents")
+    .select("id")
+    .eq("nin_number", ninNumber)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(mapSupabaseRegistrationError(error.message));
+  }
+
+  if (existingAgent) {
+    throw new RegistrationConflictError("An agent with this NIN already exists.");
+  }
+}
+
+async function assertRegistrationAvailable(input: { email: string; ninNumber?: string }) {
+  await assertEmailAvailable(input.email);
+  if (input.ninNumber) {
+    await assertNinAvailable(input.ninNumber);
+  }
 }
 
 async function createAuthUserWithConfirmation(input: {
@@ -73,7 +133,7 @@ async function createAuthUserWithConfirmation(input: {
   }
 
   if (Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-    throw new Error("An account with this email already exists.");
+    throw new RegistrationConflictError(DUPLICATE_EMAIL_MESSAGE);
   }
 
   return data.user.id;
@@ -86,6 +146,7 @@ export async function registerClient(input: {
   phone: string | null;
 }) {
   const supabase = createServerSupabaseClient();
+  await assertRegistrationAvailable({ email: input.email });
   const userId = await createAuthUserWithConfirmation({
     email: input.email,
     password: input.password,
@@ -123,6 +184,7 @@ export async function registerAgent(input: {
   ninNumber: string;
 }) {
   const supabase = createServerSupabaseClient();
+  await assertRegistrationAvailable({ email: input.email, ninNumber: input.ninNumber });
   const userId = await createAuthUserWithConfirmation({
     email: input.email,
     password: input.password,

@@ -39,7 +39,7 @@ export function getFriendlyAuthMessage(error: unknown, fallback: string) {
     message.includes("user already registered") ||
     message.includes("already exists")
   ) {
-    return "An account with this email already exists.";
+    return "An account with this email already exists. Please log in or reset your password.";
   }
 
   if (message.includes("auth/weak-password") || message.includes("password should be")) {

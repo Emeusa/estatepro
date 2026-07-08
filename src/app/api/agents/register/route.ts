@@ -40,8 +40,16 @@ function getFriendlyMessage(error: unknown) {
 
   const message = error.message.toLowerCase();
 
+  if (message.includes("nin")) {
+    return error.message;
+  }
+
+  if (message.includes("auth email availability helper")) {
+    return "Supabase setup is incomplete: auth email availability helper is missing or not initialized.";
+  }
+
   if (message.includes("auth/email-already-exists") || message.includes("already exists")) {
-    return "An account with this email already exists.";
+    return "An account with this email already exists. Please log in or reset your password.";
   }
 
   if (message.includes("users table is missing")) {
@@ -76,11 +84,28 @@ function getFriendlyMessage(error: unknown) {
     return "Enter a valid phone number.";
   }
 
-  if (message.includes("nin")) {
-    return error.message;
+  return `Agent account creation failed: ${error.message}`;
+}
+
+function getErrorStatus(error: unknown) {
+  if (error instanceof ZodError) {
+    return 400;
   }
 
-  return `Agent account creation failed: ${error.message}`;
+  if (!(error instanceof Error)) {
+    return 400;
+  }
+
+  const message = error.message.toLowerCase();
+  if (message.includes("already exists")) {
+    return 409;
+  }
+
+  if (message.includes("setup is incomplete") || message.includes("missing or not initialized")) {
+    return 500;
+  }
+
+  return 400;
 }
 
 export async function POST(request: NextRequest) {
@@ -101,10 +126,13 @@ export async function POST(request: NextRequest) {
     });
     return withRateLimitHeaders(NextResponse.json(result, { status: 201 }), limited.headers);
   } catch (error) {
-    captureServerError(error, { route: "/api/agents/register" });
+    const status = getErrorStatus(error);
+    if (status >= 500) {
+      captureServerError(error, { route: "/api/agents/register" });
+    }
     return NextResponse.json(
       { message: getFriendlyMessage(error) },
-      { status: 400 }
+      { status }
     );
   }
 }
