@@ -147,92 +147,94 @@ const FEATURE_HELP = {
     "Banner placements are custom advertising positions for larger campaigns and are configured manually with the C59 Estatehub team."
 } as const;
 
-const EXTRA_PLAN_FEATURES: Record<PricingPlanSlug, PlanFeatureDisplayRow[]> = {
-  free_starter: [
-    {
-      key: "verified-agent-eligibility",
-      label: "Verified agent eligibility",
-      value: "Included",
-      helpText: FEATURE_HELP.verifiedAgentEligibility
-    },
-    {
-      key: "agent-profile-page",
-      label: "Agent profile page",
-      value: "Included",
-      helpText: FEATURE_HELP.agentProfile
-    },
-    {
-      key: "direct-contact-links",
-      label: "Direct contact links",
-      value: "Included",
-      helpText: FEATURE_HELP.directContact
-    }
-  ],
-  starter_agent: [
-    {
-      key: "basic-analytics",
-      label: "Basic analytics",
-      value: "Included",
-      helpText: FEATURE_HELP.basicAnalytics
-    }
-  ],
-  growth_agent: [
-    {
-      key: "priority-verification",
-      label: "Priority verification",
-      value: "Included",
-      helpText: FEATURE_HELP.priorityVerification
-    }
-  ],
-  pro_agent: [
-    {
-      key: "basic-analytics",
-      label: "Analytics",
-      value: "Included",
-      helpText: FEATURE_HELP.basicAnalytics
-    }
-  ],
-  agency_plus: [
-    {
-      key: "priority-support",
-      label: "Priority support",
-      value: "Included",
-      helpText: FEATURE_HELP.prioritySupport
-    }
-  ],
-  developer_enterprise: [
-    {
-      key: "project-pages",
-      label: "Project pages",
-      value: "Custom",
-      helpText: FEATURE_HELP.projectPages
-    },
-    {
-      key: "homepage-features",
-      label: "Homepage features",
-      value: "Custom",
-      helpText: FEATURE_HELP.homepageFeatures
-    },
-    {
-      key: "area-sponsorship",
-      label: "Area sponsorship",
-      value: "Custom",
-      helpText: FEATURE_HELP.areaSponsorship
-    },
-    {
-      key: "bulk-upload",
-      label: "Bulk upload support",
-      value: "Custom",
-      helpText: FEATURE_HELP.bulkUpload
-    },
-    {
-      key: "banner-placements",
-      label: "Banner placements",
-      value: "Custom",
-      helpText: FEATURE_HELP.bannerPlacements
-    }
-  ]
-};
+const CUMULATIVE_FEATURES: Array<PlanFeatureDisplayRow & { minRank: number }> = [
+  {
+    minRank: 0,
+    key: "verified-agent-eligibility",
+    label: "Verified agent eligibility",
+    value: "Included",
+    helpText: FEATURE_HELP.verifiedAgentEligibility
+  },
+  {
+    minRank: 0,
+    key: "agent-profile-page",
+    label: "Agent profile page",
+    value: "Included",
+    helpText: FEATURE_HELP.agentProfile
+  },
+  {
+    minRank: 0,
+    key: "direct-contact-links",
+    label: "Direct contact links",
+    value: "Included",
+    helpText: FEATURE_HELP.directContact
+  },
+  {
+    minRank: 1,
+    key: "basic-analytics",
+    label: "Basic analytics",
+    value: "Included",
+    helpText: FEATURE_HELP.basicAnalytics
+  },
+  {
+    minRank: 2,
+    key: "priority-review",
+    label: "Priority review",
+    value: "Included",
+    helpText:
+      "Paid Growth and higher agents are marked as priority in admin review/support workflows. This does not bypass safety checks or approval rules."
+  },
+  {
+    minRank: 3,
+    key: "advanced-analytics",
+    label: "Advanced analytics",
+    value: "Included",
+    helpText:
+      "Advanced analytics adds listing-level performance so you can see which properties generate views, calls, and WhatsApp interest."
+  },
+  {
+    minRank: 4,
+    key: "priority-support",
+    label: "Priority support",
+    value: "Included",
+    helpText: FEATURE_HELP.prioritySupport
+  },
+  {
+    minRank: 5,
+    key: "project-pages",
+    label: "Project pages",
+    value: "Custom",
+    helpText: FEATURE_HELP.projectPages
+  },
+  {
+    minRank: 5,
+    key: "homepage-features",
+    label: "Homepage features",
+    value: "Custom",
+    helpText: FEATURE_HELP.homepageFeatures
+  },
+  {
+    minRank: 5,
+    key: "area-sponsorship",
+    label: "Area sponsorship",
+    value: "Custom",
+    helpText: FEATURE_HELP.areaSponsorship
+  },
+  {
+    minRank: 5,
+    key: "bulk-upload",
+    label: "Bulk upload support",
+    value: "Custom",
+    helpText: FEATURE_HELP.bulkUpload
+  },
+  {
+    minRank: 5,
+    key: "banner-placements",
+    label: "Banner placements",
+    value: "Custom",
+    helpText: FEATURE_HELP.bannerPlacements
+  }
+];
 
 function monthlyValue(value: number | null, unit: string) {
   if (value === null) {
@@ -301,7 +303,16 @@ export function getPlanFeatureRows(plan: PricingPlan): PlanFeatureDisplayRow[] {
     }
   ];
 
-  return [...baseRows, ...EXTRA_PLAN_FEATURES[plan.slug]];
+  const inheritedRows = CUMULATIVE_FEATURES
+    .filter((feature) => feature.minRank <= getPlanRank(plan.slug))
+    .map((feature) => ({
+      key: feature.key,
+      label: feature.label,
+      value: feature.value,
+      helpText: feature.helpText
+    }));
+
+  return [...baseRows, ...inheritedRows];
 }
 
 export function isPaidPricingPlanSlug(slug: string): slug is PaidPricingPlanSlug {
@@ -336,4 +347,23 @@ export function isLowerPlan(currentPlanSlug: string | null | undefined, targetPl
 
 export function isHigherPlan(currentPlanSlug: string | null | undefined, targetPlanSlug: string | null | undefined) {
   return getPlanRank(targetPlanSlug) > getPlanRank(currentPlanSlug);
+}
+
+export function getPlanAnalyticsLevel(planSlug?: string | null) {
+  const rank = getPlanRank(planSlug);
+  if (rank >= 3) {
+    return "advanced" as const;
+  }
+  if (rank >= 1) {
+    return "basic" as const;
+  }
+  return "none" as const;
+}
+
+export function hasPriorityReview(planSlug?: string | null) {
+  return getPlanRank(planSlug) >= 2;
+}
+
+export function hasPrioritySupport(planSlug?: string | null) {
+  return getPlanRank(planSlug) >= 4;
 }

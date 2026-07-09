@@ -5,7 +5,14 @@ import {
   toSubscriptionRecord,
   toUserRecord
 } from "@/lib/supabase-mappers";
-import { AgentProfile } from "@/lib/types";
+import { AgentProfile, PaidPlanStats } from "@/lib/types";
+
+const PAID_PLAN_STAT_FIELDS: Record<string, keyof Omit<PaidPlanStats, "totalPaidAgents">> = {
+  starter_agent: "starterAgent",
+  growth_agent: "growthAgent",
+  pro_agent: "proAgent",
+  agency_plus: "agencyPlus"
+};
 
 const DUPLICATE_EMAIL_MESSAGE = "An account with this email already exists. Please log in or reset your password.";
 
@@ -341,6 +348,43 @@ export async function listAgentUsersForAdmin(agentIds: string[]) {
   }
 
   return (data ?? []).map(toUserRecord);
+}
+
+export async function countPaidPlanSubscriptionsForAdmin(): Promise<PaidPlanStats> {
+  const supabase = createServerSupabaseClient();
+  const now = new Date().toISOString();
+  const entries = await Promise.all(
+    Object.entries(PAID_PLAN_STAT_FIELDS).map(async ([planSlug, statField]) => {
+      const { count, error } = await supabase
+        .from("subscriptions")
+        .select("agent_id", { count: "exact", head: true })
+        .eq("plan_slug", planSlug)
+        .eq("is_active", true)
+        .or("status.is.null,status.not.in.(past_due,cancelled,inactive)")
+        .or(`current_period_end.is.null,current_period_end.gt.${now}`);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return [statField, count ?? 0] as const;
+    })
+  );
+
+  const stats: PaidPlanStats = {
+    totalPaidAgents: 0,
+    starterAgent: 0,
+    growthAgent: 0,
+    proAgent: 0,
+    agencyPlus: 0
+  };
+
+  for (const [field, count] of entries) {
+    stats[field] = count;
+    stats.totalPaidAgents += count;
+  }
+
+  return stats;
 }
 
 export async function setAgentBlockStatus(agentId: string, isBlocked: boolean) {

@@ -4,7 +4,9 @@ import { AuthError, requireAgent } from "@/lib/auth";
 import { isBillingLiveEnabled } from "@/lib/billing-config";
 import { captureServerError } from "@/lib/security/logger";
 import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
+import { getAgentAnalytics } from "@/modules/analytics/analytics.service";
 import { getAgentDashboardData, getUserAccount } from "@/modules/agents/agent.service";
+import { getAgentEntitlements } from "@/modules/entitlements/entitlement.service";
 import { getAgentListings } from "@/modules/listings/listing.service";
 
 export async function GET(request: NextRequest) {
@@ -20,12 +22,18 @@ export async function GET(request: NextRequest) {
       getAgentListings(decoded.uid),
       getUserAccount(decoded.uid)
     ]);
+    const [entitlements, analytics] = await Promise.all([
+      getAgentEntitlements(decoded.uid, profile.subscription),
+      getAgentAnalytics(decoded.uid, "30d")
+    ]);
 
     return withRateLimitHeaders(
       NextResponse.json({
         profile,
         listings,
         user,
+        entitlements,
+        analytics,
         billing: {
           liveEnabled: isBillingLiveEnabled()
         }

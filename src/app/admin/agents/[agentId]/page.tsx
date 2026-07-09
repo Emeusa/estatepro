@@ -10,7 +10,7 @@ import { formatDate, formatPrice } from "@/lib/format";
 import { getListingImageCount } from "@/lib/listing-images";
 import { AVAILABILITY_LABELS, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
 import { getListingQualityBadges } from "@/lib/listing-quality";
-import { formatPlanPrice, getPricingPlan } from "@/lib/pricing";
+import { formatPlanPrice, getPricingPlan, hasPriorityReview, hasPrioritySupport } from "@/lib/pricing";
 import { getEffectivePlanSlug } from "@/lib/subscriptions";
 import { supabase } from "@/lib/supabase/client";
 import { AdminAgentDetails, AgentProfile, UserRecord } from "@/lib/types";
@@ -155,7 +155,10 @@ export default function AdminAgentDetailPage() {
   const adminName = account?.fullName ?? "Admin";
   const adminEmail = account?.email ?? "Admin account";
   const statusTone = verificationTone(review.agent.verificationStatus, review.agent.isBlocked);
-  const currentPlan = getPricingPlan(getEffectivePlanSlug(review.subscription));
+  const effectivePlanSlug = getEffectivePlanSlug(review.subscription);
+  const currentPlan = getPricingPlan(effectivePlanSlug);
+  const isPriorityAgent = hasPriorityReview(effectivePlanSlug);
+  const isPrioritySupportAgent = hasPrioritySupport(effectivePlanSlug);
 
   return (
     <AdminShell active="agents" adminName={adminName} adminEmail={adminEmail}>
@@ -180,6 +183,16 @@ export default function AdminAgentDetailPage() {
                   <span className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${statusPillClass(statusTone)}`}>
                     {review.agent.isBlocked ? "Blocked" : review.agent.verificationStatus}
                   </span>
+                  {isPriorityAgent ? (
+                    <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
+                      Priority review
+                    </span>
+                  ) : null}
+                  {isPrioritySupportAgent ? (
+                    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
+                      Priority support
+                    </span>
+                  ) : null}
                 </div>
                 <p className="mt-2 text-sm text-slate-500">{review.user.email}</p>
                 <p className="mt-1 text-sm text-slate-500">{review.user.phone ?? "No phone number"}</p>

@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { VerifiedAgentName } from "@/components/agents/verified-agent-name";
 import { ListingContactActions } from "@/components/listings/listing-contact-actions";
+import { ListingDetailEventTracker } from "@/components/listings/listing-detail-event-tracker";
 import { formatDate, formatPrice, whatsappLink } from "@/lib/format";
 import { getListingImages } from "@/lib/listing-images";
 import { AVAILABILITY_LABELS, getUnavailableBadge, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
@@ -22,6 +23,7 @@ export function ListingDetail({ details }: Props) {
 
   return (
     <section className="rounded-[2rem] bg-gradient-to-br from-stone-300 via-stone-200 to-slate-300 p-3 shadow-sm sm:p-5">
+      <ListingDetailEventTracker listingId={listing.id} />
       <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
       <div className="space-y-4">
         <div className="relative h-72 overflow-hidden rounded-3xl bg-stone-200 md:h-[28rem]">
@@ -90,29 +92,18 @@ export function ListingDetail({ details }: Props) {
           />
         </Link>
         <div className="mt-4 space-y-3">
-          <a
-            href={`tel:${listing.contactPhone}`}
-            target="_blank"
-            rel="noreferrer"
-            className="flex w-full items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white"
-          >
-            Call {listing.contactPhone}
-          </a>
-          <a
-            href={listingWhatsappHref}
-            target="_blank"
-            rel="noreferrer"
-            className="flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white"
-          >
-            Chat on WhatsApp
-          </a>
+          <ListingContactActions
+            listingId={listing.id}
+            phone={listing.contactPhone}
+            title={listing.title}
+            whatsappHref={listingWhatsappHref}
+          />
           <Link
             href={`/agents/${listing.agentId}/listings`}
             className="flex w-full items-center justify-center rounded-2xl bg-amber-100 px-4 py-3 text-sm font-medium text-amber-900"
           >
             View other properties from this agent
           </Link>
-          <ListingContactActions phone={listing.contactPhone} title={listing.title} whatsappHref={listingWhatsappHref} />
         </div>
         <dl className="mt-6 space-y-4 text-sm text-slate-700">
           <div className="flex justify-between gap-4">

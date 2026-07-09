@@ -2,13 +2,16 @@
 
 import { useState } from "react";
 
+import { trackListingEvent } from "@/lib/listing-events";
+
 type Props = {
+  listingId: string;
   phone: string;
   title: string;
   whatsappHref: string;
 };
 
-export function ListingContactActions({ phone, title, whatsappHref }: Props) {
+export function ListingContactActions({ listingId, phone, title, whatsappHref }: Props) {
   const [message, setMessage] = useState("");
 
   async function shareListing() {
@@ -28,8 +31,26 @@ export function ListingContactActions({ phone, title, whatsappHref }: Props) {
 
   return (
     <>
+      <a
+        href={`tel:${phone}`}
+        target="_blank"
+        rel="noreferrer"
+        className="hidden w-full items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white lg:flex"
+        onClick={() => trackListingEvent(listingId, "phone_click")}
+      >
+        Call {phone}
+      </a>
+      <a
+        href={whatsappHref}
+        target="_blank"
+        rel="noreferrer"
+        className="hidden w-full items-center justify-center rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white lg:flex"
+        onClick={() => trackListingEvent(listingId, "whatsapp_click")}
+      >
+        Chat on WhatsApp
+      </a>
       <button
-        className="mt-3 hidden w-full items-center justify-center rounded-2xl border border-slate-300 bg-white/55 px-4 py-3 text-sm font-medium text-slate-800 transition hover:bg-white/80 lg:flex"
+        className="hidden w-full items-center justify-center rounded-2xl border border-slate-300 bg-white/55 px-4 py-3 text-sm font-medium text-slate-800 transition hover:bg-white/80 lg:flex"
         type="button"
         onClick={shareListing}
       >
@@ -42,6 +63,7 @@ export function ListingContactActions({ phone, title, whatsappHref }: Props) {
           <a
             href={`tel:${phone}`}
             className="flex items-center justify-center rounded-2xl bg-slate-950 px-3 py-3 text-sm font-bold text-white"
+            onClick={() => trackListingEvent(listingId, "phone_click")}
           >
             Call
           </a>
@@ -50,6 +72,7 @@ export function ListingContactActions({ phone, title, whatsappHref }: Props) {
             target="_blank"
             rel="noreferrer"
             className="flex items-center justify-center rounded-2xl bg-emerald-600 px-3 py-3 text-sm font-bold text-white"
+            onClick={() => trackListingEvent(listingId, "whatsapp_click")}
           >
             WhatsApp
           </a>

@@ -21,6 +21,7 @@ import {
   sendSubscriptionCancelledEmail,
   sendSubscriptionFailedEmail
 } from "@/modules/email/email.service";
+import { syncAgentPlanCredits } from "@/modules/entitlements/entitlement.service";
 import {
   createBillingTransaction,
   getBillingTransactionByReference,
@@ -280,6 +281,7 @@ export async function applySuccessfulPaystackTransaction(reference: string) {
     paystackSubscriptionCode: subscriptionCode,
     rawResponse: transaction
   });
+  await syncAgentPlanCredits(billingTransaction.agentId, subscription).catch(() => undefined);
   await sendSubscriptionActivatedEmail({
     agentId: billingTransaction.agentId,
     planSlug: billingTransaction.planSlug,
@@ -324,7 +326,7 @@ async function applyWebhookSubscriptionUpdate(data: Record<string, unknown>) {
     return;
   }
 
-  await upsertActiveSubscription({
+  const subscription = await upsertActiveSubscription({
     agentId,
     planSlug,
     paymentProvider: "paystack",
@@ -336,6 +338,7 @@ async function applyWebhookSubscriptionUpdate(data: Record<string, unknown>) {
     currentPeriodStart: readPeriodStart(data),
     currentPeriodEnd: readPeriodEnd(data)
   });
+  await syncAgentPlanCredits(agentId, subscription).catch(() => undefined);
 }
 
 async function applyWebhookFailureOrDisable(data: Record<string, unknown>, status: "past_due" | "cancelled") {

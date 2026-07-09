@@ -24,6 +24,8 @@ export type RoadAccess = "tarred" | "untarred" | "estate_road" | "major_road" | 
 export type BillingProvider = "paystack" | "opay";
 export type BillingMode = "recurring" | "prepaid";
 export type PaystackCheckoutChannel = "bank_transfer" | "ussd" | "bank";
+export type PromotionCreditType = "boost" | "featured" | "sponsored";
+export type AnalyticsLevel = "none" | "basic" | "advanced";
 
 export type LocationValue = {
   state: string;
@@ -128,6 +130,62 @@ export type SubscriptionRecord = {
   cancelAtPeriodEnd: boolean;
 };
 
+export type PromotionCreditSummary = {
+  creditType: PromotionCreditType;
+  quantity: number;
+  remaining: number;
+  periodStart: string | null;
+  periodEnd: string | null;
+};
+
+export type AgentEntitlements = {
+  planSlug: string;
+  planName: string;
+  activeListingLimit: number;
+  activeListingCount: number;
+  autoRefreshDays: number | null;
+  analyticsLevel: AnalyticsLevel;
+  hasPriorityReview: boolean;
+  hasPrioritySupport: boolean;
+  credits: Record<PromotionCreditType, PromotionCreditSummary>;
+  periodStart: string | null;
+  periodEnd: string | null;
+};
+
+export type AgentAnalyticsSummary = {
+  range: "7d" | "30d";
+  analyticsLevel: AnalyticsLevel;
+  totals: {
+    listingViews: number;
+    detailViews: number;
+    whatsappClicks: number;
+    phoneClicks: number;
+    saves: number;
+    reports: number;
+  };
+  listings: Array<{
+    listingId: string;
+    title: string;
+    impressions: number;
+    detailViews: number;
+    whatsappClicks: number;
+    phoneClicks: number;
+  }>;
+};
+
+export type SupportRequestRecord = {
+  id: string;
+  agentId: string;
+  agentName?: string | null;
+  agentEmail?: string | null;
+  priority: "normal" | "priority" | "highest";
+  subject: string;
+  message: string;
+  status: "open" | "reviewing" | "resolved" | "closed";
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ListingFilters = {
   keyword?: string;
   location?: string;
@@ -152,6 +210,14 @@ export type AdminAgentReview = {
   user: UserRecord;
   agent: AgentProfile;
   listings: ListingRecord[];
+};
+
+export type PaidPlanStats = {
+  totalPaidAgents: number;
+  starterAgent: number;
+  growthAgent: number;
+  proAgent: number;
+  agencyPlus: number;
 };
 
 export type AdminAgentSummary = {

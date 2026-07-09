@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { AnalyticsSummary } from "@/components/agents/analytics-summary";
+import { EntitlementSummary } from "@/components/agents/entitlement-summary";
 import { ListingManager } from "@/components/agents/listing-manager";
+import { SupportRequestForm } from "@/components/agents/support-request-form";
 import { VerifiedAgentName } from "@/components/agents/verified-agent-name";
 import { PlanFeatureRow } from "@/components/shared/plan-feature-row";
 import { apiRequest } from "@/lib/api";
@@ -16,7 +19,14 @@ import {
 } from "@/lib/pricing";
 import { getEffectivePlanSlug, isSubscriptionCurrentlyActive } from "@/lib/subscriptions";
 import { supabase } from "@/lib/supabase/client";
-import { BillingMode, ListingRecord, SubscriptionRecord, UserRecord } from "@/lib/types";
+import {
+  AgentAnalyticsSummary,
+  AgentEntitlements,
+  BillingMode,
+  ListingRecord,
+  SubscriptionRecord,
+  UserRecord
+} from "@/lib/types";
 
 type DashboardData = {
   user: UserRecord | null;
@@ -29,6 +39,8 @@ type DashboardData = {
     subscription?: SubscriptionRecord;
   };
   listings: ListingRecord[];
+  entitlements?: AgentEntitlements;
+  analytics?: AgentAnalyticsSummary;
   billing?: {
     liveEnabled: boolean;
   };
@@ -203,6 +215,28 @@ export default function AgentDashboardPage() {
     setCreateRequestKey((current) => current + 1);
   }
 
+  function updateDashboardListings(listings: ListingRecord[]) {
+    setData((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const activeListingCount = listings.filter(
+        (listing) => listing.status === "active" && listing.availability === "available"
+      ).length;
+      return {
+        ...current,
+        listings,
+        entitlements: current.entitlements
+          ? {
+              ...current.entitlements,
+              activeListingCount
+            }
+          : current.entitlements
+      };
+    });
+  }
+
   async function startCheckout(planSlug: string, billingMode: BillingMode) {
     if (!data?.token || !isPaidPricingPlanSlug(planSlug)) {
       return;
@@ -373,6 +407,9 @@ export default function AgentDashboardPage() {
               </div>
             </section>
 
+            <EntitlementSummary entitlements={data.entitlements} />
+            <AnalyticsSummary analytics={data.analytics} />
+
             <section className="px-3 sm:px-6">
               <div className="rounded-2xl border border-slate-300/80 bg-slate-200 p-4 shadow-sm sm:rounded-3xl sm:p-5">
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
@@ -506,6 +543,7 @@ export default function AgentDashboardPage() {
                     </article>
                   ))}
                 </div>
+                <SupportRequestForm entitlements={data.entitlements} token={data.token} />
               </div>
             </section>
 
@@ -513,11 +551,16 @@ export default function AgentDashboardPage() {
               <ListingManager
                 token={data.token}
                 initialListings={data.listings}
+                entitlements={data.entitlements}
                 createRequestKey={createRequestKey}
                 listLimit={3}
                 viewAllHref="/agents/listings"
                 listTitle="Recent listings"
                 enableEditQueryParam
+                onEntitlementsChanged={(entitlements) =>
+                  setData((current) => (current ? { ...current, entitlements } : current))
+                }
+                onListingsChanged={updateDashboardListings}
               />
             </div>
 

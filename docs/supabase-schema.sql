@@ -153,6 +153,18 @@ create table if not exists public.promotion_credits (
   created_at timestamptz not null default timezone('utc', now())
 );
 
+create table if not exists public.promotion_credit_events (
+  id uuid primary key default gen_random_uuid(),
+  agent_id uuid not null references public.users (id) on delete cascade,
+  listing_id uuid references public.listings (id) on delete set null,
+  credit_type text not null check (credit_type in ('boost', 'featured', 'sponsored')),
+  action text not null,
+  quantity integer not null check (quantity > 0),
+  balance_after integer not null check (balance_after >= 0),
+  metadata jsonb not null default '{}',
+  created_at timestamptz not null default timezone('utc', now())
+);
+
 create table if not exists public.listing_promotions (
   id uuid primary key default gen_random_uuid(),
   listing_id uuid not null references public.listings (id) on delete cascade,
@@ -197,6 +209,17 @@ create table if not exists public.agent_daily_metrics (
   reports integer not null default 0 check (reports >= 0),
   unique_viewers integer not null default 0 check (unique_viewers >= 0),
   primary key (agent_id, metric_date)
+);
+
+create table if not exists public.support_requests (
+  id uuid primary key default gen_random_uuid(),
+  agent_id uuid not null references public.users (id) on delete cascade,
+  priority text not null default 'normal' check (priority in ('normal', 'priority', 'highest')),
+  subject text not null check (char_length(subject) between 4 and 120),
+  message text not null check (char_length(message) between 10 and 1200),
+  status text not null default 'open' check (status in ('open', 'reviewing', 'resolved', 'closed')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
 );
 
 create table if not exists public.security_events (
@@ -617,6 +640,16 @@ create index if not exists plans_active_idx
 create index if not exists promotion_credits_agent_idx
   on public.promotion_credits (agent_id, credit_type, period_end desc);
 
+create unique index if not exists promotion_credits_period_unique_idx
+  on public.promotion_credits (agent_id, credit_type, period_start, period_end);
+
+create index if not exists promotion_credit_events_agent_idx
+  on public.promotion_credit_events (agent_id, credit_type, created_at desc);
+
+create index if not exists promotion_credit_events_listing_idx
+  on public.promotion_credit_events (listing_id, created_at desc)
+  where listing_id is not null;
+
 create index if not exists listing_promotions_listing_idx
   on public.listing_promotions (listing_id, status, ends_at desc);
 
@@ -637,6 +670,12 @@ create index if not exists listing_reports_status_idx
 
 create index if not exists agent_daily_metrics_date_idx
   on public.agent_daily_metrics (metric_date desc, agent_id);
+
+create index if not exists support_requests_priority_idx
+  on public.support_requests (priority, status, created_at desc);
+
+create index if not exists support_requests_agent_idx
+  on public.support_requests (agent_id, created_at desc);
 
 create index if not exists agents_public_visibility_idx
   on public.agents (verification_status, is_blocked, id);
@@ -670,6 +709,214 @@ create index if not exists email_events_event_key_idx
 create index if not exists email_events_recipient_idx
   on public.email_events (recipient_email, created_at desc);
 
+create or replace function public.grant_plan_promotion_credits(
+  p_agent_id uuid,
+  p_plan_slug text,
+  p_period_start timestamptz,
+  p_period_end timestamptz
+)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  with plan_values as (
+    select
+      manual_boosts_monthly,
+      featured_credits_monthly,
+      sponsored_slots_monthly
+    from public.plans
+    where slug = p_plan_slug
+      and is_active = true
+  ),
+  credits as (
+    select 'boost'::text as credit_type, coalesce(manual_boosts_monthly, 0) as quantity from plan_values
+    union all
+    select 'featured'::text, coalesce(featured_credits_monthly, 0) from plan_values
+    union all
+    select 'sponsored'::text, coalesce(sponsored_slots_monthly, 0) from plan_values
+  )
+  insert into public.promotion_credits (
+    agent_id,
+    credit_type,
+    quantity,
+    remaining,
+    period_start,
+    period_end
+  )
+  select
+    p_agent_id,
+    credit_type,
+    quantity,
+    quantity,
+    p_period_start,
+    p_period_end
+  from credits
+  where quantity > 0
+  on conflict (agent_id, credit_type, period_start, period_end)
+  do update set
+    remaining = public.promotion_credits.remaining
+      + greatest(excluded.quantity - public.promotion_credits.quantity, 0),
+    quantity = greatest(public.promotion_credits.quantity, excluded.quantity);
+$$;
+
+revoke all on function public.grant_plan_promotion_credits(uuid, text, timestamptz, timestamptz) from public;
+revoke all on function public.grant_plan_promotion_credits(uuid, text, timestamptz, timestamptz) from anon;
+revoke all on function public.grant_plan_promotion_credits(uuid, text, timestamptz, timestamptz) from authenticated;
+grant execute on function public.grant_plan_promotion_credits(uuid, text, timestamptz, timestamptz) to service_role;
+
+create or replace function public.consume_promotion_credit(
+  p_agent_id uuid,
+  p_credit_type text,
+  p_listing_id uuid,
+  p_action text,
+  p_metadata jsonb default '{}'
+)
+returns table (credit_id uuid, remaining integer)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  selected_credit record;
+  new_remaining integer;
+begin
+  select *
+  into selected_credit
+  from public.promotion_credits
+  where agent_id = p_agent_id
+    and credit_type = p_credit_type
+    and period_start <= timezone('utc', now())
+    and period_end > timezone('utc', now())
+    and remaining > 0
+  order by period_end asc
+  for update skip locked
+  limit 1;
+
+  if selected_credit.id is null then
+    raise exception 'No % credits remaining for this billing period.', p_credit_type;
+  end if;
+
+  update public.promotion_credits
+  set remaining = selected_credit.remaining - 1
+  where id = selected_credit.id
+  returning public.promotion_credits.remaining into new_remaining;
+
+  insert into public.promotion_credit_events (
+    agent_id,
+    listing_id,
+    credit_type,
+    action,
+    quantity,
+    balance_after,
+    metadata
+  )
+  values (
+    p_agent_id,
+    p_listing_id,
+    p_credit_type,
+    p_action,
+    1,
+    new_remaining,
+    coalesce(p_metadata, '{}')
+  );
+
+  credit_id := selected_credit.id;
+  remaining := new_remaining;
+  return next;
+end;
+$$;
+
+revoke all on function public.consume_promotion_credit(uuid, text, uuid, text, jsonb) from public;
+revoke all on function public.consume_promotion_credit(uuid, text, uuid, text, jsonb) from anon;
+revoke all on function public.consume_promotion_credit(uuid, text, uuid, text, jsonb) from authenticated;
+grant execute on function public.consume_promotion_credit(uuid, text, uuid, text, jsonb) to service_role;
+
+create or replace function public.record_listing_event(
+  p_listing_id uuid,
+  p_event_type text,
+  p_session_hash text default null,
+  p_ip_hash text default null,
+  p_metadata jsonb default '{}'
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  listing_agent_id uuid;
+begin
+  select listings.agent_id
+  into listing_agent_id
+  from public.listings
+  join public.agents
+    on agents.id = listings.agent_id
+  where listings.id = p_listing_id
+    and listings.status = 'active'
+    and agents.verification_status = 'approved'
+    and agents.is_blocked = false;
+
+  if listing_agent_id is null then
+    return;
+  end if;
+
+  insert into public.listing_events (
+    listing_id,
+    agent_id,
+    event_type,
+    session_hash,
+    ip_hash,
+    metadata
+  )
+  values (
+    p_listing_id,
+    listing_agent_id,
+    p_event_type,
+    p_session_hash,
+    p_ip_hash,
+    coalesce(p_metadata, '{}')
+  );
+
+  insert into public.agent_daily_metrics (
+    agent_id,
+    metric_date,
+    listing_views,
+    detail_views,
+    whatsapp_clicks,
+    phone_clicks,
+    saves,
+    reports,
+    unique_viewers
+  )
+  values (
+    listing_agent_id,
+    timezone('utc', now())::date,
+    case when p_event_type = 'impression' then 1 else 0 end,
+    case when p_event_type = 'detail_view' then 1 else 0 end,
+    case when p_event_type = 'whatsapp_click' then 1 else 0 end,
+    case when p_event_type = 'phone_click' then 1 else 0 end,
+    case when p_event_type = 'save' then 1 else 0 end,
+    case when p_event_type = 'report' then 1 else 0 end,
+    case when p_session_hash is not null then 1 else 0 end
+  )
+  on conflict (agent_id, metric_date)
+  do update set
+    listing_views = public.agent_daily_metrics.listing_views + excluded.listing_views,
+    detail_views = public.agent_daily_metrics.detail_views + excluded.detail_views,
+    whatsapp_clicks = public.agent_daily_metrics.whatsapp_clicks + excluded.whatsapp_clicks,
+    phone_clicks = public.agent_daily_metrics.phone_clicks + excluded.phone_clicks,
+    saves = public.agent_daily_metrics.saves + excluded.saves,
+    reports = public.agent_daily_metrics.reports + excluded.reports,
+    unique_viewers = public.agent_daily_metrics.unique_viewers + excluded.unique_viewers;
+end;
+$$;
+
+revoke all on function public.record_listing_event(uuid, text, text, text, jsonb) from public;
+revoke all on function public.record_listing_event(uuid, text, text, text, jsonb) from anon;
+revoke all on function public.record_listing_event(uuid, text, text, text, jsonb) from authenticated;
+grant execute on function public.record_listing_event(uuid, text, text, text, jsonb) to service_role;
+
 create or replace view public.public_listings as
 select listings.*
 from public.listings
@@ -701,10 +948,12 @@ alter table public.subscriptions enable row level security;
 alter table public.billing_transactions enable row level security;
 alter table public.listings enable row level security;
 alter table public.promotion_credits enable row level security;
+alter table public.promotion_credit_events enable row level security;
 alter table public.listing_promotions enable row level security;
 alter table public.listing_events enable row level security;
 alter table public.listing_reports enable row level security;
 alter table public.agent_daily_metrics enable row level security;
+alter table public.support_requests enable row level security;
 alter table public.security_events enable row level security;
 alter table public.email_events enable row level security;
 alter table public.agent_quota_overrides enable row level security;
@@ -725,6 +974,8 @@ drop policy if exists "agents can update own listings" on public.listings;
 drop policy if exists "agents can delete own listings" on public.listings;
 drop policy if exists "agents can read own promotion credits" on public.promotion_credits;
 drop policy if exists "admins can manage promotion credits" on public.promotion_credits;
+drop policy if exists "agents can read own promotion credit events" on public.promotion_credit_events;
+drop policy if exists "admins can read promotion credit events" on public.promotion_credit_events;
 drop policy if exists "agents can read own listing promotions" on public.listing_promotions;
 drop policy if exists "admins can manage listing promotions" on public.listing_promotions;
 drop policy if exists "agents can read own listing events" on public.listing_events;
@@ -734,6 +985,9 @@ drop policy if exists "users can read own listing reports" on public.listing_rep
 drop policy if exists "admins can manage listing reports" on public.listing_reports;
 drop policy if exists "agents can read own daily metrics" on public.agent_daily_metrics;
 drop policy if exists "admins can read daily metrics" on public.agent_daily_metrics;
+drop policy if exists "agents can create own support requests" on public.support_requests;
+drop policy if exists "agents can read own support requests" on public.support_requests;
+drop policy if exists "admins can manage support requests" on public.support_requests;
 drop policy if exists "admins can read security events" on public.security_events;
 drop policy if exists "admins can read email events" on public.email_events;
 drop policy if exists "admins can read quota overrides" on public.agent_quota_overrides;
@@ -884,6 +1138,20 @@ create policy "admins can manage promotion credits"
     )
   );
 
+create policy "agents can read own promotion credit events"
+  on public.promotion_credit_events for select
+  using (auth.uid() = agent_id);
+
+create policy "admins can read promotion credit events"
+  on public.promotion_credit_events for select
+  using (
+    exists (
+      select 1 from public.users
+      where users.id = auth.uid()
+        and users.role = 'admin'
+    )
+  );
+
 create policy "agents can read own listing promotions"
   on public.listing_promotions for select
   using (auth.uid() = agent_id);
@@ -963,6 +1231,31 @@ create policy "agents can read own daily metrics"
 create policy "admins can read daily metrics"
   on public.agent_daily_metrics for select
   using (
+    exists (
+      select 1 from public.users
+      where users.id = auth.uid()
+        and users.role = 'admin'
+    )
+  );
+
+create policy "agents can create own support requests"
+  on public.support_requests for insert
+  with check (auth.uid() = agent_id);
+
+create policy "agents can read own support requests"
+  on public.support_requests for select
+  using (auth.uid() = agent_id);
+
+create policy "admins can manage support requests"
+  on public.support_requests for all
+  using (
+    exists (
+      select 1 from public.users
+      where users.id = auth.uid()
+        and users.role = 'admin'
+    )
+  )
+  with check (
     exists (
       select 1 from public.users
       where users.id = auth.uid()

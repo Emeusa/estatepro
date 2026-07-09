@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthError, requireAdmin } from "@/lib/auth";
 import { captureServerError } from "@/lib/security/logger";
 import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
-import { getAgentReviewsForAdmin } from "@/modules/agents/agent.service";
+import { getAgentReviewsForAdmin, getPaidPlanStatsForAdmin } from "@/modules/agents/agent.service";
+import { listSupportRequestsForAdmin } from "@/modules/support/support.service";
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,9 +14,13 @@ export async function GET(request: NextRequest) {
       return limited.response;
     }
 
-    const agents = await getAgentReviewsForAdmin();
+    const [agents, supportRequests, paidPlanStats] = await Promise.all([
+      getAgentReviewsForAdmin(),
+      listSupportRequestsForAdmin(12),
+      getPaidPlanStatsForAdmin()
+    ]);
 
-    return withRateLimitHeaders(NextResponse.json({ agents }), limited.headers);
+    return withRateLimitHeaders(NextResponse.json({ agents, supportRequests, paidPlanStats }), limited.headers);
   } catch (error) {
     captureServerError(error, { route: "/api/admin/overview" });
     return NextResponse.json(

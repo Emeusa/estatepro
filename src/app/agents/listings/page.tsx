@@ -7,7 +7,7 @@ import { ListingManager } from "@/components/agents/listing-manager";
 import { VerifiedAgentName } from "@/components/agents/verified-agent-name";
 import { apiRequest } from "@/lib/api";
 import { supabase } from "@/lib/supabase/client";
-import { ListingRecord, UserRecord } from "@/lib/types";
+import { AgentEntitlements, ListingRecord, UserRecord } from "@/lib/types";
 
 type ListingsPageData = {
   user: UserRecord | null;
@@ -18,6 +18,7 @@ type ListingsPageData = {
     };
   };
   listings: ListingRecord[];
+  entitlements?: AgentEntitlements;
   token: string;
 };
 
@@ -103,6 +104,27 @@ export default function AgentListingsPage() {
   const agentName = data.user?.fullName ?? "Agent";
   const isVerified = data.profile.agent?.verificationStatus === "approved";
 
+  function updateListings(listings: ListingRecord[]) {
+    setData((current) => {
+      if (!current) {
+        return current;
+      }
+      const activeListingCount = listings.filter(
+        (listing) => listing.status === "active" && listing.availability === "available"
+      ).length;
+      return {
+        ...current,
+        listings,
+        entitlements: current.entitlements
+          ? {
+              ...current.entitlements,
+              activeListingCount
+            }
+          : current.entitlements
+      };
+    });
+  }
+
   return (
     <div className="relative left-1/2 -my-8 min-h-screen w-screen -translate-x-1/2 bg-[#d7dce4]">
       <div className="grid min-h-screen lg:grid-cols-[206px_1fr]">
@@ -176,9 +198,14 @@ export default function AgentListingsPage() {
             <ListingManager
               token={data.token}
               initialListings={data.listings}
+              entitlements={data.entitlements}
               listTitle="All listings"
               showForm={false}
               editHrefForListing={(listing) => `/agents/dashboard?editListing=${listing.id}#listing-editor`}
+              onEntitlementsChanged={(entitlements) =>
+                setData((current) => (current ? { ...current, entitlements } : current))
+              }
+              onListingsChanged={updateListings}
             />
 
             <section className="pb-2 lg:hidden">

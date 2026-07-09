@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { PromotionControls } from "@/components/agents/promotion-controls";
 import { ListingForm } from "@/components/forms/listing-form";
 import { apiRequest } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { AVAILABILITY_LABELS, getUnavailableBadge, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
 import { getListingQualityBadges } from "@/lib/listing-quality";
-import { ListingRecord } from "@/lib/types";
+import { AgentEntitlements, ListingRecord } from "@/lib/types";
 
 type Props = {
   token: string;
@@ -21,6 +22,9 @@ type Props = {
   showForm?: boolean;
   editHrefForListing?: (listing: ListingRecord) => string;
   enableEditQueryParam?: boolean;
+  entitlements?: AgentEntitlements;
+  onEntitlementsChanged?: (entitlements: AgentEntitlements) => void;
+  onListingsChanged?: (listings: ListingRecord[]) => void;
 };
 
 export function ListingManager({
@@ -33,12 +37,24 @@ export function ListingManager({
   listEyebrow = "My listings",
   showForm = true,
   editHrefForListing,
-  enableEditQueryParam = false
+  enableEditQueryParam = false,
+  entitlements,
+  onEntitlementsChanged,
+  onListingsChanged
 }: Props) {
   const [selected, setSelected] = useState<ListingRecord | undefined>(undefined);
   const [message, setMessage] = useState("");
   const [listings, setListings] = useState(initialListings);
+  const [busyPromotion, setBusyPromotion] = useState<string | null>(null);
   const displayedListings = typeof listLimit === "number" ? listings.slice(0, listLimit) : listings;
+
+  function commitListings(updater: (current: ListingRecord[]) => ListingRecord[]) {
+    setListings((current) => {
+      const next = updater(current);
+      onListingsChanged?.(next);
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (!createRequestKey) {
@@ -73,7 +89,7 @@ export function ListingManager({
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       });
-      setListings((current) => current.filter((listing) => listing.id !== listingId));
+      commitListings((current) => current.filter((listing) => listing.id !== listingId));
       if (selected?.id === listingId) {
         setSelected(undefined);
       }
@@ -86,7 +102,7 @@ export function ListingManager({
   function upsertListing(next: ListingRecord) {
     const keepEditingSavedListing = selected?.id === next.id;
 
-    setListings((current) => {
+    commitListings((current) => {
       const index = current.findIndex((item) => item.id === next.id);
       if (index === -1) {
         return [next, ...current];
@@ -97,6 +113,34 @@ export function ListingManager({
       return copy;
     });
     setSelected(keepEditingSavedListing ? next : undefined);
+  }
+
+  async function promoteListing(listingId: string, promotionType: "boost" | "featured" | "sponsored") {
+    try {
+      setBusyPromotion(`${listingId}:${promotionType}`);
+      const response = await apiRequest<{ listing: ListingRecord; entitlements: AgentEntitlements }>(
+        `/api/listings/${listingId}/promotions`,
+        {
+          method: "POST",
+          retries: 0,
+          headers: { Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ promotionType })
+        }
+      );
+      commitListings((current) => current.map((listing) => (listing.id === listingId ? response.listing : listing)));
+      onEntitlementsChanged?.(response.entitlements);
+      setMessage(
+        promotionType === "boost"
+          ? "Listing boosted."
+          : promotionType === "featured"
+            ? "Listing featured for 7 days."
+            : "Listing sponsored for 7 days."
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not promote listing.");
+    } finally {
+      setBusyPromotion(null);
+    }
   }
 
   function listingEditControl(listing: ListingRecord) {
@@ -182,6 +226,16 @@ export function ListingManager({
                     Delete
                   </button>
                 </div>
+                <PromotionControls
+                  busyPromotion={
+                    busyPromotion?.startsWith(`${listing.id}:`)
+                      ? (busyPromotion.split(":")[1] as "boost" | "featured" | "sponsored")
+                      : null
+                  }
+                  entitlements={entitlements}
+                  listing={listing}
+                  onPromote={(promotionType) => promoteListing(listing.id, promotionType)}
+                />
               </div>
             ))
           ) : (

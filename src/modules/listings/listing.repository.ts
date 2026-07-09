@@ -368,6 +368,13 @@ export async function updateListing(
   if (payload.listingCategory !== undefined) updates.listing_category = payload.listingCategory;
   if (payload.availability !== undefined) updates.availability = payload.availability;
   if (payload.status !== undefined) updates.status = payload.status;
+  if (payload.promotionType !== undefined) updates.promotion_type = payload.promotionType;
+  if (payload.boostedAt !== undefined) updates.boosted_at = payload.boostedAt;
+  if (payload.lastRefreshedAt !== undefined) updates.last_refreshed_at = payload.lastRefreshedAt;
+  if (payload.expiresAt !== undefined) updates.expires_at = payload.expiresAt;
+  if (payload.featuredUntil !== undefined) updates.featured_until = payload.featuredUntil;
+  if (payload.sponsoredUntil !== undefined) updates.sponsored_until = payload.sponsoredUntil;
+  if (payload.photosVerifiedAt !== undefined) updates.photos_verified_at = payload.photosVerifiedAt;
   if (payload.imageUrls !== undefined) updates.image_urls = payload.imageUrls;
   if (payload.imageVariants !== undefined) updates.image_variants = payload.imageVariants;
   if (payload.contactPhone !== undefined) updates.contact_phone = payload.contactPhone;

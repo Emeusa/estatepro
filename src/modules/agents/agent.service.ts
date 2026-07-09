@@ -7,13 +7,14 @@ import {
   getUserProfile,
   listAgentUsersForAdmin,
   listAgentsForAdmin,
+  countPaidPlanSubscriptionsForAdmin,
   registerClient,
   registerAgent,
   setAgentBlockStatus,
   setVerificationStatus,
   updateUserProfile
 } from "@/modules/agents/agent.repository";
-import { AdminAgentDetails, AdminAgentReview, AdminAgentSummary } from "@/lib/types";
+import { AdminAgentDetails, AdminAgentReview, AdminAgentSummary, PaidPlanStats } from "@/lib/types";
 import { getListingCountsByAgentIds, getListingsByAgentIds } from "@/modules/listings/listing.service";
 import { sendAgentRegistrationReceivedEmail, sendAgentVerificationEmail } from "@/modules/email/email.service";
 
@@ -96,6 +97,10 @@ export async function getAgentReviewsForAdmin(): Promise<AdminAgentReview[]> {
       };
     })
     .filter((review): review is AdminAgentReview => review !== null);
+}
+
+export async function getPaidPlanStatsForAdmin(): Promise<PaidPlanStats> {
+  return countPaidPlanSubscriptionsForAdmin();
 }
 
 export async function getAgentReviewForAdmin(agentId: string): Promise<AdminAgentDetails | null> {

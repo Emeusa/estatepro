@@ -1,7 +1,11 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 
 import { formatPrice } from "@/lib/format";
+import { trackListingEvent } from "@/lib/listing-events";
 import { getListingHeroImage } from "@/lib/listing-images";
 import { getListingPromotionBadge } from "@/lib/listing-visibility";
 import { getUnavailableBadge, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
@@ -18,9 +22,31 @@ export function ListingCard({ listing }: Props) {
   const image = getListingHeroImage(listing);
   const promotionBadge = getListingPromotionBadge(listing);
   const listingHref = `/listings/${listing.id}`;
+  const cardRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const node = cardRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      return;
+    }
+
+    let tracked = false;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!tracked && entries.some((entry) => entry.isIntersecting)) {
+          tracked = true;
+          trackListingEvent(listing.id, "impression");
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.35 }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [listing.id]);
 
   return (
-    <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+    <article ref={cardRef} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
       <Link
         href={listingHref}
         aria-label={`View ${listing.title}`}
