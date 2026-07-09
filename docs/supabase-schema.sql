@@ -781,26 +781,26 @@ declare
   selected_credit record;
   new_remaining integer;
 begin
-  select *
+  select pc.*
   into selected_credit
-  from public.promotion_credits
-  where agent_id = p_agent_id
-    and credit_type = p_credit_type
-    and period_start <= timezone('utc', now())
-    and period_end > timezone('utc', now())
-    and remaining > 0
-  order by period_end asc
+  from public.promotion_credits pc
+  where pc.agent_id = p_agent_id
+    and pc.credit_type = p_credit_type
+    and pc.period_start <= timezone('utc', now())
+    and pc.period_end > timezone('utc', now())
+    and pc.remaining > 0
+  order by pc.period_end asc
   for update skip locked
   limit 1;
 
-  if selected_credit.id is null then
+  if not found then
     raise exception 'No % credits remaining for this billing period.', p_credit_type;
   end if;
 
-  update public.promotion_credits
+  update public.promotion_credits pc
   set remaining = selected_credit.remaining - 1
-  where id = selected_credit.id
-  returning public.promotion_credits.remaining into new_remaining;
+  where pc.id = selected_credit.id
+  returning pc.remaining into new_remaining;
 
   insert into public.promotion_credit_events (
     agent_id,

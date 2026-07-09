@@ -10,10 +10,10 @@ import { getListingHeroImage } from "@/lib/listing-images";
 import { getListingPromotionBadge } from "@/lib/listing-visibility";
 import { getUnavailableBadge, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
 import { getListingQualityBadges } from "@/lib/listing-quality";
-import { ListingRecord } from "@/lib/types";
+import { PublicListingCardRecord } from "@/lib/types";
 
 type Props = {
-  listing: ListingRecord;
+  listing: PublicListingCardRecord;
 };
 
 export function ListingCard({ listing }: Props) {

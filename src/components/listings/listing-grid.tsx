@@ -1,11 +1,11 @@
 import Link from "next/link";
 
-import { ListingRecord } from "@/lib/types";
+import { PublicListingCardRecord } from "@/lib/types";
 
 import { ListingCard } from "@/components/listings/listing-card";
 
 type Props = {
-  listings: ListingRecord[];
+  listings: PublicListingCardRecord[];
   hasActiveFilters?: boolean;
 };
 

@@ -110,6 +110,31 @@ export type ListingRecord = {
   updatedAt: string;
 };
 
+export type PublicListingCardRecord = Pick<
+  ListingRecord,
+  | "id"
+  | "title"
+  | "price"
+  | "propertyType"
+  | "listingCategory"
+  | "availability"
+  | "status"
+  | "imageUrls"
+  | "imageVariants"
+  | "promotionType"
+  | "featuredUntil"
+  | "sponsoredUntil"
+  | "location"
+  | "bedrooms"
+  | "bathrooms"
+  | "toilets"
+  | "parkingSpaces"
+  | "propertySize"
+  | "propertySizeUnit"
+  | "landSize"
+  | "landSizeUnit"
+>;
+
 export type SubscriptionRecord = {
   agentId: string;
   planSlug: string;

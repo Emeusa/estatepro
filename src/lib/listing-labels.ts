@@ -19,7 +19,7 @@ export const CATEGORY_AVAILABILITY: Record<ListingCategory, ListingAvailability[
   short_let: ["available", "booked"]
 };
 
-export function getUnavailableBadge(listing: ListingRecord) {
+export function getUnavailableBadge(listing: Pick<ListingRecord, "availability">) {
   if (listing.availability === "available") {
     return null;
   }

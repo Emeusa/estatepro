@@ -217,7 +217,19 @@ export function formatSize(value: number | null, unit: string | null, labels: Re
   return `${value.toLocaleString()} ${labels[unit] ?? unit}`;
 }
 
-export function getListingQualityBadges(listing: ListingRecord) {
+export function getListingQualityBadges(
+  listing: Pick<
+    ListingRecord,
+    | "bedrooms"
+    | "bathrooms"
+    | "toilets"
+    | "parkingSpaces"
+    | "propertySize"
+    | "propertySizeUnit"
+    | "landSize"
+    | "landSizeUnit"
+  >
+) {
   return [
     formatCount(listing.bedrooms, "Bed", "Beds"),
     formatCount(listing.bathrooms, "Bath", "Baths"),

@@ -9,6 +9,7 @@ import {
   ListingStatus,
   PaginatedResponse,
   PropertyType,
+  PublicListingCardRecord,
   PublicAgentSummary
 } from "@/lib/types";
 
@@ -79,9 +80,35 @@ function parseKeywordFilters(keyword?: string): KeywordFilters {
   return filters;
 }
 
+function toPublicListingCardRecord(listing: ListingRecord): PublicListingCardRecord {
+  return {
+    id: listing.id,
+    title: listing.title,
+    price: listing.price,
+    propertyType: listing.propertyType,
+    listingCategory: listing.listingCategory,
+    availability: listing.availability,
+    status: listing.status,
+    imageUrls: listing.imageUrls,
+    imageVariants: listing.imageVariants,
+    promotionType: listing.promotionType,
+    featuredUntil: listing.featuredUntil,
+    sponsoredUntil: listing.sponsoredUntil,
+    location: listing.location,
+    bedrooms: listing.bedrooms,
+    bathrooms: listing.bathrooms,
+    toilets: listing.toilets,
+    parkingSpaces: listing.parkingSpaces,
+    propertySize: listing.propertySize,
+    propertySizeUnit: listing.propertySizeUnit,
+    landSize: listing.landSize,
+    landSizeUnit: listing.landSizeUnit
+  };
+}
+
 export async function listPublicListings(
   filters: ListingFilters
-): Promise<PaginatedResponse<ListingRecord>> {
+): Promise<PaginatedResponse<PublicListingCardRecord>> {
   const supabase = createServerSupabaseClient();
   const keywordFilters = parseKeywordFilters(filters.keyword);
   const requestedLimit = filters.limit ?? 12;
@@ -144,7 +171,7 @@ export async function listPublicListings(
   }
 
   const candidates = (data ?? []).map(toListingRecord);
-  const items = rankListingsForFeed(candidates, requestedLimit);
+  const items = rankListingsForFeed(candidates, requestedLimit).map(toPublicListingCardRecord);
   const nextCursor = candidates.length === candidateLimit ? candidates.at(-1)?.id ?? null : null;
   return { items, nextCursor };
 }

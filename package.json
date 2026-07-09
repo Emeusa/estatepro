@@ -11,7 +11,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit --project tsconfig.typecheck.json",
-    "test:security": "vitest run tests/security"
+    "test:security": "vitest run tests/security",
+    "smoke:production": "powershell -ExecutionPolicy Bypass -File scripts/smoke-production.ps1"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.53.1",
