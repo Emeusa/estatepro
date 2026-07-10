@@ -11,6 +11,7 @@ import { getListingPromotionBadge } from "@/lib/listing-visibility";
 import { getUnavailableBadge, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
 import { getListingQualityBadges } from "@/lib/listing-quality";
 import { PublicListingCardRecord } from "@/lib/types";
+import { getQualityIconForLabel, QualityIcon } from "@/components/listings/listing-quality-icons";
 
 type Props = {
   listing: PublicListingCardRecord;
@@ -167,9 +168,10 @@ export function ListingCard({ listing }: Props) {
               {listing.cardFeatureBadges.map((badge) => (
                 <span
                   key={badge}
-                  className="rounded-full bg-blue-50 px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-700"
+                  className="inline-flex max-w-full items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-[0.62rem] font-black uppercase tracking-[0.06em] text-blue-700"
                 >
-                  {badge}
+                  <QualityIcon icon={getQualityIconForLabel(badge)} className="h-3 w-3 shrink-0 text-blue-700" />
+                  <span className="truncate">{badge}</span>
                 </span>
               ))}
             </div>

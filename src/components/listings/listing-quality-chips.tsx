@@ -1,4 +1,9 @@
-import { QualityIcon, QualityIconName } from "@/components/listings/listing-quality-icons";
+import {
+  getQualityIconForLabel,
+  normalizeQualityIconLabel,
+  QualityIcon,
+  QualityIconName
+} from "@/components/listings/listing-quality-icons";
 import {
   FURNISHING_STATUS_LABELS,
   LAND_SIZE_UNIT_LABELS,
@@ -18,62 +23,13 @@ type HighlightChip = {
   icon: QualityIconName;
 };
 
-const featureIcons: Record<string, QualityIconName> = {
-  "24 hour electricity": "bolt",
-  "24 hours electricity": "bolt",
-  "24-hour electricity": "bolt",
-  ac: "air",
-  "air condition": "air",
-  "air conditioning": "air",
-  balcony: "balcony",
-  borehole: "hotWater",
-  "cctv camera": "camera",
-  "cctv cameras": "camera",
-  chandelier: "home",
-  "dining area": "dining",
-  dishwasher: "dishwasher",
-  elevator: "floor",
-  fridge: "fridge",
-  generator: "bolt",
-  gym: "gym",
-  "hot water": "hotWater",
-  internet: "wifi",
-  "kitchen cabinet": "cabinet",
-  "kitchen cabinets": "cabinet",
-  "kitchen shelf": "shelf",
-  microwave: "microwave",
-  "pop ceiling": "layers",
-  "pre paid meter": "meter",
-  "pre-paid meter": "meter",
-  "prepaid meter": "meter",
-  refrigerator: "fridge",
-  "security post": "shield",
-  "swimming pool": "pool",
-  wardrobe: "wardrobe",
-  "water heater": "hotWater",
-  "water supply": "hotWater"
-};
-
-function normalizeFeature(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/&/g, " and ")
-    .replace(/[^a-z0-9-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function featureIcon(value: string): QualityIconName {
-  return featureIcons[normalizeFeature(value)] ?? "fallback";
-}
-
 function addChip(chips: HighlightChip[], label: string | null, icon: QualityIconName) {
   if (!label) {
     return;
   }
 
-  const normalized = normalizeFeature(label);
-  if (!normalized || chips.some((chip) => normalizeFeature(chip.label) === normalized)) {
+  const normalized = normalizeQualityIconLabel(label);
+  if (!normalized || chips.some((chip) => normalizeQualityIconLabel(chip.label) === normalized)) {
     return;
   }
 
@@ -82,7 +38,7 @@ function addChip(chips: HighlightChip[], label: string | null, icon: QualityIcon
 
 function addFeatureChips(chips: HighlightChip[], values: string[]) {
   for (const value of values) {
-    addChip(chips, value, featureIcon(value));
+    addChip(chips, value, getQualityIconForLabel(value));
   }
 }
 

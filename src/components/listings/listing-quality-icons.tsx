@@ -1,38 +1,122 @@
 export type QualityIconName =
   | "air"
+  | "airport"
   | "balcony"
   | "bath"
   | "bed"
+  | "borehole"
   | "bolt"
+  | "bus"
   | "cabinet"
   | "calendar"
   | "camera"
+  | "chandelier"
   | "condition"
   | "dining"
   | "dishwasher"
   | "document"
+  | "elevator"
   | "fallback"
+  | "fire"
   | "floor"
   | "fridge"
   | "gate"
+  | "generator"
   | "gym"
   | "home"
+  | "hospital"
   | "hotWater"
   | "landmark"
   | "layers"
+  | "laundry"
   | "location"
+  | "mall"
+  | "market"
   | "meter"
   | "microwave"
   | "parking"
+  | "pet"
   | "pool"
+  | "quarters"
   | "road"
+  | "school"
   | "shelf"
   | "shield"
   | "size"
+  | "smoke"
   | "sofa"
+  | "store"
+  | "study"
   | "toilet"
   | "wardrobe"
+  | "water"
   | "wifi";
+
+const featureIcons: Record<string, QualityIconName> = {
+  "24 hour electricity": "bolt",
+  "24 hours electricity": "bolt",
+  "24-hour electricity": "bolt",
+  ac: "air",
+  "air condition": "air",
+  "air conditioning": "air",
+  airport: "airport",
+  balcony: "balcony",
+  borehole: "borehole",
+  "boys quarter": "quarters",
+  "boys quarters": "quarters",
+  "bus stop": "bus",
+  "cctv camera": "camera",
+  "cctv cameras": "camera",
+  chandelier: "chandelier",
+  "dining area": "dining",
+  dishwasher: "dishwasher",
+  elevator: "elevator",
+  "fire extinguisher": "fire",
+  fridge: "fridge",
+  "gated estate": "gate",
+  generator: "generator",
+  gym: "gym",
+  hospital: "hospital",
+  "hot water": "hotWater",
+  internet: "wifi",
+  "kitchen cabinet": "cabinet",
+  "kitchen cabinets": "cabinet",
+  "kitchen shelf": "shelf",
+  "laundry room": "laundry",
+  "main road": "road",
+  market: "market",
+  microwave: "microwave",
+  "pet friendly": "pet",
+  "pop ceiling": "layers",
+  "pre paid meter": "meter",
+  "pre-paid meter": "meter",
+  "prepaid meter": "meter",
+  refrigerator: "fridge",
+  school: "school",
+  "security post": "shield",
+  "self contained": "home",
+  "shopping mall": "mall",
+  "smoke detector": "smoke",
+  store: "store",
+  "study room": "study",
+  "swimming pool": "pool",
+  wardrobe: "wardrobe",
+  "water heater": "hotWater",
+  "water supply": "water"
+};
+
+export function normalizeQualityIconLabel(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function getQualityIconForLabel(value: string): QualityIconName {
+  return featureIcons[normalizeQualityIconLabel(value)] ?? "fallback";
+}
 
 function iconPath(icon: QualityIconName) {
   switch (icon) {
@@ -42,6 +126,13 @@ function iconPath(icon: QualityIconName) {
           <path d="M4 8h10a3 3 0 1 0-3-3" />
           <path d="M3 12h14a3 3 0 1 1-3 3" />
           <path d="M5 16h6" />
+        </>
+      );
+    case "airport":
+      return (
+        <>
+          <path d="M2 11 18 5l-5 6 4 3-2 2-5-2-3 4-2-1 2-5-5-1Z" />
+          <path d="M9 9 6 5" />
         </>
       );
     case "balcony":
@@ -69,8 +160,25 @@ function iconPath(icon: QualityIconName) {
           <path d="M9 10h5a3 3 0 0 1 3 3" />
         </>
       );
+    case "borehole":
+      return (
+        <>
+          <path d="M5 17h10M6 8h8M7 8v7h6V8" />
+          <path d="M10 3v5M8 5h4" />
+          <path d="M10 11c-1 1-1 2 0 3 1-1 1-2 0-3Z" />
+        </>
+      );
     case "bolt":
       return <path d="m11 2-7 10h6l-1 6 7-10h-6l1-6Z" />;
+    case "bus":
+      return (
+        <>
+          <path d="M5 4h10a2 2 0 0 1 2 2v8H3V6a2 2 0 0 1 2-2Z" />
+          <path d="M3 9h14M6 16v1M14 16v1" />
+          <circle cx="6" cy="12.5" r=".8" />
+          <circle cx="14" cy="12.5" r=".8" />
+        </>
+      );
     case "cabinet":
       return (
         <>
@@ -91,6 +199,14 @@ function iconPath(icon: QualityIconName) {
         <>
           <path d="M4 7h3l1-2h4l1 2h3v9H4z" />
           <circle cx="10" cy="11.5" r="2.5" />
+        </>
+      );
+    case "chandelier":
+      return (
+        <>
+          <path d="M10 3v4M5 7h10" />
+          <path d="M6 7c0 3 2 5 4 5s4-2 4-5" />
+          <path d="M7 14h6M8 17h4" />
         </>
       );
     case "condition":
@@ -124,6 +240,21 @@ function iconPath(icon: QualityIconName) {
           <path d="M12 3v4h4M8 11h5M8 14h4" />
         </>
       );
+    case "elevator":
+      return (
+        <>
+          <path d="M5 3h10v14H5z" />
+          <path d="M8 7 10 5l2 2M8 13l2 2 2-2" />
+        </>
+      );
+    case "fire":
+      return (
+        <>
+          <path d="M8 4h4v4H8zM10 8v4" />
+          <path d="M7 12h6v5H7z" />
+          <path d="M8 15h4" />
+        </>
+      );
     case "floor":
       return (
         <>
@@ -147,6 +278,15 @@ function iconPath(icon: QualityIconName) {
           <path d="M10 11v6" />
         </>
       );
+    case "generator":
+      return (
+        <>
+          <path d="M4 7h11v8H4z" />
+          <path d="M7 7V5h5v2M7 11h3" />
+          <circle cx="13" cy="11" r="1" />
+          <path d="M15 9h2v4h-2" />
+        </>
+      );
     case "gym":
       return (
         <>
@@ -160,6 +300,14 @@ function iconPath(icon: QualityIconName) {
           <path d="M3 10 10 4l7 6" />
           <path d="M5 9v8h10V9" />
           <path d="M8 17v-5h4v5" />
+        </>
+      );
+    case "hospital":
+      return (
+        <>
+          <path d="M5 4h10v13H5z" />
+          <path d="M8 10h4M10 8v4" />
+          <path d="M7 17v-3h6v3" />
         </>
       );
     case "hotWater":
@@ -186,11 +334,37 @@ function iconPath(icon: QualityIconName) {
           <path d="m3 15 7 4 7-4" />
         </>
       );
+    case "laundry":
+      return (
+        <>
+          <path d="M5 3h10v14H5z" />
+          <path d="M7 6h.01M10 6h.01" />
+          <circle cx="10" cy="12" r="3" />
+          <path d="M8 12c1 .8 3 .8 4 0" />
+        </>
+      );
     case "location":
       return (
         <>
           <path d="M10 18s6-5 6-10A6 6 0 0 0 4 8c0 5 6 10 6 10Z" />
           <circle cx="10" cy="8" r="2" />
+        </>
+      );
+    case "mall":
+      return (
+        <>
+          <path d="M5 8h10l-1 9H6L5 8Z" />
+          <path d="M8 8a2 2 0 0 1 4 0" />
+          <path d="M6 11h8" />
+        </>
+      );
+    case "market":
+      return (
+        <>
+          <path d="M4 7h12l-1 4H5L4 7Z" />
+          <path d="M5 11v6h10v-6" />
+          <path d="M8 17v-4h4v4" />
+          <path d="M6 4h8l2 3H4l2-3Z" />
         </>
       );
     case "meter":
@@ -216,6 +390,15 @@ function iconPath(icon: QualityIconName) {
           <path d="M9 8h3" />
         </>
       );
+    case "pet":
+      return (
+        <>
+          <circle cx="6" cy="7" r="1.3" />
+          <circle cx="10" cy="5.5" r="1.3" />
+          <circle cx="14" cy="7" r="1.3" />
+          <path d="M6.5 14c0-2 1.5-4 3.5-4s3.5 2 3.5 4c0 1.4-1.1 2.5-2.5 2.5h-2c-1.4 0-2.5-1.1-2.5-2.5Z" />
+        </>
+      );
     case "pool":
       return (
         <>
@@ -224,11 +407,27 @@ function iconPath(icon: QualityIconName) {
           <path d="M7 10V5a2 2 0 0 1 4 0" />
         </>
       );
+    case "quarters":
+      return (
+        <>
+          <path d="M3 10 8 6l5 4v7H3z" />
+          <path d="M12 9h5v8h-5" />
+          <path d="M6 17v-4h3v4" />
+        </>
+      );
     case "road":
       return (
         <>
           <path d="M7 18 9 3h2l2 15" />
           <path d="M10 6v2M10 11v2M10 16v2" />
+        </>
+      );
+    case "school":
+      return (
+        <>
+          <path d="M10 3 3 7l7 4 7-4-7-4Z" />
+          <path d="M5 9v4c2 2 8 2 10 0V9" />
+          <path d="M17 7v5" />
         </>
       );
     case "shelf":
@@ -253,12 +452,34 @@ function iconPath(icon: QualityIconName) {
           <path d="M3 17h14V3" />
         </>
       );
+    case "smoke":
+      return (
+        <>
+          <circle cx="10" cy="7" r="4" />
+          <path d="M7 13c2-1 4-1 6 0M6 16c2.7-1.2 5.3-1.2 8 0" />
+        </>
+      );
     case "sofa":
       return (
         <>
           <path d="M5 11V8a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v3" />
           <path d="M4 11h12v5H4z" />
           <path d="M4 16v2M16 16v2" />
+        </>
+      );
+    case "store":
+      return (
+        <>
+          <path d="M5 6h10v11H5z" />
+          <path d="M7 6a3 3 0 0 1 6 0" />
+          <path d="M8 11h4M8 14h3" />
+        </>
+      );
+    case "study":
+      return (
+        <>
+          <path d="M4 5h5a3 3 0 0 1 3 3v9a3 3 0 0 0-3-3H4z" />
+          <path d="M16 5h-4v12a3 3 0 0 1 3-3h1z" />
         </>
       );
     case "toilet":
@@ -275,6 +496,13 @@ function iconPath(icon: QualityIconName) {
           <path d="M5 3h10v15H5z" />
           <path d="M10 3v15" />
           <path d="M8 10h.01M12 10h.01" />
+        </>
+      );
+    case "water":
+      return (
+        <>
+          <path d="M10 3s5 5 5 9a5 5 0 0 1-10 0c0-4 5-9 5-9Z" />
+          <path d="M8 13a2 2 0 0 0 3 1.7" />
         </>
       );
     case "wifi":
@@ -295,11 +523,11 @@ function iconPath(icon: QualityIconName) {
   }
 }
 
-export function QualityIcon({ icon }: { icon: QualityIconName }) {
+export function QualityIcon({ icon, className }: { icon: QualityIconName; className?: string }) {
   return (
     <svg
       aria-hidden="true"
-      className="h-4 w-4 shrink-0 text-slate-950"
+      className={className ?? "h-4 w-4 shrink-0 text-slate-950"}
       fill="none"
       stroke="currentColor"
       strokeLinecap="round"
