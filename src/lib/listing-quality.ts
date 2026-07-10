@@ -239,3 +239,28 @@ export function getListingQualityBadges(
     formatSize(listing.landSize, listing.landSizeUnit, LAND_SIZE_UNIT_LABELS)
   ].filter((value): value is string => Boolean(value));
 }
+
+export function getListingCardFeatureBadges(
+  listing: Pick<
+    ListingRecord,
+    | "furnishingStatus"
+    | "servicingStatus"
+    | "propertyCondition"
+    | "amenities"
+    | "utilities"
+    | "safetyFeatures"
+    | "extraFeatures"
+  >
+) {
+  return [
+    listing.furnishingStatus ? FURNISHING_STATUS_LABELS[listing.furnishingStatus] : null,
+    listing.servicingStatus ? SERVICING_STATUS_LABELS[listing.servicingStatus] : null,
+    listing.propertyCondition ? PROPERTY_CONDITION_LABELS[listing.propertyCondition] : null,
+    ...listing.amenities,
+    ...listing.utilities,
+    ...listing.safetyFeatures,
+    ...listing.extraFeatures
+  ]
+    .filter((value): value is string => Boolean(value))
+    .slice(0, 2);
+}

@@ -50,6 +50,7 @@ export async function PATCH(request: NextRequest, { params }: Props) {
 
     const { agentId } = await params;
     const body = agentModerationSchema.parse(await request.json());
+    let listingActivationSummary: Awaited<ReturnType<typeof approvePendingListingsForAgent>> | null = null;
 
     if (body.verificationStatus) {
       await updateAgentVerification(agentId, body.verificationStatus);
@@ -61,7 +62,7 @@ export async function PATCH(request: NextRequest, { params }: Props) {
         metadata: { agentId, verificationStatus: body.verificationStatus }
       });
       if (body.verificationStatus === "approved") {
-        await approvePendingListingsForAgent(agentId);
+        listingActivationSummary = await approvePendingListingsForAgent(agentId);
       }
     }
 
@@ -76,7 +77,13 @@ export async function PATCH(request: NextRequest, { params }: Props) {
       });
     }
 
-    return withRateLimitHeaders(NextResponse.json({ ok: true }), limited.headers);
+    return withRateLimitHeaders(
+      NextResponse.json({
+        ok: true,
+        ...(listingActivationSummary ? { listingActivationSummary } : {})
+      }),
+      limited.headers
+    );
   } catch (error) {
     captureServerError(error, { route: "/api/admin/agents/[agentId]" });
     return NextResponse.json(

@@ -50,7 +50,7 @@ const socialLinks = [
 
 export function Footer() {
   return (
-    <footer className="mt-12 border-t border-slate-200 bg-slate-950 text-white">
+    <footer id="site-footer" className="mt-12 border-t border-slate-200 bg-slate-950 text-white">
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 md:grid-cols-[1fr_1.4fr]">
         <section>
           <p className="font-heading text-2xl font-semibold text-amber-100">C59 Estatehub</p>

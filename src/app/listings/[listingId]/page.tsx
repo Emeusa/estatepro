@@ -5,7 +5,7 @@ import { cache } from "react";
 import { ListingDetail } from "@/components/listings/listing-detail";
 import { getListingHeroImage } from "@/lib/listing-images";
 import { buildListingMetaDescription, buildListingMetaTitle, SITE_NAME } from "@/lib/seo";
-import { getPublicListingDetails } from "@/modules/listings/listing.service";
+import { getPublicListingDetails, getSimilarListingsForPublicListing } from "@/modules/listings/listing.service";
 
 type Props = {
   params: Promise<{ listingId: string }>;
@@ -66,10 +66,12 @@ export default async function ListingPage({ params }: Props) {
     notFound();
   }
 
+  const similarListings = await getSimilarListingsForPublicListing(details.listing, 3);
+
   return (
     <div className="relative left-1/2 -my-8 w-screen -translate-x-1/2 bg-gradient-to-br from-stone-300 via-stone-200 to-slate-300 px-4 py-8">
       <div className="mx-auto max-w-6xl">
-        <ListingDetail details={details} />
+        <ListingDetail details={details} similarListings={similarListings} />
       </div>
     </div>
   );

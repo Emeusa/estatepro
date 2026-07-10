@@ -133,7 +133,12 @@ export type PublicListingCardRecord = Pick<
   | "propertySizeUnit"
   | "landSize"
   | "landSizeUnit"
->;
+> & {
+  descriptionPreview: string;
+  contactPhone: string;
+  contactWhatsapp: string;
+  cardFeatureBadges: string[];
+};
 
 export type SubscriptionRecord = {
   agentId: string;

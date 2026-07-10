@@ -4,17 +4,19 @@ import Link from "next/link";
 import { VerifiedAgentName } from "@/components/agents/verified-agent-name";
 import { ListingContactActions } from "@/components/listings/listing-contact-actions";
 import { ListingDetailEventTracker } from "@/components/listings/listing-detail-event-tracker";
+import { SimilarListingCard } from "@/components/listings/similar-listing-card";
 import { formatDate, formatPrice, whatsappLink } from "@/lib/format";
 import { getListingImages } from "@/lib/listing-images";
 import { AVAILABILITY_LABELS, getUnavailableBadge, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
 import { ListingQualityChips } from "@/components/listings/listing-quality-chips";
-import { PublicListingDetails } from "@/lib/types";
+import { PublicListingCardRecord, PublicListingDetails } from "@/lib/types";
 
 type Props = {
   details: PublicListingDetails;
+  similarListings?: PublicListingCardRecord[];
 };
 
-export function ListingDetail({ details }: Props) {
+export function ListingDetail({ details, similarListings = [] }: Props) {
   const { agent, listing } = details;
   const images = getListingImages(listing);
   const heroImage = images[0];
@@ -129,6 +131,27 @@ export function ListingDetail({ details }: Props) {
         </dl>
       </aside>
       </div>
+      {similarListings.length ? (
+        <section className="mt-6 rounded-3xl bg-white/35 p-4 shadow-sm sm:p-5">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">More options</p>
+              <h2 className="mt-1 text-xl font-black text-slate-950">Similar listings</h2>
+            </div>
+            <Link
+              href={`/?listingCategory=${listing.listingCategory}&propertyType=${listing.propertyType}#search-results`}
+              className="hidden rounded-full bg-slate-950 px-4 py-2 text-xs font-bold text-white transition hover:bg-slate-800 sm:inline-flex"
+            >
+              View more
+            </Link>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {similarListings.map((similarListing) => (
+              <SimilarListingCard key={similarListing.id} listing={similarListing} />
+            ))}
+          </div>
+        </section>
+      ) : null}
       <div className="mt-6 space-y-2 px-1 text-xs leading-6 text-slate-700 sm:px-2">
         <p className="font-semibold text-slate-900">Disclaimer</p>
         <p>

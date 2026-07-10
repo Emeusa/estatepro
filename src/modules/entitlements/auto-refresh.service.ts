@@ -2,6 +2,7 @@ import { getPricingPlan, isPaidPricingPlanSlug } from "@/lib/pricing";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isSubscriptionCurrentlyActive } from "@/lib/subscriptions";
 import { toSubscriptionRecord } from "@/lib/supabase-mappers";
+import { enforceAgentActiveListingLimit } from "@/modules/listings/listing.service";
 
 type SubscriptionRow = Parameters<typeof toSubscriptionRecord>[0];
 
@@ -14,54 +15,69 @@ function isDue(listing: { created_at: string; boosted_at?: string | null; last_r
 
 export async function refreshEligibleListings() {
   const supabase = createServerSupabaseClient();
-  const { data: subscriptionRows, error } = await supabase
-    .from("subscriptions")
-    .select("*")
-    .eq("is_active", true)
-    .in("status", ["active", "trialing"])
-    .limit(500);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
   let refreshed = 0;
-  for (const row of (subscriptionRows ?? []) as SubscriptionRow[]) {
-    const subscription = toSubscriptionRecord(row);
-    if (!isSubscriptionCurrentlyActive(subscription) || !isPaidPricingPlanSlug(subscription.planSlug)) {
-      continue;
+  let demoted = 0;
+  const pageSize = 500;
+
+  for (let from = 0; ; from += pageSize) {
+    const { data: subscriptionRows, error } = await supabase
+      .from("subscriptions")
+      .select("*")
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      throw new Error(error.message);
     }
 
-    const plan = getPricingPlan(subscription.planSlug);
-    if (!plan.autoRefreshDays) {
-      continue;
+    const rows = (subscriptionRows ?? []) as SubscriptionRow[];
+    if (!rows.length) {
+      break;
     }
 
-    const { data: listings } = await supabase
-      .from("listings")
-      .select("id, created_at, boosted_at, last_refreshed_at")
-      .eq("agent_id", subscription.agentId)
-      .eq("status", "active")
-      .eq("availability", "available")
-      .limit(250);
+    for (const row of rows) {
+      const subscription = toSubscriptionRecord(row);
+      const limitResult = await enforceAgentActiveListingLimit(subscription.agentId, subscription);
+      demoted += limitResult.demotedListings;
 
-    const dueIds = (listings ?? [])
-      .filter((listing) => isDue(listing, plan.autoRefreshDays as number))
-      .map((listing) => listing.id);
+      if (!isSubscriptionCurrentlyActive(subscription) || !isPaidPricingPlanSlug(subscription.planSlug)) {
+        continue;
+      }
 
-    if (!dueIds.length) {
-      continue;
+      const plan = getPricingPlan(subscription.planSlug);
+      if (!plan.autoRefreshDays) {
+        continue;
+      }
+
+      const { data: listings } = await supabase
+        .from("listings")
+        .select("id, created_at, boosted_at, last_refreshed_at")
+        .eq("agent_id", subscription.agentId)
+        .eq("status", "active")
+        .eq("availability", "available")
+        .limit(250);
+
+      const dueIds = (listings ?? [])
+        .filter((listing) => isDue(listing, plan.autoRefreshDays as number))
+        .map((listing) => listing.id);
+
+      if (!dueIds.length) {
+        continue;
+      }
+
+      const { error: updateError } = await supabase
+        .from("listings")
+        .update({ last_refreshed_at: new Date().toISOString() })
+        .in("id", dueIds);
+
+      if (!updateError) {
+        refreshed += dueIds.length;
+      }
     }
 
-    const { error: updateError } = await supabase
-      .from("listings")
-      .update({ last_refreshed_at: new Date().toISOString() })
-      .in("id", dueIds);
-
-    if (!updateError) {
-      refreshed += dueIds.length;
+    if (rows.length < pageSize) {
+      break;
     }
   }
 
-  return { refreshed };
+  return { refreshed, demoted };
 }

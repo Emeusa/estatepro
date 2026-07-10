@@ -22,6 +22,7 @@ import {
   sendSubscriptionFailedEmail
 } from "@/modules/email/email.service";
 import { syncAgentPlanCredits } from "@/modules/entitlements/entitlement.service";
+import { enforceAgentActiveListingLimit } from "@/modules/listings/listing.service";
 import {
   createBillingTransaction,
   getBillingTransactionByReference,
@@ -347,11 +348,12 @@ async function applyWebhookFailureOrDisable(data: Record<string, unknown>, statu
     return;
   }
 
-  await updateSubscriptionBillingState(agentId, {
+  const subscription = await updateSubscriptionBillingState(agentId, {
     status,
     isActive: false,
     cancelAtPeriodEnd: status === "cancelled"
   });
+  await enforceAgentActiveListingLimit(agentId, subscription).catch(() => undefined);
   if (status === "past_due") {
     await sendSubscriptionFailedEmail(agentId);
   } else {
@@ -404,6 +406,7 @@ export async function cancelAgentSubscription(agentId: string) {
     isActive: false,
     cancelAtPeriodEnd: true
   });
+  await enforceAgentActiveListingLimit(agentId, updatedSubscription).catch(() => undefined);
   await sendSubscriptionCancelledEmail(agentId);
   return updatedSubscription;
 }

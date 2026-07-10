@@ -1,5 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { splitListingsByActiveLimit } from "@/lib/listing-limits";
 import { toNameCase } from "@/lib/format";
+import { getListingCardFeatureBadges } from "@/lib/listing-quality";
 import { rankListingsForFeed } from "@/lib/listing-visibility";
 import { toListingRecord } from "@/lib/supabase-mappers";
 import {
@@ -22,8 +24,24 @@ type KeywordFilters = {
   titleKeyword?: string;
 };
 
+type SimilarListingFilters = {
+  state?: string;
+  propertyType?: PropertyType;
+  listingCategory?: ListingCategory;
+};
+
 function normalizeKeyword(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function createDescriptionPreview(value: string, maxLength = 110) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  const clipped = normalized.slice(0, maxLength).replace(/\s+\S*$/, "").trim();
+  return `${clipped || normalized.slice(0, maxLength).trim()}...`;
 }
 
 function parseKeywordFilters(keyword?: string): KeywordFilters {
@@ -102,7 +120,11 @@ function toPublicListingCardRecord(listing: ListingRecord): PublicListingCardRec
     propertySize: listing.propertySize,
     propertySizeUnit: listing.propertySizeUnit,
     landSize: listing.landSize,
-    landSizeUnit: listing.landSizeUnit
+    landSizeUnit: listing.landSizeUnit,
+    descriptionPreview: createDescriptionPreview(listing.description),
+    contactPhone: listing.contactPhone,
+    contactWhatsapp: listing.contactWhatsapp,
+    cardFeatureBadges: getListingCardFeatureBadges(listing)
   };
 }
 
@@ -176,6 +198,79 @@ export async function listPublicListings(
   return { items, nextCursor };
 }
 
+async function listSimilarPublicListingCandidates(
+  listing: ListingRecord,
+  filters: SimilarListingFilters,
+  candidateLimit: number
+) {
+  const supabase = createServerSupabaseClient();
+  let query = supabase
+    .from(PUBLIC_FEED_LISTINGS_SOURCE)
+    .select("*")
+    .neq("id", listing.id)
+    .order("created_at", { ascending: false })
+    .limit(candidateLimit);
+
+  if (filters.state) {
+    query = query.eq("location->>state", filters.state);
+  }
+  if (filters.propertyType) {
+    query = query.eq("property_type", filters.propertyType);
+  }
+  if (filters.listingCategory) {
+    query = query.eq("listing_category", filters.listingCategory);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const candidates = (data ?? []).map(toListingRecord);
+  return rankListingsForFeed(candidates, candidateLimit).map(toPublicListingCardRecord);
+}
+
+export async function listSimilarPublicListings(listing: ListingRecord, limit = 3) {
+  if (limit <= 0) {
+    return [];
+  }
+
+  const results: PublicListingCardRecord[] = [];
+  const seenIds = new Set([listing.id]);
+  const strategies: SimilarListingFilters[] = [
+    {
+      state: listing.location.state,
+      propertyType: listing.propertyType,
+      listingCategory: listing.listingCategory
+    },
+    {
+      state: listing.location.state,
+      listingCategory: listing.listingCategory
+    },
+    {
+      propertyType: listing.propertyType,
+      listingCategory: listing.listingCategory
+    }
+  ];
+
+  for (const strategy of strategies) {
+    const candidateLimit = Math.max((limit - results.length) * 4, 6);
+    const matches = await listSimilarPublicListingCandidates(listing, strategy, candidateLimit);
+
+    for (const match of matches) {
+      if (!seenIds.has(match.id)) {
+        seenIds.add(match.id);
+        results.push(match);
+      }
+      if (results.length >= limit) {
+        return results;
+      }
+    }
+  }
+
+  return results;
+}
+
 async function getListingRowById(listingId: string, source: "listings" | "public_listings") {
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase.from(source).select("*").eq("id", listingId).single();
@@ -206,7 +301,7 @@ export async function listPublicListingsByAgent(agentId: string) {
     throw new Error(error.message);
   }
 
-  return (data ?? []).map(toListingRecord);
+  return (data ?? []).map(toListingRecord).map(toPublicListingCardRecord);
 }
 
 export async function getPublicAgentSummary(agentId: string): Promise<PublicAgentSummary | null> {
@@ -297,14 +392,20 @@ export async function listListingCountsByAgentIds(agentIds: string[]) {
   }, new Map<string, number>());
 }
 
-export async function countActiveAvailableListingsForAgent(agentId: string) {
+export async function countActiveAvailableListingsForAgent(agentId: string, excludeListingId?: string) {
   const supabase = createServerSupabaseClient();
-  const { count, error } = await supabase
+  let query = supabase
     .from("listings")
     .select("id", { count: "exact", head: true })
     .eq("agent_id", agentId)
     .eq("status", "active")
     .eq("availability", "available");
+
+  if (excludeListingId) {
+    query = query.neq("id", excludeListingId);
+  }
+
+  const { count, error } = await query;
 
   if (error) {
     throw new Error(error.message);
@@ -313,17 +414,102 @@ export async function countActiveAvailableListingsForAgent(agentId: string) {
   return count ?? 0;
 }
 
-export async function activatePendingListingsForAgent(agentId: string) {
+export type PendingListingActivationSummary = {
+  activatedListings: number;
+  keptPendingListings: number;
+  activeListingLimit: number;
+};
+
+export type ActiveListingLimitEnforcementSummary = {
+  demotedListings: number;
+  activeListingLimit: number;
+};
+
+export async function activatePendingListingsForAgent(
+  agentId: string,
+  activeListingLimit: number
+): Promise<PendingListingActivationSummary> {
   const supabase = createServerSupabaseClient();
-  const { error } = await supabase
+  const [activeAvailableListings, pendingResult] = await Promise.all([
+    countActiveAvailableListingsForAgent(agentId),
+    supabase
+      .from("listings")
+      .select("*")
+      .eq("agent_id", agentId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: true })
+      .limit(1000)
+  ]);
+
+  if (pendingResult.error) {
+    throw new Error(pendingResult.error.message);
+  }
+
+  const pendingListings = (pendingResult.data ?? []).map(toListingRecord);
+  const availableSlots = Math.max(activeListingLimit - activeAvailableListings, 0);
+  const pendingUnavailableIds = pendingListings
+    .filter((listing) => listing.availability !== "available")
+    .map((listing) => listing.id);
+  const pendingAvailableIds = pendingListings
+    .filter((listing) => listing.availability === "available")
+    .slice(0, availableSlots)
+    .map((listing) => listing.id);
+  const activateIds = [...pendingUnavailableIds, ...pendingAvailableIds];
+
+  if (activateIds.length) {
+    const { error } = await supabase
+      .from("listings")
+      .update({ status: "active" })
+      .in("id", activateIds);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+  }
+
+  return {
+    activatedListings: activateIds.length,
+    keptPendingListings: pendingListings.length - activateIds.length,
+    activeListingLimit
+  };
+}
+
+export async function demoteExcessActiveAvailableListingsForAgent(
+  agentId: string,
+  activeListingLimit: number
+): Promise<ActiveListingLimitEnforcementSummary> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
     .from("listings")
-    .update({ status: "active" })
+    .select("*")
     .eq("agent_id", agentId)
-    .eq("status", "pending");
+    .eq("status", "active")
+    .eq("availability", "available")
+    .limit(2000);
 
   if (error) {
     throw new Error(error.message);
   }
+
+  const activeListings = (data ?? []).map(toListingRecord);
+  const { overflow } = splitListingsByActiveLimit(activeListings, activeListingLimit);
+  const overflowIds = overflow.map((listing) => listing.id);
+
+  if (overflowIds.length) {
+    const { error: updateError } = await supabase
+    .from("listings")
+      .update({ status: "pending" })
+      .in("id", overflowIds);
+
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
+  }
+
+  return {
+    demotedListings: overflowIds.length,
+    activeListingLimit
+  };
 }
 
 export async function createListing(
