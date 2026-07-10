@@ -19,6 +19,15 @@ const playfair = Playfair_Display({
   display: "swap"
 });
 
+const siteUrl = getSiteUrl().toString().replace(/\/$/, "");
+const organizationJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: SITE_NAME,
+  url: siteUrl,
+  logo: `${siteUrl}/icon-512.png`
+};
+
 export const metadata: Metadata = {
   metadataBase: getSiteUrl(),
   title: {
@@ -38,9 +47,14 @@ export const metadata: Metadata = {
     description: DEFAULT_SITE_DESCRIPTION
   },
   icons: {
-    icon: "/favicon.png",
-    shortcut: "/favicon.png",
-    apple: "/favicon.png"
+    icon: [
+      { url: "/favicon.ico", type: "image/x-icon" },
+      { url: "/favicon-48x48.png", sizes: "48x48", type: "image/png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" }
+    ],
+    shortcut: "/favicon.ico",
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }]
   }
 };
 
@@ -48,6 +62,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className={`${inter.variable} ${playfair.variable}`}>
       <body suppressHydrationWarning>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        />
         <Header />
         <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
         <Footer />
