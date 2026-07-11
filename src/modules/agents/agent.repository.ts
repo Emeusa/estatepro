@@ -175,12 +175,26 @@ export async function registerClient(input: {
     .select("*")
     .single();
 
-  if (insertError || !data) {
-    await rollbackAuthUser(userId);
-    throw new Error(mapSupabaseRegistrationError(insertError?.message ?? "Could not save user profile."));
+  if (data && !insertError) {
+    return { user: toUserRecord(data) };
   }
 
-  return { user: toUserRecord(data) };
+  const { data: repairedData, error: repairError } = await supabase
+    .from("users")
+    .upsert(userRecord, { onConflict: "id" })
+    .select("*")
+    .single();
+
+  if (repairedData && !repairError) {
+    return { user: toUserRecord(repairedData) };
+  }
+
+  await rollbackAuthUser(userId);
+  throw new Error(
+    mapSupabaseRegistrationError(
+      repairError?.message ?? insertError?.message ?? "Could not save user profile."
+    )
+  );
 }
 
 export async function registerAgent(input: {

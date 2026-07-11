@@ -87,7 +87,7 @@ export function Header() {
   const dashboardLabel = user?.role === "client" ? "Profile" : "Dashboard";
 
   return (
-    <header className="site-header border-b border-white/10">
+    <header className="site-header border-b border-teal-950/25">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-0.5 sm:gap-4 lg:py-0">
         <Link href="/" className="brand-logo" aria-label="C59 Estatehub home">
           <Image

@@ -85,7 +85,7 @@ export function ListingDetail({ details, similarListings = [] }: Props) {
         </div>
         <ListingQualityChips listing={listing} />
       </div>
-      <aside className="rounded-3xl bg-white/65 p-6 shadow-sm">
+      <aside className="self-start rounded-3xl bg-white/65 p-6 shadow-sm">
         <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Contact agent</p>
         <Link
           href={`/agents/${listing.agentId}/listings`}

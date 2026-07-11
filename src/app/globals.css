@@ -88,13 +88,33 @@
   .brand-logo::before {
     content: "";
     position: absolute;
-    inset: -6px -10px;
+    inset: -6px -10px -8px;
     z-index: -1;
     border-radius: 999px;
     background:
-      linear-gradient(180deg, rgba(18, 143, 135, 0.96), rgba(15, 135, 127, 0.9)),
+      linear-gradient(
+        180deg,
+        rgba(18, 143, 135, 0.98) 0%,
+        rgba(17, 142, 133, 0.96) 68%,
+        rgba(13, 124, 117, 0.92) 100%
+      ),
       radial-gradient(circle at center, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 68%);
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.03);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.03),
+      inset 0 -8px 10px rgba(7, 84, 79, 0.22);
+  }
+
+  .brand-logo::after {
+    content: "";
+    position: absolute;
+    left: -8px;
+    right: -8px;
+    bottom: -7px;
+    height: 10px;
+    z-index: -1;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(13, 124, 117, 0.72), rgba(13, 124, 117, 0));
+    pointer-events: none;
   }
 
   .brand-logo img {

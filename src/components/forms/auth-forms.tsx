@@ -20,6 +20,10 @@ type AccountResponse = {
   } | null;
 };
 
+type ClientRegistrationResponse = {
+  checkEmailUrl?: string;
+};
+
 type PasswordFieldProps = {
   name: string;
   placeholder: string;
@@ -85,14 +89,14 @@ function getSafeNextPath() {
   return next;
 }
 
-function redirectToCheckEmail(email: string, accountType: ConfirmationAccountType) {
+function redirectToCheckEmail(email: string, accountType: ConfirmationAccountType, targetUrl?: string) {
   try {
     window.sessionStorage.setItem(CONFIRMATION_EMAIL_STORAGE_KEY, email);
     window.sessionStorage.setItem(CONFIRMATION_ACCOUNT_TYPE_STORAGE_KEY, accountType);
   } catch {
     // Users can still read the fallback instructions on the destination page.
   }
-  window.location.assign(buildCheckEmailUrl(email, accountType));
+  window.location.assign(targetUrl ?? buildCheckEmailUrl(email, accountType));
 }
 
 async function getAccessToken() {
@@ -254,6 +258,12 @@ export function LoginForm() {
           {isSubmitting ? <ButtonSpinner /> : null}
           {isSubmitting ? "Logging in..." : "Login"}
         </button>
+        <p className="text-center text-sm text-slate-500">
+          Don&apos;t have an account?
+          <Link href="/register" className="ml-1 font-semibold text-teal-700 transition hover:text-teal-900">
+            Sign up
+          </Link>
+        </p>
         {message ? <p className="text-sm text-rose-600">{message}</p> : null}
       </form>
 
@@ -319,7 +329,7 @@ export function ClientRegisterForm() {
 
     try {
       const phone = form.get("phone")?.toString().trim() ?? "";
-      await apiRequest("/api/auth/register", {
+      const response = await apiRequest<ClientRegistrationResponse>("/api/auth/register", {
         method: "POST",
         retries: 0,
         body: JSON.stringify({
@@ -333,7 +343,7 @@ export function ClientRegisterForm() {
       event.currentTarget.reset();
       setPassword("");
       setConfirmPassword("");
-      redirectToCheckEmail(email, "client");
+      redirectToCheckEmail(email, "client", response.checkEmailUrl);
     } catch (error) {
       const fallback = error instanceof Error ? error.message : "We could not create your account. Please try again.";
       setMessage(getFriendlyAuthMessage(error, fallback));
@@ -365,6 +375,12 @@ export function ClientRegisterForm() {
         {isSubmitting ? <ButtonSpinner /> : null}
         {isSubmitting ? "Creating account..." : "Create account"}
       </button>
+      <p className="text-center text-sm text-slate-500">
+        Already have an account?
+        <Link href="/login" className="ml-1 font-semibold text-teal-700 transition hover:text-teal-900">
+          Login
+        </Link>
+      </p>
       <p className="text-center text-sm text-slate-500">
         Want to list properties?
         <Link href="/agents/register" className="ml-1 font-medium text-teal-700">
@@ -493,6 +509,12 @@ export function AgentRegisterForm() {
         {isSubmitting ? <ButtonSpinner /> : null}
         {isSubmitting ? "Creating agent account..." : "Create agent account"}
       </button>
+      <p className="text-center text-sm text-slate-500">
+        Already have an account?
+        <Link href="/login" className="ml-1 font-semibold text-teal-700 transition hover:text-teal-900">
+          Login
+        </Link>
+      </p>
       {message ? <p className={`text-sm ${messageType === "success" ? "text-emerald-700" : "text-rose-600"}`}>{message}</p> : null}
     </form>
   );

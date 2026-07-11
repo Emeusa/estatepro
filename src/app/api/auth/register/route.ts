@@ -5,6 +5,7 @@ import { assertBotProtection, botProtectionSchema } from "@/lib/security/bot";
 import { captureServerError } from "@/lib/security/logger";
 import { getClientIp } from "@/lib/security/request";
 import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
+import { buildCheckEmailUrl } from "@/lib/auth-confirmation";
 import { clientRegistrationRequestSchema } from "@/modules/agents/agent.schema";
 import { createClientAccount } from "@/modules/agents/agent.service";
 
@@ -95,7 +96,16 @@ export async function POST(request: NextRequest) {
       fullName: body.fullName,
       phone: body.phone
     });
-    return withRateLimitHeaders(NextResponse.json(result, { status: 201 }), limited.headers);
+    return withRateLimitHeaders(
+      NextResponse.json(
+        {
+          ...result,
+          checkEmailUrl: buildCheckEmailUrl(body.email, "client")
+        },
+        { status: 201 }
+      ),
+      limited.headers
+    );
   } catch (error) {
     const status = getErrorStatus(error);
     if (status >= 500) {
