@@ -57,9 +57,15 @@ function SearchIcon() {
   );
 }
 
-function SelectChevron() {
+function SelectChevron({ isSide }: { isSide: boolean }) {
   return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" className="pointer-events-none absolute right-1 top-1/2 h-4 w-4 -translate-y-1/2 fill-none stroke-current stroke-2 md:right-0">
+    <svg
+      viewBox="0 0 20 20"
+      aria-hidden="true"
+      className={`pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2 fill-none stroke-current stroke-2 ${
+        isSide ? "right-1" : "right-1 md:right-3"
+      }`}
+    >
       <path d="m5 7 5 5 5-5" />
     </svg>
   );
@@ -143,14 +149,14 @@ export function FilterBar({
 
   const selectClass = isSide
     ? "w-full cursor-pointer appearance-none bg-transparent py-2.5 pr-7 text-sm font-bold text-slate-900 outline-none disabled:cursor-not-allowed disabled:text-slate-400 [&>option]:bg-white [&>option]:text-slate-950"
-    : "w-full cursor-pointer appearance-none bg-transparent py-3 pr-6 text-sm font-bold text-white outline-none disabled:cursor-not-allowed disabled:text-white/55 md:py-2 [&>option]:bg-white [&>option]:text-slate-950";
+    : "w-full min-w-0 cursor-pointer appearance-none overflow-hidden text-ellipsis whitespace-nowrap bg-transparent py-3 pr-8 text-sm font-bold text-white outline-none disabled:cursor-not-allowed disabled:text-white/55 md:py-2.5 [&>option]:bg-white [&>option]:text-slate-950";
   const fieldWrapClass = isSide
     ? "relative cursor-pointer rounded-2xl border border-slate-200 bg-white px-3 text-slate-900 shadow-sm"
-    : "relative cursor-pointer border-b border-white/70 px-2 text-white md:border-b-0 md:border-r md:border-white/45 md:px-4 last:md:border-r-0";
+    : "relative min-w-0 cursor-pointer border-b border-white/70 px-2 text-white md:rounded-2xl md:border md:border-white/35 md:bg-slate-950/20 md:px-3 md:shadow-sm md:backdrop-blur-sm";
   const advancedFieldWrapClass = `${fieldWrapClass} ${isSide || showMoreFilters ? "block" : "hidden md:block"}`;
   const priceInputClass = isSide
     ? "w-full bg-transparent py-2.5 text-sm font-bold text-slate-900 outline-none placeholder:text-slate-500"
-    : "w-full bg-transparent py-3 text-sm font-bold text-white outline-none placeholder:text-white md:py-2";
+    : "w-full min-w-0 bg-transparent py-3 text-sm font-bold text-white outline-none placeholder:text-white md:py-2.5";
 
   return (
     <form
@@ -230,7 +236,7 @@ export function FilterBar({
           className={
             isSide
               ? "grid gap-3"
-              : "grid grid-cols-2 gap-x-4 gap-y-4 pb-2 md:flex md:justify-center md:gap-0 md:pb-0"
+              : "grid grid-cols-2 gap-x-4 gap-y-4 pb-2 md:grid-cols-4 md:gap-3 md:pb-0 2xl:grid-cols-8"
           }
         >
           <label className={fieldWrapClass}>
@@ -254,7 +260,7 @@ export function FilterBar({
                 </option>
               ))}
             </select>
-            <SelectChevron />
+            <SelectChevron isSide={isSide} />
           </label>
 
           <label className={fieldWrapClass}>
@@ -274,7 +280,7 @@ export function FilterBar({
                 </option>
               ))}
             </select>
-            <SelectChevron />
+            <SelectChevron isSide={isSide} />
           </label>
 
           <label className={fieldWrapClass}>
@@ -292,7 +298,7 @@ export function FilterBar({
                 </option>
               ))}
             </select>
-            <SelectChevron />
+            <SelectChevron isSide={isSide} />
           </label>
 
           <label className={advancedFieldWrapClass}>
@@ -316,7 +322,7 @@ export function FilterBar({
                 </option>
               ))}
             </select>
-            <SelectChevron />
+            <SelectChevron isSide={isSide} />
           </label>
 
           <label className={advancedFieldWrapClass}>
@@ -329,7 +335,7 @@ export function FilterBar({
                 </option>
               ))}
             </select>
-            <SelectChevron />
+            <SelectChevron isSide={isSide} />
           </label>
 
           <label className={advancedFieldWrapClass}>
@@ -342,7 +348,7 @@ export function FilterBar({
                 </option>
               ))}
             </select>
-            <SelectChevron />
+            <SelectChevron isSide={isSide} />
           </label>
 
           <label className={advancedFieldWrapClass}>

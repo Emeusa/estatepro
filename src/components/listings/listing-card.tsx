@@ -92,14 +92,14 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
 
   return (
     <article ref={cardRef} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-      <div className={`relative bg-slate-100 ${previewImages.length ? "h-36" : "h-52"}`}>
+      <div className={`relative bg-slate-950 ${previewImages.length ? "h-36" : "h-52"}`}>
         <Link href={listingHref} aria-label={`View ${listing.title}`} className="group relative block h-full">
           {image ? (
             <Image
               src={image.cardUrl}
               alt={listing.title}
               fill
-              className="object-cover transition duration-300 group-hover:scale-[1.03]"
+              className="object-contain transition duration-300 group-hover:opacity-95"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
               quality={70}
               unoptimized={image.isPreprocessed}
@@ -135,13 +135,13 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
               key={`${preview.cardUrl}-${index}`}
               href={listingHref}
               aria-label={`View photo ${index + 2} for ${listing.title}`}
-              className="group relative h-12 overflow-hidden rounded-xl bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
+              className="group relative h-12 overflow-hidden rounded-xl bg-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
             >
               <Image
                 src={preview.cardUrl}
                 alt={listing.title}
                 fill
-                className="object-cover transition duration-300 group-hover:scale-[1.05]"
+                className="object-contain transition duration-300 group-hover:opacity-95"
                 sizes="120px"
                 quality={70}
                 unoptimized={preview.isPreprocessed}

@@ -300,8 +300,8 @@ export function ListingForm({ token, listing, onSaved }: Props) {
       if (imageFiles.length) {
         try {
           const uploadedImages = await uploadListingImages(moveToFront(imageFiles, uploadThumbnailIndex), token);
-          payload.imageVariants = uploadedImages;
-          payload.imageUrls = uploadedImages.map((image) => image.heroUrl);
+          payload.imageUrls = uploadedImages.imageUrls;
+          payload.imageVariants = uploadedImages.imageVariants;
         } catch (error) {
           const uploadMessage = getUploadFailureMessage(error);
           setFieldErrors({ images: uploadMessage });

@@ -12,6 +12,17 @@ import {
 import { supabase } from "@/lib/supabase/client";
 import { ListingImageVariant } from "@/lib/types";
 
+type ListingImageUploadResult = {
+  imageUrls: string[];
+  imageVariants: ListingImageVariant[];
+};
+
+const RAW_IMAGE_EXTENSIONS: Record<string, "jpg" | "png" | "webp"> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp"
+};
+
 async function requireUserId() {
   const {
     data: { session }
@@ -50,7 +61,51 @@ async function authorizeListingImageUpload(files: File[], token: string) {
   });
 }
 
-export async function uploadListingImages(files: File[], token: string) {
+function getRawImageExtension(file: File) {
+  const extension = RAW_IMAGE_EXTENSIONS[file.type];
+
+  if (!extension) {
+    throw new Error(`Only ${SUPPORTED_LISTING_IMAGE_LABEL} images are supported.`);
+  }
+
+  return extension;
+}
+
+async function uploadOriginalListingImages(files: File[], userId: string): Promise<string[]> {
+  return Promise.all(
+    files.map(async (file, index) => {
+      const imageId = crypto.randomUUID();
+      const extension = getRawImageExtension(file);
+      const path = `${userId}/${imageId}-${index}-original.${extension}`;
+
+      await upload("listing-images", path, file);
+
+      return supabase.storage.from("listing-images").getPublicUrl(path).data.publicUrl;
+    })
+  );
+}
+
+function isImageProcessingFailure(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("compression") ||
+    message.includes("convert") ||
+    message.includes("decode") ||
+    message.includes("dimension") ||
+    message.includes("image") ||
+    message.includes("load") ||
+    message.includes("canvas") ||
+    message.includes("webp") ||
+    message.includes("todataurl") ||
+    message.includes("toblob")
+  );
+}
+
+export async function uploadListingImages(files: File[], token: string): Promise<ListingImageUploadResult> {
   const userId = await requireUserId();
   const unsupportedFile = files.find((file) => !isSupportedListingImageType(file.type));
   const oversizedFile = files.find((file) => file.size > MAX_LISTING_IMAGE_BYTES);
@@ -66,26 +121,46 @@ export async function uploadListingImages(files: File[], token: string) {
   const acceptedFiles = files.slice(0, MAX_LISTING_IMAGES);
   await authorizeListingImageUpload(acceptedFiles, token);
 
-  const uploads = acceptedFiles.map(async (file, index): Promise<ListingImageVariant> => {
-    const optimized = await processListingImage(file);
-    const imageId = crypto.randomUUID();
-    const heroPath = `${userId}/${imageId}-${index}-hero.webp`;
-    const cardPath = `${userId}/${imageId}-${index}-card.webp`;
+  let processedImages: Awaited<ReturnType<typeof processListingImage>>[];
 
-    await upload("listing-images", heroPath, optimized.hero);
-    await upload("listing-images", cardPath, optimized.card);
+  try {
+    processedImages = await Promise.all(acceptedFiles.map((file) => processListingImage(file)));
+  } catch (error) {
+    if (!isImageProcessingFailure(error)) {
+      throw error;
+    }
 
+    console.warn("Listing image optimization failed; uploading validated original images instead.");
     return {
-      heroUrl: supabase.storage.from("listing-images").getPublicUrl(heroPath).data.publicUrl,
-      cardUrl: supabase.storage.from("listing-images").getPublicUrl(cardPath).data.publicUrl,
-      blurDataUrl: optimized.blurDataUrl,
-      width: optimized.width,
-      height: optimized.height,
-      cardWidth: optimized.cardWidth,
-      cardHeight: optimized.cardHeight,
-      order: index
+      imageUrls: await uploadOriginalListingImages(acceptedFiles, userId),
+      imageVariants: []
     };
-  });
+  }
 
-  return Promise.all(uploads);
+  const imageVariants = await Promise.all(
+    processedImages.map(async (optimized, index): Promise<ListingImageVariant> => {
+      const imageId = crypto.randomUUID();
+      const heroPath = `${userId}/${imageId}-${index}-hero.webp`;
+      const cardPath = `${userId}/${imageId}-${index}-card.webp`;
+
+      await upload("listing-images", heroPath, optimized.hero);
+      await upload("listing-images", cardPath, optimized.card);
+
+      return {
+        heroUrl: supabase.storage.from("listing-images").getPublicUrl(heroPath).data.publicUrl,
+        cardUrl: supabase.storage.from("listing-images").getPublicUrl(cardPath).data.publicUrl,
+        blurDataUrl: optimized.blurDataUrl,
+        width: optimized.width,
+        height: optimized.height,
+        cardWidth: optimized.cardWidth,
+        cardHeight: optimized.cardHeight,
+        order: index
+      };
+    })
+  );
+
+  return {
+    imageUrls: imageVariants.map((image) => image.heroUrl),
+    imageVariants
+  };
 }

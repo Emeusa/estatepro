@@ -1,6 +1,6 @@
 import { ListingImageVariant, ListingRecord } from "@/lib/types";
 
-type ListingImageSource = {
+export type ListingImageSource = {
   heroUrl: string;
   cardUrl: string;
   blurDataUrl: string | null;
