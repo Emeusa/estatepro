@@ -6,7 +6,7 @@ import { LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
 import { getLgasForState, NIGERIA_STATES } from "@/lib/nigeria-locations";
 import { ListingCategory, PropertyType } from "@/lib/types";
 
-type Props = {
+export type FilterBarProps = {
   initialKeyword?: string;
   initialState?: string;
   initialCity?: string;
@@ -16,6 +16,7 @@ type Props = {
   initialBathrooms?: number;
   initialType?: string;
   initialCategory?: string;
+  variant?: "hero" | "side";
 };
 
 type FilterTab = {
@@ -73,8 +74,10 @@ export function FilterBar({
   initialBedrooms,
   initialBathrooms,
   initialType,
-  initialCategory
-}: Props) {
+  initialCategory,
+  variant = "hero"
+}: FilterBarProps) {
+  const isSide = variant === "side";
   const [keyword, setKeyword] = useState(initialKeyword ?? "");
   const [state, setState] = useState(initialState ?? "");
   const [city, setCity] = useState(initialCity ?? "");
@@ -138,40 +141,71 @@ export function FilterBar({
     window.location.href = "/#search-results";
   }
 
-  const selectClass =
-    "w-full cursor-pointer appearance-none bg-transparent py-3 pr-6 text-sm font-bold text-white outline-none disabled:cursor-not-allowed disabled:text-white/55 md:py-2 [&>option]:bg-white [&>option]:text-slate-950";
-  const fieldWrapClass =
-    "relative cursor-pointer border-b border-white/70 px-2 text-white md:border-b-0 md:border-r md:border-white/45 md:px-4 last:md:border-r-0";
-  const advancedFieldWrapClass = `${fieldWrapClass} ${showMoreFilters ? "block" : "hidden md:block"}`;
+  const selectClass = isSide
+    ? "w-full cursor-pointer appearance-none bg-transparent py-2.5 pr-7 text-sm font-bold text-slate-900 outline-none disabled:cursor-not-allowed disabled:text-slate-400 [&>option]:bg-white [&>option]:text-slate-950"
+    : "w-full cursor-pointer appearance-none bg-transparent py-3 pr-6 text-sm font-bold text-white outline-none disabled:cursor-not-allowed disabled:text-white/55 md:py-2 [&>option]:bg-white [&>option]:text-slate-950";
+  const fieldWrapClass = isSide
+    ? "relative cursor-pointer rounded-2xl border border-slate-200 bg-white px-3 text-slate-900 shadow-sm"
+    : "relative cursor-pointer border-b border-white/70 px-2 text-white md:border-b-0 md:border-r md:border-white/45 md:px-4 last:md:border-r-0";
+  const advancedFieldWrapClass = `${fieldWrapClass} ${isSide || showMoreFilters ? "block" : "hidden md:block"}`;
+  const priceInputClass = isSide
+    ? "w-full bg-transparent py-2.5 text-sm font-bold text-slate-900 outline-none placeholder:text-slate-500"
+    : "w-full bg-transparent py-3 text-sm font-bold text-white outline-none placeholder:text-white md:py-2";
 
   return (
     <form
       onSubmit={onSubmit}
-      className="w-full overflow-hidden bg-transparent p-0 md:rounded-[1.5rem] md:bg-white/15 md:px-5 md:py-5"
+      className={
+        isSide
+          ? "w-full overflow-hidden rounded-[1.35rem] bg-slate-50 p-3"
+          : "w-full overflow-hidden bg-transparent p-0 md:rounded-[1.5rem] md:bg-white/15 md:px-5 md:py-5"
+      }
     >
-      <div className="grid grid-cols-3 border-b border-white/55 text-center text-sm font-bold text-white md:grid-cols-4 md:border-white/45 md:text-base">
+      <div
+        className={
+          isSide
+            ? "grid grid-cols-2 gap-2 text-center text-xs font-black uppercase tracking-[0.08em] text-slate-700"
+            : "grid grid-cols-3 border-b border-white/55 text-center text-sm font-bold text-white md:grid-cols-4 md:border-white/45 md:text-base"
+        }
+      >
         {tabs.map((tab) => (
           <button
             key={tab.label}
             type="button"
-            className={`relative cursor-pointer px-2 pb-3 pt-0 transition md:px-6 md:pb-4 md:pt-5 ${
-              activeTab === tab.label ? "text-amber-100" : "text-white"
-            } ${tab.label === "Short Let" ? "hidden md:block" : ""}`}
+            className={
+              isSide
+                ? `relative cursor-pointer rounded-2xl border px-3 py-2.5 transition ${
+                    activeTab === tab.label
+                      ? "border-amber-300 bg-amber-100 text-slate-950"
+                      : "border-slate-200 bg-white text-slate-700 hover:border-teal-200 hover:text-teal-800"
+                  }`
+                : `relative cursor-pointer px-2 pb-3 pt-0 transition md:px-6 md:pb-4 md:pt-5 ${
+                    activeTab === tab.label ? "text-amber-100" : "text-white"
+                  } ${tab.label === "Short Let" ? "hidden md:block" : ""}`
+            }
             onClick={() => applyTab(tab)}
           >
             {tab.label}
-            <span
-              className={`absolute bottom-0 left-1/2 h-[2px] w-24 max-w-[80%] -translate-x-1/2 rounded-full transition ${
-                activeTab === tab.label ? "bg-amber-200" : "bg-transparent"
-              }`}
-            />
+            {!isSide ? (
+              <span
+                className={`absolute bottom-0 left-1/2 h-[2px] w-24 max-w-[80%] -translate-x-1/2 rounded-full transition ${
+                  activeTab === tab.label ? "bg-amber-200" : "bg-transparent"
+                }`}
+              />
+            ) : null}
           </button>
         ))}
       </div>
 
-      <div className="mt-8 flex flex-col gap-4 md:mt-4">
-        <div className="flex flex-col gap-4 md:flex-row md:gap-0">
-          <label className="relative flex min-h-14 flex-1 items-center rounded-md border border-[#080f3d] bg-white px-4 text-[#080f3d] md:rounded-l-xl md:rounded-r-none md:px-5">
+      <div className={isSide ? "mt-3 flex flex-col gap-3" : "mt-8 flex flex-col gap-4 md:mt-4"}>
+        <div className={isSide ? "grid gap-3" : "flex flex-col gap-4 md:flex-row md:gap-0"}>
+          <label
+            className={
+              isSide
+                ? "relative flex min-h-12 flex-1 items-center rounded-2xl border border-slate-200 bg-white px-4 text-slate-900 shadow-sm"
+                : "relative flex min-h-14 flex-1 items-center rounded-md border border-[#080f3d] bg-white px-4 text-[#080f3d] md:rounded-l-xl md:rounded-r-none md:px-5"
+            }
+          >
             <SearchIcon />
             <input
               aria-label="Search listings"
@@ -181,12 +215,24 @@ export function FilterBar({
               onChange={(event) => setKeyword(event.target.value)}
             />
           </label>
-          <button className="hidden min-h-10 cursor-pointer rounded-md bg-[#430078] px-8 text-sm font-bold text-white shadow-sm md:block md:min-h-14 md:rounded-l-none md:rounded-r-xl md:px-10 md:text-base">
+          <button
+            className={
+              isSide
+                ? "min-h-11 cursor-pointer rounded-2xl bg-[#430078] px-6 text-sm font-black text-white shadow-sm transition hover:bg-[#530096]"
+                : "hidden min-h-10 cursor-pointer rounded-md bg-[#430078] px-8 text-sm font-bold text-white shadow-sm md:block md:min-h-14 md:rounded-l-none md:rounded-r-xl md:px-10 md:text-base"
+            }
+          >
             Search
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-4 gap-y-4 pb-2 md:flex md:justify-center md:gap-0 md:pb-0">
+        <div
+          className={
+            isSide
+              ? "grid gap-3"
+              : "grid grid-cols-2 gap-x-4 gap-y-4 pb-2 md:flex md:justify-center md:gap-0 md:pb-0"
+          }
+        >
           <label className={fieldWrapClass}>
             <span className="sr-only">Property type</span>
             <select
@@ -302,7 +348,7 @@ export function FilterBar({
           <label className={advancedFieldWrapClass}>
             <span className="sr-only">Minimum price</span>
             <input
-              className="w-full bg-transparent py-3 text-sm font-bold text-white outline-none placeholder:text-white md:py-2"
+              className={priceInputClass}
               inputMode="numeric"
               placeholder="Min. Price"
               value={minPrice}
@@ -313,7 +359,7 @@ export function FilterBar({
           <label className={advancedFieldWrapClass}>
             <span className="sr-only">Maximum price</span>
             <input
-              className="w-full bg-transparent py-3 text-sm font-bold text-white outline-none placeholder:text-white md:py-2"
+              className={priceInputClass}
               inputMode="numeric"
               placeholder="Max. Price"
               value={maxPrice}
@@ -321,8 +367,8 @@ export function FilterBar({
             />
           </label>
         </div>
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div className="flex gap-2 md:hidden">
+        <div className={isSide ? "flex flex-col gap-2" : "flex flex-col gap-2 md:flex-row md:items-center md:justify-between"}>
+          <div className={isSide ? "hidden" : "flex gap-2 md:hidden"}>
             <button
               className="flex-1 rounded-md border border-white/60 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-white/10"
               type="button"
@@ -342,19 +388,23 @@ export function FilterBar({
           </div>
           {hasActiveFilters ? (
             <button
-              className="hidden rounded-md border border-white/50 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/10 md:inline-flex"
+              className={
+                isSide
+                  ? "rounded-2xl border border-slate-300 px-4 py-2.5 text-sm font-black text-slate-700 transition hover:bg-white"
+                  : "hidden rounded-md border border-white/50 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/10 md:inline-flex"
+              }
               type="button"
               onClick={clearFilters}
             >
               Clear filters
             </button>
-          ) : <span className="hidden md:block" />}
-          <button className="min-h-10 cursor-pointer rounded-md bg-[#430078] px-8 text-sm font-bold text-white shadow-sm md:hidden">
+          ) : <span className={isSide ? "hidden" : "hidden md:block"} />}
+          <button className={isSide ? "hidden" : "min-h-10 cursor-pointer rounded-md bg-[#430078] px-8 text-sm font-bold text-white shadow-sm md:hidden"}>
             Search
           </button>
         </div>
       </div>
-      <div className="mt-6 hidden h-px w-full bg-white/40 md:block" aria-hidden="true" />
+      {!isSide ? <div className="mt-6 hidden h-px w-full bg-white/40 md:block" aria-hidden="true" /> : null}
     </form>
   );
 }

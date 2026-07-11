@@ -389,8 +389,14 @@ export function AgentRegisterForm() {
     const form = new FormData(event.currentTarget);
     const email = normalizeEmailInput(form.get("email")?.toString() ?? "");
     const ninNumber = form.get("ninNumber")?.toString().trim() ?? "";
+    const acceptedLegalTerms = form.get("acceptedLegalTerms") === "on";
     if (!/^\d{11}$/.test(ninNumber)) {
       setMessage("Your NIN must be exactly 11 digits.");
+      return;
+    }
+
+    if (!acceptedLegalTerms) {
+      setMessage("Please agree to the Terms and Conditions and Privacy Policy before creating an agent account.");
       return;
     }
 
@@ -406,6 +412,7 @@ export function AgentRegisterForm() {
           fullName: form.get("fullName"),
           phone: form.get("phone"),
           ninNumber,
+          acceptedLegalTerms,
           ...readBotFields(form)
         })
       });
@@ -448,6 +455,25 @@ export function AgentRegisterForm() {
         onChange={setConfirmPassword}
       />
       <TurnstileFields />
+      <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+        <input
+          name="acceptedLegalTerms"
+          type="checkbox"
+          required
+          className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-teal-700"
+        />
+        <span>
+          I agree to the{" "}
+          <Link href="/terms" className="font-bold text-teal-700 underline">
+            Terms and Conditions
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="font-bold text-teal-700 underline">
+            Privacy Policy
+          </Link>
+          , including the agent listing, fraud prevention, verification, and reporting rules.
+        </span>
+      </label>
       <button className="button-primary inline-flex w-full items-center justify-center gap-2" disabled={isSubmitting}>
         {isSubmitting ? <ButtonSpinner /> : null}
         {isSubmitting ? "Creating agent account..." : "Create agent account"}

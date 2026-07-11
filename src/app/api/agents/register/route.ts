@@ -31,6 +31,10 @@ function getFriendlyMessage(error: unknown) {
       return "Your NIN must be exactly 11 digits.";
     }
 
+    if (issue.path.includes("acceptedLegalTerms")) {
+      return "Please agree to the Terms and Conditions and Privacy Policy before creating an agent account.";
+    }
+
     return "We could not create the agent account. Please check your details and try again.";
   }
 

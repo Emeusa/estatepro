@@ -48,10 +48,15 @@ const socialLinks = [
   }
 ];
 
+const legalLinks = [
+  { label: "Terms & Conditions", href: "/terms" },
+  { label: "Privacy Policy", href: "/privacy" }
+];
+
 export function Footer() {
   return (
     <footer id="site-footer" className="mt-12 border-t border-slate-200 bg-slate-950 text-white">
-      <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 md:grid-cols-[1fr_1.4fr]">
+      <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 md:grid-cols-[1fr_1.4fr_0.65fr]">
         <section>
           <p className="font-heading text-2xl font-semibold text-amber-100">C59 Estatehub</p>
           <p className="mt-3 max-w-md text-sm leading-7 text-slate-300">
@@ -86,6 +91,21 @@ export function Footer() {
                 className="text-sm text-slate-300 transition hover:text-amber-100"
               >
                 {keyword}
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-amber-200">Legal</h2>
+          <div className="mt-4 grid gap-2">
+            {legalLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="text-sm text-slate-300 transition hover:text-amber-100"
+              >
+                {link.label}
               </Link>
             ))}
           </div>

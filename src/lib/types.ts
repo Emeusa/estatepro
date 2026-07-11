@@ -138,6 +138,8 @@ export type PublicListingCardRecord = Pick<
   contactPhone: string;
   contactWhatsapp: string;
   cardFeatureBadges: string[];
+  agentName: string | null;
+  agentIsVerified: boolean;
 };
 
 export type SubscriptionRecord = {

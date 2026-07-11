@@ -3,6 +3,7 @@ import Image from "next/image";
 
 import { FilterBar } from "@/components/listings/filter-bar";
 import { ListingGrid } from "@/components/listings/listing-grid";
+import { StickyListingFilter } from "@/components/listings/sticky-listing-filter";
 import { DEFAULT_SITE_DESCRIPTION, SITE_NAME } from "@/lib/seo";
 import { getPublicListings } from "@/modules/listings/listing.service";
 
@@ -35,6 +36,28 @@ type Props = {
 
 export default async function HomePage({ searchParams }: Props) {
   const params = await searchParams;
+  const filterValues = {
+    initialKeyword: typeof params.q === "string" ? params.q : undefined,
+    initialState: typeof params.state === "string" ? params.state : undefined,
+    initialCity: typeof params.city === "string" ? params.city : undefined,
+    initialMinPrice: typeof params.minPrice === "string" ? Number(params.minPrice) : undefined,
+    initialMaxPrice: typeof params.maxPrice === "string" ? Number(params.maxPrice) : undefined,
+    initialBedrooms: typeof params.bedrooms === "string" ? Number(params.bedrooms) : undefined,
+    initialBathrooms: typeof params.bathrooms === "string" ? Number(params.bathrooms) : undefined,
+    initialType: typeof params.propertyType === "string" ? params.propertyType : undefined,
+    initialCategory: typeof params.listingCategory === "string" ? params.listingCategory : undefined
+  };
+  const listingQueryParams = {
+    q: typeof params.q === "string" ? params.q : undefined,
+    state: typeof params.state === "string" ? params.state : undefined,
+    city: typeof params.city === "string" ? params.city : undefined,
+    minPrice: typeof params.minPrice === "string" ? params.minPrice : undefined,
+    maxPrice: typeof params.maxPrice === "string" ? params.maxPrice : undefined,
+    bedrooms: typeof params.bedrooms === "string" ? params.bedrooms : undefined,
+    bathrooms: typeof params.bathrooms === "string" ? params.bathrooms : undefined,
+    propertyType: typeof params.propertyType === "string" ? params.propertyType : undefined,
+    listingCategory: typeof params.listingCategory === "string" ? params.listingCategory : undefined
+  };
   const hasActiveFilters = [
     "q",
     "state",
@@ -47,15 +70,15 @@ export default async function HomePage({ searchParams }: Props) {
     "listingCategory"
   ].some((key) => typeof params[key] === "string" && Boolean(params[key]));
   const listings = await getPublicListings({
-    keyword: typeof params.q === "string" ? params.q : undefined,
-    state: typeof params.state === "string" ? params.state : undefined,
-    city: typeof params.city === "string" ? params.city : undefined,
-    minPrice: typeof params.minPrice === "string" ? Number(params.minPrice) : undefined,
-    maxPrice: typeof params.maxPrice === "string" ? Number(params.maxPrice) : undefined,
-    bedrooms: typeof params.bedrooms === "string" ? Number(params.bedrooms) : undefined,
-    bathrooms: typeof params.bathrooms === "string" ? Number(params.bathrooms) : undefined,
-    propertyType: typeof params.propertyType === "string" ? params.propertyType : undefined,
-    listingCategory: typeof params.listingCategory === "string" ? params.listingCategory : undefined
+    keyword: filterValues.initialKeyword,
+    state: filterValues.initialState,
+    city: filterValues.initialCity,
+    minPrice: filterValues.initialMinPrice,
+    maxPrice: filterValues.initialMaxPrice,
+    bedrooms: filterValues.initialBedrooms,
+    bathrooms: filterValues.initialBathrooms,
+    propertyType: filterValues.initialType,
+    listingCategory: filterValues.initialCategory
   });
 
   return (
@@ -81,23 +104,19 @@ export default async function HomePage({ searchParams }: Props) {
           <p className="mx-auto mt-4 max-w-2xl text-[clamp(0.82rem,3.4vw,0.95rem)] leading-6 text-stone-100 sm:mt-5 sm:leading-7">
             Built for fast contact with verified agents.
           </p>
-          <div className="mx-auto mt-6 max-w-6xl text-left sm:mt-8">
-            <FilterBar
-              initialKeyword={typeof params.q === "string" ? params.q : undefined}
-              initialState={typeof params.state === "string" ? params.state : undefined}
-              initialCity={typeof params.city === "string" ? params.city : undefined}
-              initialMinPrice={typeof params.minPrice === "string" ? Number(params.minPrice) : undefined}
-              initialMaxPrice={typeof params.maxPrice === "string" ? Number(params.maxPrice) : undefined}
-              initialBedrooms={typeof params.bedrooms === "string" ? Number(params.bedrooms) : undefined}
-              initialBathrooms={typeof params.bathrooms === "string" ? Number(params.bathrooms) : undefined}
-              initialType={typeof params.propertyType === "string" ? params.propertyType : undefined}
-              initialCategory={typeof params.listingCategory === "string" ? params.listingCategory : undefined}
-            />
+          <div id="homepage-filter-anchor" className="mx-auto mt-6 max-w-6xl text-left sm:mt-8">
+            <FilterBar {...filterValues} />
           </div>
         </div>
       </section>
+      <StickyListingFilter anchorId="homepage-filter-anchor" {...filterValues} />
       <section id="search-results" className="scroll-mt-24">
-        <ListingGrid listings={listings.items} hasActiveFilters={hasActiveFilters} />
+        <ListingGrid
+          listings={listings.items}
+          hasActiveFilters={hasActiveFilters}
+          nextCursor={listings.nextCursor}
+          queryParams={listingQueryParams}
+        />
       </section>
     </div>
   );

@@ -40,6 +40,21 @@ function ListingPromotionBadge({ label }: { label: string }) {
   );
 }
 
+function VerifiedAgentBadge({ agentName }: { agentName: string | null }) {
+  return (
+    <span
+      className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[0.62rem] font-black uppercase tracking-[0.07em] text-emerald-700 ring-1 ring-emerald-100"
+      title={agentName ? `Verified agent: ${agentName}` : "Verified agent"}
+      aria-label={agentName ? `Verified agent ${agentName}` : "Verified agent"}
+    >
+      <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0 fill-current">
+        <path d="M12 2.25 19.25 5v5.45c0 4.66-2.9 8.87-7.25 11.3-4.35-2.43-7.25-6.64-7.25-11.3V5L12 2.25Zm3.62 7.47a1 1 0 0 0-1.41-1.41l-3.3 3.29-1.12-1.11a1 1 0 1 0-1.41 1.41l1.82 1.82a1 1 0 0 0 1.41 0l4.01-4Z" />
+      </svg>
+      <span className="truncate">{agentName ?? "Verified agent"}</span>
+    </span>
+  );
+}
+
 export function ListingCard({ listing }: Props) {
   const unavailableBadge = getUnavailableBadge(listing);
   const qualityBadges = getListingQualityBadges(listing).slice(0, 4);
@@ -177,6 +192,7 @@ export function ListingCard({ listing }: Props) {
             </div>
           ) : null}
           <p className="mt-2 text-base font-black text-slate-950">{formatPrice(listing.price)}</p>
+          {listing.agentIsVerified ? <VerifiedAgentBadge agentName={listing.agentName} /> : null}
         </Link>
         <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
           <a

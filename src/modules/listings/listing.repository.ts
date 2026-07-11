@@ -98,7 +98,10 @@ function parseKeywordFilters(keyword?: string): KeywordFilters {
   return filters;
 }
 
-function toPublicListingCardRecord(listing: ListingRecord): PublicListingCardRecord {
+function toPublicListingCardRecord(
+  listing: ListingRecord,
+  agent?: PublicAgentSummary | null
+): PublicListingCardRecord {
   return {
     id: listing.id,
     title: listing.title,
@@ -124,8 +127,47 @@ function toPublicListingCardRecord(listing: ListingRecord): PublicListingCardRec
     descriptionPreview: createDescriptionPreview(listing.description),
     contactPhone: listing.contactPhone,
     contactWhatsapp: listing.contactWhatsapp,
-    cardFeatureBadges: getListingCardFeatureBadges(listing)
+    cardFeatureBadges: getListingCardFeatureBadges(listing),
+    agentName: agent?.fullName ?? null,
+    agentIsVerified: Boolean(agent?.isVerified)
   };
+}
+
+async function listPublicAgentSummaries(agentIds: string[]) {
+  const uniqueAgentIds = Array.from(new Set(agentIds.filter(Boolean)));
+  const summaries = new Map<string, PublicAgentSummary>();
+
+  if (!uniqueAgentIds.length) {
+    return summaries;
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("agents")
+    .select("id, verification_status, is_blocked, users!inner(full_name)")
+    .in("id", uniqueAgentIds)
+    .eq("verification_status", "approved")
+    .eq("is_blocked", false);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  for (const row of data ?? []) {
+    const user = Array.isArray(row.users) ? row.users[0] : row.users;
+    summaries.set(row.id, {
+      id: row.id,
+      fullName: toNameCase(user?.full_name ?? "Verified agent"),
+      isVerified: row.verification_status === "approved"
+    });
+  }
+
+  return summaries;
+}
+
+async function toPublicListingCardRecords(listings: ListingRecord[]) {
+  const agentSummaries = await listPublicAgentSummaries(listings.map((listing) => listing.agentId));
+  return listings.map((listing) => toPublicListingCardRecord(listing, agentSummaries.get(listing.agentId)));
 }
 
 export async function listPublicListings(
@@ -193,8 +235,10 @@ export async function listPublicListings(
   }
 
   const candidates = (data ?? []).map(toListingRecord);
-  const items = rankListingsForFeed(candidates, requestedLimit).map(toPublicListingCardRecord);
-  const nextCursor = candidates.length === candidateLimit ? candidates.at(-1)?.id ?? null : null;
+  const rankedListings = rankListingsForFeed(candidates, requestedLimit);
+  const items = await toPublicListingCardRecords(rankedListings);
+  const nextCursorIndex = Math.min(requestedLimit, candidates.length) - 1;
+  const nextCursor = candidates.length > requestedLimit ? candidates[nextCursorIndex]?.id ?? null : null;
   return { items, nextCursor };
 }
 
@@ -227,7 +271,7 @@ async function listSimilarPublicListingCandidates(
   }
 
   const candidates = (data ?? []).map(toListingRecord);
-  return rankListingsForFeed(candidates, candidateLimit).map(toPublicListingCardRecord);
+  return toPublicListingCardRecords(rankListingsForFeed(candidates, candidateLimit));
 }
 
 export async function listSimilarPublicListings(listing: ListingRecord, limit = 3) {
@@ -301,7 +345,7 @@ export async function listPublicListingsByAgent(agentId: string) {
     throw new Error(error.message);
   }
 
-  return (data ?? []).map(toListingRecord).map(toPublicListingCardRecord);
+  return toPublicListingCardRecords((data ?? []).map(toListingRecord));
 }
 
 export async function getPublicAgentSummary(agentId: string): Promise<PublicAgentSummary | null> {

@@ -47,7 +47,10 @@ export const clientRegistrationSchema = z.object({
 }).strict();
 
 export const agentRegistrationRequestSchema = agentRegistrationSchema
-  .extend(botProtectionSchema.shape)
+  .extend({
+    ...botProtectionSchema.shape,
+    acceptedLegalTerms: z.literal(true)
+  })
   .strict();
 
 export const clientRegistrationRequestSchema = clientRegistrationSchema

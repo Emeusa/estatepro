@@ -200,6 +200,12 @@
   }
 
   @media (max-width: 639px) {
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
     .nav-chip {
       min-height: 2.25rem;
       padding: 0.58rem 0.78rem;
