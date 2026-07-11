@@ -21,10 +21,8 @@ type Props = {
   onSavedChange?: (listingId: string, saved: boolean) => void;
 };
 
-const DEFAULT_CARD_IMAGE_RATIO = 4 / 3;
-
 function getCardImageRatio(image: ReturnType<typeof getListingImages>[number] | undefined) {
-  return image?.cardWidth && image.cardHeight ? image.cardWidth / image.cardHeight : DEFAULT_CARD_IMAGE_RATIO;
+  return image?.cardWidth && image.cardHeight ? image.cardWidth / image.cardHeight : 4 / 3;
 }
 
 function ListingPromotionBadge({ label }: { label: string }) {
@@ -69,9 +67,6 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
   const images = getListingImages(listing);
   const image = images[0];
   const previewImages = images.slice(1, 4);
-  const imageCardUrl = image?.cardUrl;
-  const storedMainImageRatio = getCardImageRatio(image);
-  const [mainImageRatio, setMainImageRatio] = useState(() => storedMainImageRatio);
   const [previewRatios, setPreviewRatios] = useState<Record<number, number>>({});
   const promotionBadge = getListingPromotionBadge(listing);
   const listingHref = `/listings/${listing.id}`;
@@ -99,15 +94,8 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
   }, [listing.id]);
 
   useEffect(() => {
-    setMainImageRatio(storedMainImageRatio);
     setPreviewRatios({});
-  }, [imageCardUrl, storedMainImageRatio]);
-
-  function rememberMainImageRatio(element: HTMLImageElement) {
-    if (element.naturalWidth && element.naturalHeight) {
-      setMainImageRatio(element.naturalWidth / element.naturalHeight);
-    }
-  }
+  }, [image?.cardUrl]);
 
   function rememberPreviewRatio(index: number, element: HTMLImageElement) {
     if (!element.naturalWidth || !element.naturalHeight) {
@@ -119,7 +107,7 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
 
   return (
     <article ref={cardRef} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-      <div className="relative w-full overflow-hidden" style={{ aspectRatio: mainImageRatio }}>
+      <div className="relative h-48 w-full overflow-hidden sm:h-52 lg:h-48 xl:h-52">
         <Link href={listingHref} aria-label={`View ${listing.title}`} className="group relative block h-full">
           {image ? (
             <Image
@@ -130,7 +118,6 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
               quality={70}
               unoptimized={image.isPreprocessed}
-              onLoad={(event) => rememberMainImageRatio(event.currentTarget)}
             />
           ) : null}
           {images.length > 1 ? (

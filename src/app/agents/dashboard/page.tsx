@@ -3,26 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { AnalyticsSummary } from "@/components/agents/analytics-summary";
+import { AgentSubscriptionPanel } from "@/components/agents/subscription-panel";
 import { EntitlementSummary } from "@/components/agents/entitlement-summary";
 import { ListingManager } from "@/components/agents/listing-manager";
-import { SupportRequestForm } from "@/components/agents/support-request-form";
 import { VerifiedAgentName } from "@/components/agents/verified-agent-name";
-import { PlanFeatureRow } from "@/components/shared/plan-feature-row";
 import { apiRequest } from "@/lib/api";
-import {
-  formatPlanPrice,
-  getPlanFeatureRows,
-  getPricingPlan,
-  isLowerPlan,
-  isPaidPricingPlanSlug,
-  PRICING_PLANS
-} from "@/lib/pricing";
+import { formatPlanPrice, getPricingPlan } from "@/lib/pricing";
 import { getEffectivePlanSlug, isSubscriptionCurrentlyActive } from "@/lib/subscriptions";
 import { supabase } from "@/lib/supabase/client";
 import {
   AgentAnalyticsSummary,
   AgentEntitlements,
-  BillingMode,
   ListingRecord,
   SubscriptionRecord,
   UserRecord
@@ -57,7 +48,7 @@ const navItems = [
   { label: "Dashboard", href: "#dashboard" },
   { label: "My Listings", href: "/agents/listings" },
   { label: "Saved Listings", href: "/saved-listings" },
-  { label: "Subscription", href: "#subscription" },
+  { label: "Subscription", href: "/agents/subscription" },
   { label: "My Profile", href: "/agents/profile" }
 ];
 
@@ -70,10 +61,6 @@ function initials(name: string) {
     .join("") || "AG";
 }
 
-function checkoutBusyKey(planSlug: string, billingMode: BillingMode) {
-  return `${planSlug}:paystack:${billingMode}`;
-}
-
 function readableDate(value?: string | null) {
   if (!value) {
     return null;
@@ -84,10 +71,6 @@ function readableDate(value?: string | null) {
     day: "numeric",
     year: "numeric"
   }).format(new Date(value));
-}
-
-function paymentMethodLabel(billingMode: BillingMode) {
-  return billingMode === "prepaid" ? "Paystack Transfer / USSD" : "Paystack auto-renewal";
 }
 
 function StatCard({ label, value, tone = "blue" }: StatCardProps) {
@@ -114,9 +97,6 @@ function StatCard({ label, value, tone = "blue" }: StatCardProps) {
 export default function AgentDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [message, setMessage] = useState("Loading dashboard...");
-  const [billingMessage, setBillingMessage] = useState("");
-  const [busyBillingPlan, setBusyBillingPlan] = useState<string | null>(null);
-  const [cancellingBilling, setCancellingBilling] = useState(false);
   const [createRequestKey, setCreateRequestKey] = useState(0);
 
   useEffect(() => {
@@ -163,15 +143,6 @@ export default function AgentDashboardPage() {
     };
   }, []);
 
-  useEffect(() => {
-    const billingResult = new URLSearchParams(window.location.search).get("billing");
-    if (billingResult === "success") {
-      setBillingMessage("Payment confirmed. Your plan has been updated.");
-    } else if (billingResult === "failed") {
-      setBillingMessage("Payment verification failed. If you were charged, contact support with your payment reference.");
-    }
-  }, []);
-
   const stats = useMemo(() => {
     const listings = data?.listings ?? [];
     return {
@@ -199,16 +170,11 @@ export default function AgentDashboardPage() {
   const verificationStatus = data.profile.agent?.verificationStatus ?? "pending";
   const isVerified = verificationStatus === "approved";
   const isBlocked = data.profile.agent?.isBlocked ?? false;
-  const canUpgrade = isVerified && !isBlocked;
   const accountStatus = isBlocked ? "Blocked" : "Operational";
   const currentSubscription = data.profile.subscription ?? null;
   const currentPlan = getPricingPlan(getEffectivePlanSlug(currentSubscription));
   const subscriptionActive = isSubscriptionCurrentlyActive(currentSubscription);
   const hasActivePaidPlan = currentPlan.priceMonthly !== null && currentPlan.priceMonthly > 0 && subscriptionActive;
-  const hasCancellablePaidPlan =
-    hasActivePaidPlan &&
-    currentSubscription?.paymentProvider === "paystack" &&
-    currentSubscription.billingMode === "recurring";
   const billingLiveEnabled = data.billing?.liveEnabled ?? false;
   const currentPeriodEndLabel = readableDate(currentSubscription?.currentPeriodEnd);
 
@@ -236,64 +202,6 @@ export default function AgentDashboardPage() {
           : current.entitlements
       };
     });
-  }
-
-  async function startCheckout(planSlug: string, billingMode: BillingMode) {
-    if (!data?.token || !isPaidPricingPlanSlug(planSlug)) {
-      return;
-    }
-
-    setBusyBillingPlan(checkoutBusyKey(planSlug, billingMode));
-    setBillingMessage("");
-
-    try {
-      const response = await apiRequest<{ authorizationUrl: string }>("/api/billing/checkout", {
-        method: "POST",
-        retries: 0,
-        headers: { Authorization: `Bearer ${data.token}` },
-        body: JSON.stringify({ planSlug, provider: "paystack", billingMode })
-      });
-      window.open(response.authorizationUrl, "_blank", "noopener,noreferrer");
-      setBusyBillingPlan(null);
-    } catch (error) {
-      setBillingMessage(
-        error instanceof Error ? error.message : `Could not start ${paymentMethodLabel(billingMode)} checkout.`
-      );
-      setBusyBillingPlan(null);
-    }
-  }
-
-  async function cancelSubscription() {
-    if (!data?.token) {
-      return;
-    }
-
-    setCancellingBilling(true);
-    setBillingMessage("");
-
-    try {
-      const response = await apiRequest<{ subscription: SubscriptionRecord }>("/api/billing/cancel", {
-        method: "POST",
-        retries: 0,
-        headers: { Authorization: `Bearer ${data.token}` }
-      });
-      setData((current) =>
-        current
-          ? {
-              ...current,
-              profile: {
-                ...current.profile,
-                subscription: response.subscription
-              }
-            }
-          : current
-      );
-      setBillingMessage("Subscription renewal has been cancelled.");
-    } catch (error) {
-      setBillingMessage(error instanceof Error ? error.message : "Could not cancel subscription.");
-    } finally {
-      setCancellingBilling(false);
-    }
   }
 
   return (
@@ -411,142 +319,33 @@ export default function AgentDashboardPage() {
             <EntitlementSummary entitlements={data.entitlements} />
             <AnalyticsSummary analytics={data.analytics} />
 
-            <section className="px-3 sm:px-6">
-              <div className="rounded-2xl border border-slate-300/80 bg-slate-200 p-4 shadow-sm sm:rounded-3xl sm:p-5">
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Launch pricing</p>
-                    <h2 className="mt-2 text-lg font-bold text-slate-950">Visibility plans</h2>
-                  </div>
-                  <p className="text-xs font-semibold text-slate-500">
-                    {billingLiveEnabled
-                      ? "Secure checkout is handled by Paystack."
-                      : "Live billing is locked until final billing verification is complete."}
-                  </p>
-                </div>
-                {billingMessage ? (
-                  <p className="mt-3 rounded-2xl bg-slate-300/60 px-4 py-3 text-sm font-semibold text-slate-700">
-                    {billingMessage}
-                  </p>
-                ) : null}
-                {!canUpgrade ? (
-                  <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-                    Your agent account must be approved before you can upgrade.
-                  </p>
-                ) : null}
-                <p className="mt-3 text-xs font-semibold leading-5 text-slate-500">
-                  What these features mean: hover, focus, or tap the helper icon beside each feature for a plain-language
-                  explanation before choosing a plan.
-                </p>
-                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {PRICING_PLANS.slice(0, 5).map((plan) => (
-                    <article
-                      key={plan.slug}
-                      className={`rounded-2xl border p-4 ${
-                        plan.slug === currentPlan.slug
-                          ? "border-blue-500 bg-blue-50"
-                          : plan.isPopular
-                            ? "border-amber-300 bg-amber-50/80"
-                            : "border-slate-300 bg-slate-300/50"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h3 className="font-bold text-slate-950">{plan.name}</h3>
-                          <p className="mt-1 text-sm font-semibold text-slate-600">{formatPlanPrice(plan.priceMonthly)}</p>
-                        </div>
-                        {plan.slug === currentPlan.slug ? (
-                          <span className="rounded-full bg-blue-600 px-2.5 py-1 text-[11px] font-bold text-white">Current</span>
-                        ) : plan.isPopular ? (
-                          <span className="rounded-full bg-amber-500 px-2.5 py-1 text-[11px] font-bold text-white">Popular</span>
-                        ) : null}
-                      </div>
-                      <p className="mt-3 text-xs leading-5 text-slate-600">{plan.description}</p>
-                      <div className="mt-3 grid gap-2">
-                        {getPlanFeatureRows(plan).map((feature) => (
-                          <PlanFeatureRow key={feature.key} feature={feature} />
-                        ))}
-                      </div>
-                      <div className="mt-4">
-                        {plan.slug === currentPlan.slug ? (
-                          <button
-                            className="w-full rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-400"
-                            disabled
-                            type="button"
-                          >
-                            Current
-                          </button>
-                        ) : hasActivePaidPlan && isLowerPlan(currentPlan.slug, plan.slug) ? (
-                          <p className="rounded-xl bg-slate-300/70 px-4 py-2.5 text-center text-xs font-bold text-slate-600">
-                            Available after current plan expires
-                          </p>
-                        ) : isPaidPricingPlanSlug(plan.slug) && !canUpgrade ? (
-                          <p className="rounded-xl bg-slate-300/70 px-4 py-2.5 text-center text-xs font-bold text-slate-600">
-                            Approval required before upgrade
-                          </p>
-                        ) : isPaidPricingPlanSlug(plan.slug) && billingLiveEnabled ? (
-                          <div className="grid gap-2">
-                            {(() => {
-                              const recurringBusyKey = checkoutBusyKey(plan.slug, "recurring");
-                              const prepaidBusyKey = checkoutBusyKey(plan.slug, "prepaid");
-                              const activePaystackRecurring =
-                                hasActivePaidPlan &&
-                                currentSubscription?.paymentProvider === "paystack" &&
-                                currentSubscription.billingMode === "recurring";
-                              const prepaidBlocked = activePaystackRecurring;
-
-                              return (
-                                <>
-                                  <button
-                                    className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                                    disabled={busyBillingPlan !== null}
-                                    onClick={() => startCheckout(plan.slug, "recurring")}
-                                    type="button"
-                                  >
-                                    {busyBillingPlan === recurringBusyKey ? "Opening Paystack..." : "Auto-renew with Paystack"}
-                                  </button>
-                                  <button
-                                    className="w-full rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                                    disabled={busyBillingPlan !== null || prepaidBlocked}
-                                    onClick={() => startCheckout(plan.slug, "prepaid")}
-                                    type="button"
-                                  >
-                                    {busyBillingPlan === prepaidBusyKey ? "Opening transfer checkout..." : "Pay by Transfer / USSD"}
-                                  </button>
-                                  <p className="text-center text-[11px] font-semibold leading-4 text-slate-500">
-                                    No ATM card needed. Pay by bank app transfer, USSD, or Paystack bank payment.
-                                  </p>
-                                  {prepaidBlocked ? (
-                                    <p className="text-center text-[11px] font-semibold text-slate-500">
-                                      Transfer / USSD prepaid payment is available after your Paystack auto-renew plan expires.
-                                    </p>
-                                  ) : null}
-                                </>
-                              );
-                            })()}
-                          </div>
-                        ) : isPaidPricingPlanSlug(plan.slug) ? (
-                          <p className="rounded-xl bg-slate-300/70 px-4 py-2.5 text-center text-xs font-bold text-slate-600">
-                            Billing opens soon
-                          </p>
-                        ) : null}
-                        {plan.slug === currentPlan.slug && hasCancellablePaidPlan && !currentSubscription?.cancelAtPeriodEnd ? (
-                          <button
-                            className="mt-2 w-full rounded-xl border border-slate-400 px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
-                            disabled={cancellingBilling}
-                            onClick={cancelSubscription}
-                            type="button"
-                          >
-                            {cancellingBilling ? "Cancelling..." : "Cancel renewal"}
-                          </button>
-                        ) : null}
-                      </div>
-                    </article>
-                  ))}
-                </div>
-                <SupportRequestForm entitlements={data.entitlements} token={data.token} />
-              </div>
-            </section>
+            {!hasActivePaidPlan ? (
+              <section className="px-3 sm:px-6">
+                <AgentSubscriptionPanel
+                  agent={{
+                    verificationStatus,
+                    isBlocked
+                  }}
+                  billingLiveEnabled={billingLiveEnabled}
+                  entitlements={data.entitlements}
+                  onSubscriptionChanged={(subscription) =>
+                    setData((current) =>
+                      current
+                        ? {
+                            ...current,
+                            profile: {
+                              ...current.profile,
+                              subscription
+                            }
+                          }
+                        : current
+                    )
+                  }
+                  subscription={currentSubscription}
+                  token={data.token}
+                />
+              </section>
+            ) : null}
 
             <div className="px-3 sm:px-6">
               <ListingManager

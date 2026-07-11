@@ -23,7 +23,7 @@ const agentDashboardLinks = [
   { label: "Dashboard", href: "/agents/dashboard#dashboard" },
   { label: "My Listings", href: "/agents/listings" },
   { label: "Saved Listings", href: "/saved-listings" },
-  { label: "Subscription", href: "/agents/dashboard#subscription" },
+  { label: "Subscription", href: "/agents/subscription" },
   { label: "My Profile", href: "/agents/profile" }
 ];
 
@@ -32,7 +32,11 @@ export function Header() {
   const [user, setUser] = useState<SessionUser>(null);
   const [loading, setLoading] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const isAgentDashboard = pathname === "/agents/dashboard" || pathname === "/agents/listings" || pathname === "/agents/profile";
+  const isAgentDashboard =
+    pathname === "/agents/dashboard" ||
+    pathname === "/agents/listings" ||
+    pathname === "/agents/subscription" ||
+    pathname === "/agents/profile";
 
   useEffect(() => {
     let active = true;

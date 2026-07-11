@@ -3,22 +3,29 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { ListingManager } from "@/components/agents/listing-manager";
+import { AgentSubscriptionPanel } from "@/components/agents/subscription-panel";
 import { VerifiedAgentName } from "@/components/agents/verified-agent-name";
 import { apiRequest } from "@/lib/api";
+import { formatPlanPrice, getPricingPlan } from "@/lib/pricing";
+import { getEffectivePlanSlug, isSubscriptionCurrentlyActive } from "@/lib/subscriptions";
 import { supabase } from "@/lib/supabase/client";
-import { AgentEntitlements, ListingRecord, UserRecord } from "@/lib/types";
+import { AgentEntitlements, ListingRecord, SubscriptionRecord, UserRecord } from "@/lib/types";
 
-type ListingsPageData = {
+type SubscriptionPageData = {
   user: UserRecord | null;
   profile: {
     agent?: {
       verificationStatus: string;
+      trialEndsAt: string;
       isBlocked: boolean;
     };
+    subscription?: SubscriptionRecord;
   };
   listings: ListingRecord[];
   entitlements?: AgentEntitlements;
+  billing?: {
+    liveEnabled: boolean;
+  };
   token: string;
 };
 
@@ -41,27 +48,39 @@ function initials(name: string) {
   );
 }
 
-export default function AgentListingsPage() {
-  const [data, setData] = useState<ListingsPageData | null>(null);
-  const [message, setMessage] = useState("Loading listings...");
+function readableDate(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-NG", {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  }).format(new Date(value));
+}
+
+export default function AgentSubscriptionPage() {
+  const [data, setData] = useState<SubscriptionPageData | null>(null);
+  const [message, setMessage] = useState("Loading subscription...");
 
   useEffect(() => {
     let active = true;
 
-    async function loadListings() {
+    async function loadSubscription() {
       const {
         data: { session }
       } = await supabase.auth.getSession();
 
       if (!session?.access_token) {
         if (active) {
-          setMessage("Sign in first to access your listings.");
+          setMessage("Sign in first to manage your subscription.");
         }
         return;
       }
 
       try {
-        const profile = await apiRequest<Omit<ListingsPageData, "token">>("/api/agents/me", {
+        const profile = await apiRequest<Omit<SubscriptionPageData, "token">>("/api/agents/me", {
           headers: { Authorization: `Bearer ${session.access_token}` }
         });
         if (active) {
@@ -70,17 +89,17 @@ export default function AgentListingsPage() {
         }
       } catch (error) {
         if (active) {
-          setMessage(error instanceof Error ? error.message : "Failed to load listings.");
+          setMessage(error instanceof Error ? error.message : "Failed to load subscription.");
         }
       }
     }
 
-    loadListings();
+    loadSubscription();
 
     const {
       data: { subscription }
     } = supabase.auth.onAuthStateChange(() => {
-      loadListings();
+      loadSubscription();
     });
 
     return () => {
@@ -103,28 +122,13 @@ export default function AgentListingsPage() {
   }
 
   const agentName = data.user?.fullName ?? "Agent";
-  const isVerified = data.profile.agent?.verificationStatus === "approved";
-
-  function updateListings(listings: ListingRecord[]) {
-    setData((current) => {
-      if (!current) {
-        return current;
-      }
-      const activeListingCount = listings.filter(
-        (listing) => listing.status === "active" && listing.availability === "available"
-      ).length;
-      return {
-        ...current,
-        listings,
-        entitlements: current.entitlements
-          ? {
-              ...current.entitlements,
-              activeListingCount
-            }
-          : current.entitlements
-      };
-    });
-  }
+  const verificationStatus = data.profile.agent?.verificationStatus ?? "pending";
+  const isVerified = verificationStatus === "approved";
+  const isBlocked = data.profile.agent?.isBlocked ?? false;
+  const currentSubscription = data.profile.subscription ?? null;
+  const currentPlan = getPricingPlan(getEffectivePlanSlug(currentSubscription));
+  const subscriptionActive = isSubscriptionCurrentlyActive(currentSubscription);
+  const currentPeriodEndLabel = readableDate(currentSubscription?.currentPeriodEnd);
 
   return (
     <div className="relative left-1/2 -my-8 min-h-screen w-screen -translate-x-1/2 bg-[#d7dce4]">
@@ -139,7 +143,7 @@ export default function AgentListingsPage() {
                 key={item.href}
                 href={item.href}
                 className={`flex rounded-xl px-3 py-3 font-medium transition ${
-                  item.href === "/agents/listings" ? "bg-blue-50 text-blue-700" : "hover:bg-blue-50 hover:text-blue-700"
+                  item.href === "/agents/subscription" ? "bg-blue-50 text-blue-700" : "hover:bg-blue-50 hover:text-blue-700"
                 }`}
               >
                 {item.label}
@@ -183,30 +187,56 @@ export default function AgentListingsPage() {
           </div>
 
           <div className="space-y-4 px-3 py-4 sm:px-6 sm:py-5">
-            <section className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h1 className="text-2xl font-bold text-slate-950 sm:text-3xl">My listings</h1>
-                <p className="mt-2 text-sm text-slate-500">Manage every property you have posted.</p>
-              </div>
-              <Link
-                href="/agents/dashboard#listing-editor"
-                className="rounded-xl bg-blue-600 px-5 py-3 text-center text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
-              >
-                + Post a Property
-              </Link>
+            <section>
+              <h1 className="text-2xl font-bold text-slate-950 sm:text-3xl">Subscription</h1>
+              <p className="mt-2 text-sm text-slate-500">Manage your visibility plan, payment option, and support access.</p>
             </section>
 
-            <ListingManager
-              token={data.token}
-              initialListings={data.listings}
+            <section className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl border border-slate-300/80 bg-slate-200 p-3 shadow-sm sm:rounded-3xl sm:p-5">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Current Plan</p>
+                <p className="mt-2 text-lg font-semibold text-slate-950 sm:mt-3 sm:text-xl">{currentPlan.name}</p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">{formatPlanPrice(currentPlan.priceMonthly)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-300/80 bg-slate-200 p-3 shadow-sm sm:rounded-3xl sm:p-5">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Billing Status</p>
+                <p className="mt-2 text-lg font-semibold text-slate-950 sm:mt-3 sm:text-xl">
+                  {subscriptionActive ? "Active" : "Free / inactive"}
+                </p>
+                {currentPeriodEndLabel ? (
+                  <p className="mt-1 text-xs font-bold text-emerald-700">Until {currentPeriodEndLabel}</p>
+                ) : null}
+              </div>
+              <div className="rounded-xl border border-slate-300/80 bg-slate-200 p-3 shadow-sm sm:rounded-3xl sm:p-5">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Account Eligibility</p>
+                <p className="mt-2 text-lg font-semibold capitalize text-slate-950 sm:mt-3 sm:text-xl">
+                  {isBlocked ? "Blocked" : verificationStatus}
+                </p>
+              </div>
+            </section>
+
+            <AgentSubscriptionPanel
+              agent={{
+                verificationStatus,
+                isBlocked
+              }}
+              billingLiveEnabled={data.billing?.liveEnabled ?? false}
               entitlements={data.entitlements}
-              listTitle="All listings"
-              showForm={false}
-              editHrefForListing={(listing) => `/agents/dashboard?editListing=${listing.id}#listing-editor`}
-              onEntitlementsChanged={(entitlements) =>
-                setData((current) => (current ? { ...current, entitlements } : current))
+              onSubscriptionChanged={(subscription) =>
+                setData((current) =>
+                  current
+                    ? {
+                        ...current,
+                        profile: {
+                          ...current.profile,
+                          subscription
+                        }
+                      }
+                    : current
+                )
               }
-              onListingsChanged={updateListings}
+              subscription={currentSubscription}
+              token={data.token}
             />
 
             <section className="pb-2 lg:hidden">

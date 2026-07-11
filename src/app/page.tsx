@@ -84,7 +84,7 @@ export default async function HomePage({ searchParams }: Props) {
   return (
     <div className="space-y-8">
       <section
-        className="relative left-1/2 -mt-8 w-screen -translate-x-1/2 overflow-hidden bg-slate-950 px-4 py-1 text-center text-amber-50 sm:px-6 sm:py-3 lg:py-4"
+        className="relative left-1/2 -mt-8 w-screen -translate-x-1/2 overflow-hidden bg-slate-950 px-4 py-1 text-center text-amber-50 sm:px-6 sm:py-3 lg:py-2"
       >
         <Image
           src="/homepage-hero.webp"
@@ -101,10 +101,10 @@ export default async function HomePage({ searchParams }: Props) {
           <p className="text-[clamp(0.78rem,2.7vw,1.125rem)] font-semibold uppercase tracking-[0.24em] text-amber-200 sm:tracking-[0.34em]">
             Property search
           </p>
-          <p className="mx-auto mt-4 max-w-2xl text-[clamp(0.82rem,3.4vw,0.95rem)] leading-6 text-stone-100 sm:mt-5 sm:leading-7">
+          <p className="mx-auto mt-4 max-w-2xl text-[clamp(0.82rem,3.4vw,0.95rem)] leading-6 text-stone-100 sm:mt-5 sm:leading-7 lg:mt-2 lg:leading-5">
             Built for fast contact with verified agents.
           </p>
-          <div id="homepage-filter-anchor" className="mx-auto mt-6 max-w-6xl text-left sm:mt-8">
+          <div id="homepage-filter-anchor" className="mx-auto mt-6 max-w-6xl text-left sm:mt-8 lg:mt-4">
             <FilterBar {...filterValues} />
           </div>
         </div>

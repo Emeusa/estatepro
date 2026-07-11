@@ -4,7 +4,8 @@ import { ChangeEvent, FormEvent, ReactNode, useEffect, useState } from "react";
 
 import { ApiRequestError, apiRequest } from "@/lib/api";
 import {
-  isSupportedListingImageType,
+  isSupportedListingImageFile,
+  isUnsupportedHeicImage,
   MAX_LISTING_IMAGES,
   MAX_LISTING_IMAGE_BYTES,
   MAX_LISTING_IMAGE_MB,
@@ -160,8 +161,21 @@ export function ListingForm({ token, listing, onSaved }: Props) {
 
   function onImageChange(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
-    const unsupportedFile = files.find((file) => !isSupportedListingImageType(file.type));
+    const heicFile = files.find(isUnsupportedHeicImage);
+    const unsupportedFile = files.find((file) => !isSupportedListingImageFile(file));
     const oversizedFile = files.find((file) => file.size > MAX_LISTING_IMAGE_BYTES);
+
+    if (heicFile) {
+      event.target.value = "";
+      setSelectedFiles([]);
+      setPreviewUrls([]);
+      setUploadThumbnailIndex(0);
+      setFieldErrors((current) => ({
+        ...current,
+        images: "HEIC images are not supported yet. Please choose JPG, PNG, or WebP."
+      }));
+      return;
+    }
 
     if (unsupportedFile) {
       event.target.value = "";
@@ -210,6 +224,10 @@ export function ListingForm({ token, listing, onSaved }: Props) {
 
     if (message.includes("logged in") || message.includes("session") || message.includes("jwt")) {
       return "Your session expired. Log in again before uploading images.";
+    }
+
+    if (message.includes("heic") || message.includes("heif")) {
+      return "HEIC images are not supported yet. Please choose JPG, PNG, or WebP.";
     }
 
     if (message.includes("bucket") || message.includes("not found")) {

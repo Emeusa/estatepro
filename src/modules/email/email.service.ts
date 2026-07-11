@@ -216,7 +216,7 @@ export async function sendSubscriptionActivatedEmail(input: {
     ],
     cta: {
       label: "View subscription",
-      href: new URL("/agents/dashboard#subscription", getSiteUrl()).toString()
+      href: new URL("/agents/subscription", getSiteUrl()).toString()
     },
     metadata: {
       planSlug: input.planSlug,
@@ -246,7 +246,7 @@ export async function sendSubscriptionFailedEmail(agentId: string) {
     ],
     cta: {
       label: "Open subscription",
-      href: new URL("/agents/dashboard#subscription", getSiteUrl()).toString()
+      href: new URL("/agents/subscription", getSiteUrl()).toString()
     }
   });
 }
@@ -270,7 +270,7 @@ export async function sendSubscriptionCancelledEmail(agentId: string) {
     ],
     cta: {
       label: "View subscription",
-      href: new URL("/agents/dashboard#subscription", getSiteUrl()).toString()
+      href: new URL("/agents/subscription", getSiteUrl()).toString()
     }
   });
 }
