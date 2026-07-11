@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { CSSProperties, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { ListingImageSource } from "@/lib/listing-images";
@@ -12,33 +12,25 @@ type Props = {
   unavailableBadge?: string | null;
 };
 
-function imageBlurProps(image: ListingImageSource) {
-  return image.blurDataUrl ? { placeholder: "blur" as const, blurDataURL: image.blurDataUrl } : {};
-}
+const DEFAULT_IMAGE_RATIO = 4 / 3;
 
-function ImageBackdrop({ image }: { image: ListingImageSource }) {
-  return (
-    <Image
-      src={image.heroUrl}
-      alt=""
-      aria-hidden="true"
-      fill
-      className="scale-110 object-cover opacity-25 blur-xl"
-      sizes="(max-width: 1024px) 100vw, 780px"
-      quality={70}
-      unoptimized={image.isPreprocessed}
-      {...imageBlurProps(image)}
-    />
-  );
+function storedRatio(image: ListingImageSource, variant: "hero" | "card" = "hero") {
+  const width = variant === "card" ? image.cardWidth : image.width;
+  const height = variant === "card" ? image.cardHeight : image.height;
+  return width && height ? width / height : null;
 }
 
 export function ListingImageGallery({ images, title, unavailableBadge }: Props) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
+  const [measuredRatios, setMeasuredRatios] = useState<Record<number, number>>({});
   const thumbnailScrollerRef = useRef<HTMLDivElement | null>(null);
 
   const selectedImage = images[selectedIndex] ?? null;
+  const selectedRatio = selectedImage
+    ? measuredRatios[selectedIndex] ?? storedRatio(selectedImage) ?? DEFAULT_IMAGE_RATIO
+    : DEFAULT_IMAGE_RATIO;
   const hasMultipleImages = images.length > 1;
 
   useEffect(() => {
@@ -108,6 +100,20 @@ export function ListingImageGallery({ images, title, unavailableBadge }: Props) 
     });
   }
 
+  function rememberRatio(index: number, image: HTMLImageElement) {
+    if (!image.naturalWidth || !image.naturalHeight) {
+      return;
+    }
+    const ratio = image.naturalWidth / image.naturalHeight;
+    setMeasuredRatios((current) => (current[index] === ratio ? current : { ...current, [index]: ratio }));
+  }
+
+  const galleryFrameStyle = {
+    "--listing-image-ratio": selectedRatio,
+    "--listing-image-mobile-width": `${70 * selectedRatio}vh`,
+    "--listing-image-desktop-width": `${75 * selectedRatio}vh`
+  } as CSSProperties & Record<`--${string}`, string | number>;
+
   const previewModal =
     previewOpen && selectedImage && portalRoot
       ? createPortal(
@@ -139,7 +145,6 @@ export function ListingImageGallery({ images, title, unavailableBadge }: Props) 
                 sizes="100vw"
                 quality={78}
                 unoptimized={selectedImage.isPreprocessed}
-                {...imageBlurProps(selectedImage)}
               />
             </div>
             {hasMultipleImages ? (
@@ -180,16 +185,15 @@ export function ListingImageGallery({ images, title, unavailableBadge }: Props) 
   }
 
   return (
-    <div className="space-y-3">
-      <div className="relative">
+    <div className="min-w-0 max-w-full space-y-3 overflow-hidden">
+      <div className="relative flex min-w-0 max-w-full justify-center overflow-hidden">
         <button
           type="button"
           onClick={() => setPreviewOpen(true)}
-          className="group relative block h-80 w-full overflow-hidden rounded-3xl bg-stone-100 md:h-[28rem]"
+          className="listing-gallery-frame group relative block max-w-full overflow-hidden rounded-3xl"
+          style={galleryFrameStyle}
           aria-label={`Open full preview for ${title}`}
         >
-          <ImageBackdrop image={selectedImage} />
-          <span className="absolute inset-0 bg-white/30" aria-hidden="true" />
           <Image
             src={selectedImage.heroUrl}
             alt={`${title} image ${selectedIndex + 1}`}
@@ -198,7 +202,7 @@ export function ListingImageGallery({ images, title, unavailableBadge }: Props) 
             sizes="(max-width: 1024px) 100vw, 780px"
             quality={78}
             unoptimized={selectedImage.isPreprocessed}
-            {...imageBlurProps(selectedImage)}
+            onLoad={(event) => rememberRatio(selectedIndex, event.currentTarget)}
           />
           <span className="pointer-events-none absolute bottom-4 right-4 hidden rounded-full bg-slate-950/70 px-3 py-1.5 text-xs font-bold text-white shadow-sm ring-1 ring-white/10 sm:inline-flex">
             Click to preview
@@ -236,7 +240,7 @@ export function ListingImageGallery({ images, title, unavailableBadge }: Props) 
       </div>
 
       {hasMultipleImages ? (
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden">
           <button
             type="button"
             onClick={() => scrollThumbnails("left")}
@@ -256,24 +260,13 @@ export function ListingImageGallery({ images, title, unavailableBadge }: Props) 
                 key={`${image.cardUrl}-${index}`}
                 type="button"
                 onClick={() => setSelectedIndex(index)}
-                className={`relative h-20 w-28 shrink-0 overflow-hidden rounded-2xl bg-stone-100 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950 sm:h-24 sm:w-36 ${
+                className={`relative h-20 shrink-0 overflow-hidden rounded-2xl shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950 sm:h-24 ${
                   index === selectedIndex ? "ring-2 ring-amber-400 ring-offset-2" : "ring-1 ring-white/50 hover:ring-slate-400"
                 }`}
+                style={{ aspectRatio: measuredRatios[index] ?? storedRatio(image, "card") ?? DEFAULT_IMAGE_RATIO }}
                 aria-label={`Show listing image ${index + 1}`}
                 aria-current={index === selectedIndex ? "true" : undefined}
               >
-                <Image
-                  src={image.cardUrl}
-                  alt=""
-                  aria-hidden="true"
-                  fill
-                  className="scale-110 object-cover opacity-25 blur-lg"
-                  sizes="144px"
-                  quality={60}
-                  unoptimized={image.isPreprocessed}
-                  {...imageBlurProps(image)}
-                />
-                <span className="absolute inset-0 bg-white/25" aria-hidden="true" />
                 <Image
                   src={image.cardUrl}
                   alt={`${title} thumbnail ${index + 1}`}
@@ -282,7 +275,7 @@ export function ListingImageGallery({ images, title, unavailableBadge }: Props) 
                   sizes="144px"
                   quality={70}
                   unoptimized={image.isPreprocessed}
-                  {...imageBlurProps(image)}
+                  onLoad={(event) => rememberRatio(index, event.currentTarget)}
                 />
               </button>
             ))}

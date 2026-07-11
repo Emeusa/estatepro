@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { formatPrice, whatsappLink } from "@/lib/format";
 import { trackListingEvent } from "@/lib/listing-events";
@@ -20,6 +20,12 @@ type Props = {
   initialSaved?: boolean;
   onSavedChange?: (listingId: string, saved: boolean) => void;
 };
+
+const DEFAULT_CARD_IMAGE_RATIO = 4 / 3;
+
+function getCardImageRatio(image: ReturnType<typeof getListingImages>[number] | undefined) {
+  return image?.cardWidth && image.cardHeight ? image.cardWidth / image.cardHeight : DEFAULT_CARD_IMAGE_RATIO;
+}
 
 function ListingPromotionBadge({ label }: { label: string }) {
   if (label === "Sponsored") {
@@ -63,8 +69,10 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
   const images = getListingImages(listing);
   const image = images[0];
   const previewImages = images.slice(1, 4);
-  const previewGridClass =
-    previewImages.length === 1 ? "grid-cols-1" : previewImages.length === 2 ? "grid-cols-2" : "grid-cols-3";
+  const imageCardUrl = image?.cardUrl;
+  const storedMainImageRatio = getCardImageRatio(image);
+  const [mainImageRatio, setMainImageRatio] = useState(() => storedMainImageRatio);
+  const [previewRatios, setPreviewRatios] = useState<Record<number, number>>({});
   const promotionBadge = getListingPromotionBadge(listing);
   const listingHref = `/listings/${listing.id}`;
   const cardRef = useRef<HTMLElement | null>(null);
@@ -90,35 +98,40 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
     return () => observer.disconnect();
   }, [listing.id]);
 
+  useEffect(() => {
+    setMainImageRatio(storedMainImageRatio);
+    setPreviewRatios({});
+  }, [imageCardUrl, storedMainImageRatio]);
+
+  function rememberMainImageRatio(element: HTMLImageElement) {
+    if (element.naturalWidth && element.naturalHeight) {
+      setMainImageRatio(element.naturalWidth / element.naturalHeight);
+    }
+  }
+
+  function rememberPreviewRatio(index: number, element: HTMLImageElement) {
+    if (!element.naturalWidth || !element.naturalHeight) {
+      return;
+    }
+    const ratio = element.naturalWidth / element.naturalHeight;
+    setPreviewRatios((current) => (current[index] === ratio ? current : { ...current, [index]: ratio }));
+  }
+
   return (
     <article ref={cardRef} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-      <div className={`relative bg-stone-100 ${previewImages.length ? "h-36" : "h-52"}`}>
+      <div className="relative w-full overflow-hidden" style={{ aspectRatio: mainImageRatio }}>
         <Link href={listingHref} aria-label={`View ${listing.title}`} className="group relative block h-full">
           {image ? (
-            <>
-              <Image
-                src={image.cardUrl}
-                alt=""
-                aria-hidden="true"
-                fill
-                className="scale-110 object-cover opacity-25 blur-lg"
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
-                quality={60}
-                unoptimized={image.isPreprocessed}
-                {...(image.blurDataUrl ? { placeholder: "blur" as const, blurDataURL: image.blurDataUrl } : {})}
-              />
-              <span className="absolute inset-0 bg-white/20" aria-hidden="true" />
-              <Image
-                src={image.cardUrl}
-                alt={listing.title}
-                fill
-                className="object-contain transition duration-300 group-hover:opacity-95"
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
-                quality={70}
-                unoptimized={image.isPreprocessed}
-                {...(image.blurDataUrl ? { placeholder: "blur" as const, blurDataURL: image.blurDataUrl } : {})}
-              />
-            </>
+            <Image
+              src={image.cardUrl}
+              alt={listing.title}
+              fill
+              className="object-contain transition duration-300 group-hover:opacity-95"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
+              quality={70}
+              unoptimized={image.isPreprocessed}
+              onLoad={(event) => rememberMainImageRatio(event.currentTarget)}
+            />
           ) : null}
           {images.length > 1 ? (
             <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-slate-950/80 px-2.5 py-1 text-xs font-bold text-white shadow-sm">
@@ -143,26 +156,15 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
         />
       </div>
       {previewImages.length ? (
-        <div className={`grid ${previewGridClass} gap-2 bg-white px-3 pt-3`}>
+        <div className="flex min-w-0 max-w-full items-start gap-2 overflow-hidden bg-white px-3 pt-3">
           {previewImages.map((preview, index) => (
             <Link
               key={`${preview.cardUrl}-${index}`}
               href={listingHref}
               aria-label={`View photo ${index + 2} for ${listing.title}`}
-              className="group relative h-12 overflow-hidden rounded-xl bg-stone-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
+              className="group relative h-12 max-w-full shrink-0 overflow-hidden rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
+              style={{ aspectRatio: previewRatios[index] ?? getCardImageRatio(preview) }}
             >
-              <Image
-                src={preview.cardUrl}
-                alt=""
-                aria-hidden="true"
-                fill
-                className="scale-110 object-cover opacity-25 blur-md"
-                sizes="120px"
-                quality={60}
-                unoptimized={preview.isPreprocessed}
-                {...(preview.blurDataUrl ? { placeholder: "blur" as const, blurDataURL: preview.blurDataUrl } : {})}
-              />
-              <span className="absolute inset-0 bg-white/20" aria-hidden="true" />
               <Image
                 src={preview.cardUrl}
                 alt={listing.title}
@@ -171,7 +173,7 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
                 sizes="120px"
                 quality={70}
                 unoptimized={preview.isPreprocessed}
-                {...(preview.blurDataUrl ? { placeholder: "blur" as const, blurDataURL: preview.blurDataUrl } : {})}
+                onLoad={(event) => rememberPreviewRatio(index, event.currentTarget)}
               />
             </Link>
           ))}

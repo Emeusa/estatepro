@@ -2,6 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+.listing-gallery-frame {
+  width: min(100%, var(--listing-image-mobile-width));
+  aspect-ratio: var(--listing-image-ratio);
+  max-height: 70vh;
+}
+
+@media (min-width: 768px) {
+  .listing-gallery-frame {
+    width: min(100%, var(--listing-image-desktop-width));
+    max-height: 75vh;
+  }
+}
+
 @layer base {
   :root {
     color-scheme: light;

@@ -5,6 +5,10 @@ export type ListingImageSource = {
   cardUrl: string;
   blurDataUrl: string | null;
   isPreprocessed: boolean;
+  width: number | null;
+  height: number | null;
+  cardWidth: number | null;
+  cardHeight: number | null;
 };
 
 export function getListingImages(
@@ -17,7 +21,11 @@ export function getListingImages(
         heroUrl: image.heroUrl,
         cardUrl: image.cardUrl,
         blurDataUrl: image.blurDataUrl,
-        isPreprocessed: true
+        isPreprocessed: true,
+        width: image.width,
+        height: image.height,
+        cardWidth: image.cardWidth,
+        cardHeight: image.cardHeight
       }));
   }
 
@@ -25,7 +33,11 @@ export function getListingImages(
     heroUrl: url,
     cardUrl: url,
     blurDataUrl: null,
-    isPreprocessed: false
+    isPreprocessed: false,
+    width: null,
+    height: null,
+    cardWidth: null,
+    cardHeight: null
   }));
 }
 
