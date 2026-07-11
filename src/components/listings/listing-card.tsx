@@ -114,7 +114,7 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
               src={image.cardUrl}
               alt={listing.title}
               fill
-              className="object-contain transition duration-300 group-hover:opacity-95"
+              className="object-cover transition duration-300 group-hover:scale-[1.02] group-hover:opacity-95"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
               quality={70}
               unoptimized={image.isPreprocessed}
@@ -156,7 +156,7 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
                 src={preview.cardUrl}
                 alt={listing.title}
                 fill
-                className="object-contain transition duration-300 group-hover:opacity-95"
+                className="object-cover transition duration-300 group-hover:scale-[1.03] group-hover:opacity-95"
                 sizes="120px"
                 quality={70}
                 unoptimized={preview.isPreprocessed}
