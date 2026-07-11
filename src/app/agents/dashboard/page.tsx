@@ -56,6 +56,7 @@ type StatCardProps = {
 const navItems = [
   { label: "Dashboard", href: "#dashboard" },
   { label: "My Listings", href: "/agents/listings" },
+  { label: "Saved Listings", href: "/saved-listings" },
   { label: "Subscription", href: "#subscription" },
   { label: "My Profile", href: "/agents/profile" }
 ];

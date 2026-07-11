@@ -11,6 +11,23 @@ const normalizedEmailSchema = z
   .email()
   .max(254);
 
+const optionalPhoneSchema = z
+  .preprocess((value) => {
+    if (value === undefined || value === null) {
+      return null;
+    }
+    if (typeof value === "string" && !value.trim()) {
+      return null;
+    }
+    return value;
+  }, z.union([z.null(), z.string().trim().min(10).max(20).regex(/^[+\d\s().-]+$/)]))
+  .transform((value) => {
+    if (value === null) {
+      return null;
+    }
+    return normalizePhone(value);
+  });
+
 export const agentRegistrationSchema = z.object({
   email: normalizedEmailSchema,
   password: z.string().min(6).max(72),
@@ -34,16 +51,7 @@ export const clientRegistrationSchema = z.object({
       }
       return sanitizeText(value);
     }),
-  phone: z
-    .string()
-    .trim()
-    .optional()
-    .transform((value) => {
-      if (!value) {
-        return null;
-      }
-      return normalizePhone(value);
-    })
+  phone: optionalPhoneSchema
 }).strict();
 
 export const agentRegistrationRequestSchema = agentRegistrationSchema
@@ -59,16 +67,7 @@ export const clientRegistrationRequestSchema = clientRegistrationSchema
 
 export const userProfileSchema = z.object({
   fullName: z.string().min(2).max(120).transform((value) => toNameCase(sanitizeText(value))),
-  phone: z
-    .string()
-    .trim()
-    .optional()
-    .transform((value) => {
-      if (!value) {
-        return null;
-      }
-      return normalizePhone(value);
-    })
+  phone: optionalPhoneSchema
 }).strict();
 
 export const agentModerationSchema = z.object({

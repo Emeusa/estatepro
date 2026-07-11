@@ -198,6 +198,13 @@ create table if not exists public.listing_reports (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
+create table if not exists public.saved_listings (
+  user_id uuid not null references public.users (id) on delete cascade,
+  listing_id uuid not null references public.listings (id) on delete cascade,
+  created_at timestamptz not null default timezone('utc', now()),
+  primary key (user_id, listing_id)
+);
+
 create table if not exists public.agent_daily_metrics (
   agent_id uuid not null references public.users (id) on delete cascade,
   metric_date date not null,
@@ -668,6 +675,12 @@ create index if not exists listing_reports_listing_idx
 create index if not exists listing_reports_status_idx
   on public.listing_reports (status, created_at desc);
 
+create index if not exists saved_listings_user_created_idx
+  on public.saved_listings (user_id, created_at desc);
+
+create index if not exists saved_listings_listing_idx
+  on public.saved_listings (listing_id);
+
 create index if not exists agent_daily_metrics_date_idx
   on public.agent_daily_metrics (metric_date desc, agent_id);
 
@@ -952,6 +965,7 @@ alter table public.promotion_credit_events enable row level security;
 alter table public.listing_promotions enable row level security;
 alter table public.listing_events enable row level security;
 alter table public.listing_reports enable row level security;
+alter table public.saved_listings enable row level security;
 alter table public.agent_daily_metrics enable row level security;
 alter table public.support_requests enable row level security;
 alter table public.security_events enable row level security;
@@ -983,6 +997,10 @@ drop policy if exists "admins can read listing events" on public.listing_events;
 drop policy if exists "users can create listing reports" on public.listing_reports;
 drop policy if exists "users can read own listing reports" on public.listing_reports;
 drop policy if exists "admins can manage listing reports" on public.listing_reports;
+drop policy if exists "users can read own saved listings" on public.saved_listings;
+drop policy if exists "users can save own listings" on public.saved_listings;
+drop policy if exists "users can remove own saved listings" on public.saved_listings;
+drop policy if exists "admins can manage saved listings" on public.saved_listings;
 drop policy if exists "agents can read own daily metrics" on public.agent_daily_metrics;
 drop policy if exists "admins can read daily metrics" on public.agent_daily_metrics;
 drop policy if exists "agents can create own support requests" on public.support_requests;
@@ -1209,6 +1227,47 @@ create policy "users can read own listing reports"
 
 create policy "admins can manage listing reports"
   on public.listing_reports for all
+  using (
+    exists (
+      select 1 from public.users
+      where users.id = auth.uid()
+        and users.role = 'admin'
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.users
+      where users.id = auth.uid()
+        and users.role = 'admin'
+    )
+  );
+
+create policy "users can read own saved listings"
+  on public.saved_listings for select
+  using (auth.uid() = user_id);
+
+create policy "users can save own listings"
+  on public.saved_listings for insert
+  with check (
+    auth.uid() = user_id
+    and exists (
+      select 1
+      from public.listings
+      join public.agents
+        on agents.id = listings.agent_id
+      where listings.id = saved_listings.listing_id
+        and listings.status = 'active'
+        and agents.verification_status = 'approved'
+        and agents.is_blocked = false
+    )
+  );
+
+create policy "users can remove own saved listings"
+  on public.saved_listings for delete
+  using (auth.uid() = user_id);
+
+create policy "admins can manage saved listings"
+  on public.saved_listings for all
   using (
     exists (
       select 1 from public.users

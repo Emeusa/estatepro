@@ -149,10 +149,6 @@ export default function TermsPage() {
             </a>
             .
           </p>
-          <p className="mt-3 rounded-2xl bg-slate-950 px-4 py-3 text-slate-100">
-            These terms are practical platform rules and should be reviewed by a qualified Nigerian lawyer before public
-            fraud-report publication or major paid-plan launch.
-          </p>
         </section>
       </div>
     </article>

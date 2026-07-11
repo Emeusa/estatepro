@@ -160,10 +160,6 @@ export default function PrivacyPage() {
             </Link>
             .
           </p>
-          <p className="mt-3 rounded-2xl bg-slate-950 px-4 py-3 text-slate-100">
-            This policy is a practical privacy baseline and should be reviewed by a qualified Nigerian lawyer or privacy
-            professional before high-volume launch or public fraud-report publication.
-          </p>
         </section>
       </div>
     </article>

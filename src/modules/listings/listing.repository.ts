@@ -348,6 +348,24 @@ export async function listPublicListingsByAgent(agentId: string) {
   return toPublicListingCardRecords((data ?? []).map(toListingRecord));
 }
 
+export async function listPublicListingCardsByIds(listingIds: string[]) {
+  const uniqueListingIds = Array.from(new Set(listingIds.filter(Boolean)));
+  if (!uniqueListingIds.length) {
+    return [];
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.from("public_listings").select("*").in("id", uniqueListingIds);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const cards = await toPublicListingCardRecords((data ?? []).map(toListingRecord));
+  const byId = new Map(cards.map((listing) => [listing.id, listing]));
+  return uniqueListingIds.map((listingId) => byId.get(listingId)).filter((listing): listing is PublicListingCardRecord => Boolean(listing));
+}
+
 export async function getPublicAgentSummary(agentId: string): Promise<PublicAgentSummary | null> {
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase

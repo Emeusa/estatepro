@@ -22,6 +22,7 @@ const marketLinks = [
 const agentDashboardLinks = [
   { label: "Dashboard", href: "/agents/dashboard#dashboard" },
   { label: "My Listings", href: "/agents/listings" },
+  { label: "Saved Listings", href: "/saved-listings" },
   { label: "Subscription", href: "/agents/dashboard#subscription" },
   { label: "My Profile", href: "/agents/profile" }
 ];

@@ -17,24 +17,6 @@ const popularKeywords = [
 
 const socialLinks = [
   {
-    label: "Facebook",
-    href: "https://www.facebook.com",
-    icon: (
-      <path d="M13.5 20v-7h2.3l.4-2.7h-2.7V8.6c0-.8.2-1.3 1.4-1.3h1.5V4.9c-.7-.1-1.5-.2-2.2-.2-2.2 0-3.8 1.4-3.8 3.8v1.8H8v2.7h2.4v7h3.1Z" />
-    )
-  },
-  {
-    label: "Instagram",
-    href: "https://www.instagram.com",
-    icon: (
-      <>
-        <rect x="5" y="5" width="14" height="14" rx="4" />
-        <circle cx="12" cy="12" r="3.2" />
-        <circle cx="16.4" cy="7.6" r="1" />
-      </>
-    )
-  },
-  {
     label: "X",
     href: "https://x.com",
     icon: <path d="m5 5 5.5 7.4L5.4 19h2.4l3.8-4.9 3.6 4.9H19l-5.9-8L17.8 5h-2.4l-3.3 4.3L8.9 5H5Z" />

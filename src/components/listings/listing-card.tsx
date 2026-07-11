@@ -11,10 +11,14 @@ import { getListingPromotionBadge } from "@/lib/listing-visibility";
 import { getUnavailableBadge, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
 import { getListingQualityBadges } from "@/lib/listing-quality";
 import { PublicListingCardRecord } from "@/lib/types";
+import { VerifiedBadgeIcon } from "@/components/agents/verified-badge";
 import { getQualityIconForLabel, QualityIcon } from "@/components/listings/listing-quality-icons";
+import { SaveListingButton } from "@/components/listings/save-listing-button";
 
 type Props = {
   listing: PublicListingCardRecord;
+  initialSaved?: boolean;
+  onSavedChange?: (listingId: string, saved: boolean) => void;
 };
 
 function ListingPromotionBadge({ label }: { label: string }) {
@@ -43,19 +47,17 @@ function ListingPromotionBadge({ label }: { label: string }) {
 function VerifiedAgentBadge({ agentName }: { agentName: string | null }) {
   return (
     <span
-      className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[0.62rem] font-black uppercase tracking-[0.07em] text-emerald-700 ring-1 ring-emerald-100"
+      className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[0.62rem] font-black uppercase tracking-[0.07em] text-slate-800 shadow-sm ring-1 ring-emerald-200"
       title={agentName ? `Verified agent: ${agentName}` : "Verified agent"}
       aria-label={agentName ? `Verified agent ${agentName}` : "Verified agent"}
     >
-      <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0 fill-current">
-        <path d="M12 2.25 19.25 5v5.45c0 4.66-2.9 8.87-7.25 11.3-4.35-2.43-7.25-6.64-7.25-11.3V5L12 2.25Zm3.62 7.47a1 1 0 0 0-1.41-1.41l-3.3 3.29-1.12-1.11a1 1 0 1 0-1.41 1.41l1.82 1.82a1 1 0 0 0 1.41 0l4.01-4Z" />
-      </svg>
-      <span className="truncate">{agentName ?? "Verified agent"}</span>
+      <VerifiedBadgeIcon className="h-4 w-4 ring-1 ring-white" />
+      <span className="truncate text-emerald-800">{agentName ?? "Verified agent"}</span>
     </span>
   );
 }
 
-export function ListingCard({ listing }: Props) {
+export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
   const unavailableBadge = getUnavailableBadge(listing);
   const qualityBadges = getListingQualityBadges(listing).slice(0, 4);
   const images = getListingImages(listing);
@@ -90,40 +92,42 @@ export function ListingCard({ listing }: Props) {
 
   return (
     <article ref={cardRef} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-      <Link
-        href={listingHref}
-        aria-label={`View ${listing.title}`}
-        className={`group relative block bg-slate-100 ${previewImages.length ? "h-36" : "h-52"}`}
-      >
-        {image ? (
-          <Image
-            src={image.cardUrl}
-            alt={listing.title}
-            fill
-            className="object-cover transition duration-300 group-hover:scale-[1.03]"
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
-            quality={70}
-            unoptimized={image.isPreprocessed}
-            {...(image.blurDataUrl ? { placeholder: "blur" as const, blurDataURL: image.blurDataUrl } : {})}
-          />
-        ) : null}
-        {images.length > 1 ? (
-          <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-slate-950/80 px-2.5 py-1 text-xs font-bold text-white shadow-sm">
-            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current">
-              <path d="M7 5.5 8.4 4h7.2L17 5.5h2.5A2.5 2.5 0 0 1 22 8v9a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 2 17V8a2.5 2.5 0 0 1 2.5-2.5H7Zm5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0-1.8a2.2 2.2 0 1 1 0-4.4 2.2 2.2 0 0 1 0 4.4Z" />
-            </svg>
-            {images.length}
-          </span>
-        ) : null}
-        {unavailableBadge ? (
-          <span className="absolute left-3 top-3 rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white shadow-sm">
-            {unavailableBadge}
-          </span>
-        ) : null}
-        {promotionBadge ? (
-          <ListingPromotionBadge label={promotionBadge} />
-        ) : null}
-      </Link>
+      <div className={`relative bg-slate-100 ${previewImages.length ? "h-36" : "h-52"}`}>
+        <Link href={listingHref} aria-label={`View ${listing.title}`} className="group relative block h-full">
+          {image ? (
+            <Image
+              src={image.cardUrl}
+              alt={listing.title}
+              fill
+              className="object-cover transition duration-300 group-hover:scale-[1.03]"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
+              quality={70}
+              unoptimized={image.isPreprocessed}
+              {...(image.blurDataUrl ? { placeholder: "blur" as const, blurDataURL: image.blurDataUrl } : {})}
+            />
+          ) : null}
+          {images.length > 1 ? (
+            <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-slate-950/80 px-2.5 py-1 text-xs font-bold text-white shadow-sm">
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current">
+                <path d="M7 5.5 8.4 4h7.2L17 5.5h2.5A2.5 2.5 0 0 1 22 8v9a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 2 17V8a2.5 2.5 0 0 1 2.5-2.5H7Zm5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0-1.8a2.2 2.2 0 1 1 0-4.4 2.2 2.2 0 0 1 0 4.4Z" />
+              </svg>
+              {images.length}
+            </span>
+          ) : null}
+          {unavailableBadge ? (
+            <span className="absolute left-3 top-14 rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white shadow-sm">
+              {unavailableBadge}
+            </span>
+          ) : null}
+          {promotionBadge ? <ListingPromotionBadge label={promotionBadge} /> : null}
+        </Link>
+        <SaveListingButton
+          listingId={listing.id}
+          initialSaved={initialSaved}
+          onSavedChange={(saved) => onSavedChange?.(listing.id, saved)}
+          className="absolute left-3 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:scale-105 hover:text-rose-600 disabled:cursor-wait disabled:opacity-70"
+        />
+      </div>
       {previewImages.length ? (
         <div className={`grid ${previewGridClass} gap-2 bg-white px-3 pt-3`}>
           {previewImages.map((preview, index) => (

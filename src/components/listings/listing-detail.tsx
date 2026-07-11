@@ -4,6 +4,7 @@ import Link from "next/link";
 import { VerifiedAgentName } from "@/components/agents/verified-agent-name";
 import { ListingContactActions } from "@/components/listings/listing-contact-actions";
 import { ListingDetailEventTracker } from "@/components/listings/listing-detail-event-tracker";
+import { SaveListingButton } from "@/components/listings/save-listing-button";
 import { SimilarListingCard } from "@/components/listings/similar-listing-card";
 import { formatDate, formatPrice, whatsappLink } from "@/lib/format";
 import { getListingImages } from "@/lib/listing-images";
@@ -64,7 +65,10 @@ export function ListingDetail({ details, similarListings = [] }: Props) {
           ))}
         </div>
         <div className="rounded-3xl bg-white/65 p-6 shadow-sm">
-          <h1 className="text-2xl font-semibold text-slate-950">{listing.title}</h1>
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="text-2xl font-semibold text-slate-950">{listing.title}</h1>
+            <SaveListingButton listingId={listing.id} />
+          </div>
           <p className="mt-2 text-sm text-slate-600">
             {listing.location.area}, {listing.location.city}, {listing.location.state}
           </p>
@@ -99,6 +103,9 @@ export function ListingDetail({ details, similarListings = [] }: Props) {
             phone={listing.contactPhone}
             title={listing.title}
             whatsappHref={listingWhatsappHref}
+            price={listing.price}
+            locationText={`${listing.location.area}, ${listing.location.city}, ${listing.location.state}`}
+            thumbnailUrl={heroImage?.cardUrl ?? null}
           />
           <Link
             href={`/agents/${listing.agentId}/listings`}

@@ -77,6 +77,14 @@ function normalizeEmailInput(value: string) {
   return value.trim().toLowerCase();
 }
 
+function getSafeNextPath() {
+  const next = new URLSearchParams(window.location.search).get("next");
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/login")) {
+    return null;
+  }
+  return next;
+}
+
 function redirectToCheckEmail(email: string, accountType: ConfirmationAccountType) {
   try {
     window.sessionStorage.setItem(CONFIRMATION_EMAIL_STORAGE_KEY, email);
@@ -107,6 +115,12 @@ async function redirectByRole() {
 
   if (!response.user) {
     throw new Error("Account profile was not found.");
+  }
+
+  const nextPath = getSafeNextPath();
+  if (nextPath) {
+    window.location.assign(nextPath);
+    return;
   }
 
   if (response.user.role === "agent") {
@@ -304,6 +318,7 @@ export function ClientRegisterForm() {
     setIsSubmitting(true);
 
     try {
+      const phone = form.get("phone")?.toString().trim() ?? "";
       await apiRequest("/api/auth/register", {
         method: "POST",
         retries: 0,
@@ -311,7 +326,7 @@ export function ClientRegisterForm() {
           email,
           password,
           fullName: undefined,
-          phone: form.get("phone")?.toString().trim() || undefined,
+          phone: phone || null,
           ...readBotFields(form)
         })
       });

@@ -18,7 +18,7 @@ type MetricRow = {
 
 type EventRow = {
   listing_id: string;
-  event_type: "impression" | "detail_view" | "whatsapp_click" | "phone_click";
+  event_type: "impression" | "detail_view" | "whatsapp_click" | "phone_click" | "save" | "report";
 };
 
 function startDateForRange(range: AnalyticsRange) {
@@ -110,7 +110,7 @@ export async function getAgentAnalytics(agentId: string, range: AnalyticsRange =
 
 export async function recordListingEvent(input: {
   listingId: string;
-  eventType: "impression" | "detail_view" | "whatsapp_click" | "phone_click";
+  eventType: "impression" | "detail_view" | "whatsapp_click" | "phone_click" | "save" | "report";
   sessionId?: string | null;
   ipHash?: string | null;
 }) {

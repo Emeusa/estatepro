@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 import { apiRequest } from "@/lib/api";
 import { supabase } from "@/lib/supabase/client";
@@ -126,9 +127,14 @@ export default function ClientDashboardPage() {
           <p className="mt-2 text-sm leading-7 text-slate-600">
             Update your profile details here or sign out of your account.
           </p>
-          <button className="button-secondary mt-5" onClick={logout}>
-            Log out
-          </button>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link className="button-primary" href="/saved-listings">
+              Saved Listings
+            </Link>
+            <button className="button-secondary" onClick={logout}>
+              Log out
+            </button>
+          </div>
         </div>
       </div>
       <form onSubmit={saveProfile} className="space-y-4 rounded-3xl bg-white p-6 shadow-sm">
