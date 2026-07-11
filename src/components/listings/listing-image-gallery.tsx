@@ -16,6 +16,22 @@ function imageBlurProps(image: ListingImageSource) {
   return image.blurDataUrl ? { placeholder: "blur" as const, blurDataURL: image.blurDataUrl } : {};
 }
 
+function ImageBackdrop({ image }: { image: ListingImageSource }) {
+  return (
+    <Image
+      src={image.heroUrl}
+      alt=""
+      aria-hidden="true"
+      fill
+      className="scale-110 object-cover opacity-25 blur-xl"
+      sizes="(max-width: 1024px) 100vw, 780px"
+      quality={70}
+      unoptimized={image.isPreprocessed}
+      {...imageBlurProps(image)}
+    />
+  );
+}
+
 export function ListingImageGallery({ images, title, unavailableBadge }: Props) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -157,7 +173,7 @@ export function ListingImageGallery({ images, title, unavailableBadge }: Props) 
 
   if (!selectedImage) {
     return (
-      <div className="flex h-72 items-center justify-center rounded-3xl bg-slate-900 text-sm font-semibold text-slate-300 md:h-[28rem]">
+      <div className="flex h-72 items-center justify-center rounded-3xl bg-stone-100 text-sm font-semibold text-slate-500 md:h-[28rem]">
         No image available
       </div>
     );
@@ -169,9 +185,11 @@ export function ListingImageGallery({ images, title, unavailableBadge }: Props) 
         <button
           type="button"
           onClick={() => setPreviewOpen(true)}
-          className="group relative block h-80 w-full overflow-hidden rounded-3xl bg-slate-950 md:h-[28rem]"
+          className="group relative block h-80 w-full overflow-hidden rounded-3xl bg-stone-100 md:h-[28rem]"
           aria-label={`Open full preview for ${title}`}
         >
+          <ImageBackdrop image={selectedImage} />
+          <span className="absolute inset-0 bg-white/30" aria-hidden="true" />
           <Image
             src={selectedImage.heroUrl}
             alt={`${title} image ${selectedIndex + 1}`}
@@ -238,12 +256,24 @@ export function ListingImageGallery({ images, title, unavailableBadge }: Props) 
                 key={`${image.cardUrl}-${index}`}
                 type="button"
                 onClick={() => setSelectedIndex(index)}
-                className={`relative h-20 w-28 shrink-0 overflow-hidden rounded-2xl bg-slate-950 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950 sm:h-24 sm:w-36 ${
+                className={`relative h-20 w-28 shrink-0 overflow-hidden rounded-2xl bg-stone-100 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950 sm:h-24 sm:w-36 ${
                   index === selectedIndex ? "ring-2 ring-amber-400 ring-offset-2" : "ring-1 ring-white/50 hover:ring-slate-400"
                 }`}
                 aria-label={`Show listing image ${index + 1}`}
                 aria-current={index === selectedIndex ? "true" : undefined}
               >
+                <Image
+                  src={image.cardUrl}
+                  alt=""
+                  aria-hidden="true"
+                  fill
+                  className="scale-110 object-cover opacity-25 blur-lg"
+                  sizes="144px"
+                  quality={60}
+                  unoptimized={image.isPreprocessed}
+                  {...imageBlurProps(image)}
+                />
+                <span className="absolute inset-0 bg-white/25" aria-hidden="true" />
                 <Image
                   src={image.cardUrl}
                   alt={`${title} thumbnail ${index + 1}`}

@@ -50,7 +50,7 @@ function getInitialTab(category?: string, propertyType?: string) {
 
 function SearchIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 fill-none stroke-current stroke-[2.4]">
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 fill-none stroke-current stroke-[2.4] md:h-4 md:w-4">
       <circle cx="11" cy="11" r="6.5" />
       <path d="m16 16 4 4" />
     </svg>
@@ -62,7 +62,7 @@ function SelectChevron({ isSide }: { isSide: boolean }) {
     <svg
       viewBox="0 0 20 20"
       aria-hidden="true"
-      className={`pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2 fill-none stroke-current stroke-2 ${
+      className={`pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2 fill-none stroke-current stroke-2 md:h-3.5 md:w-3.5 ${
         isSide ? "right-1" : "right-1 md:right-3"
       }`}
     >
@@ -149,14 +149,14 @@ export function FilterBar({
 
   const selectClass = isSide
     ? "w-full cursor-pointer appearance-none bg-transparent py-2.5 pr-7 text-sm font-bold text-slate-900 outline-none disabled:cursor-not-allowed disabled:text-slate-400 [&>option]:bg-white [&>option]:text-slate-950"
-    : "w-full min-w-0 cursor-pointer appearance-none overflow-hidden text-ellipsis whitespace-nowrap bg-transparent py-3 pr-8 text-sm font-bold text-white outline-none disabled:cursor-not-allowed disabled:text-white/55 md:py-2.5 [&>option]:bg-white [&>option]:text-slate-950";
+    : "w-full min-w-0 cursor-pointer appearance-none overflow-hidden text-ellipsis whitespace-nowrap bg-transparent py-3 pr-8 text-sm font-bold text-white outline-none disabled:cursor-not-allowed disabled:text-white/55 md:py-1.5 md:pr-6 md:text-[0.72rem] [&>option]:bg-white [&>option]:text-slate-950";
   const fieldWrapClass = isSide
     ? "relative cursor-pointer rounded-2xl border border-slate-200 bg-white px-3 text-slate-900 shadow-sm"
-    : "relative min-w-0 cursor-pointer border-b border-white/70 px-2 text-white md:rounded-2xl md:border md:border-white/35 md:bg-slate-950/20 md:px-3 md:shadow-sm md:backdrop-blur-sm";
+    : "relative min-w-0 cursor-pointer border-b border-white/70 px-2 text-white md:rounded-xl md:border md:border-white/30 md:bg-slate-950/16 md:px-2.5 md:shadow-sm md:backdrop-blur-sm";
   const advancedFieldWrapClass = `${fieldWrapClass} ${isSide || showMoreFilters ? "block" : "hidden md:block"}`;
   const priceInputClass = isSide
     ? "w-full bg-transparent py-2.5 text-sm font-bold text-slate-900 outline-none placeholder:text-slate-500"
-    : "w-full min-w-0 bg-transparent py-3 text-sm font-bold text-white outline-none placeholder:text-white md:py-2.5";
+    : "w-full min-w-0 bg-transparent py-3 text-sm font-bold text-white outline-none placeholder:text-white md:py-1.5 md:text-[0.72rem]";
 
   return (
     <form
@@ -164,14 +164,14 @@ export function FilterBar({
       className={
         isSide
           ? "w-full overflow-hidden rounded-[1.35rem] bg-slate-50 p-3"
-          : "w-full overflow-hidden bg-transparent p-0 md:rounded-[1.5rem] md:bg-white/15 md:px-5 md:py-5"
+          : "w-full overflow-hidden bg-transparent p-0 md:rounded-[1rem] md:bg-white/12 md:px-3 md:py-3"
       }
     >
       <div
         className={
           isSide
             ? "grid grid-cols-2 gap-2 text-center text-xs font-black uppercase tracking-[0.08em] text-slate-700"
-            : "grid grid-cols-3 border-b border-white/55 text-center text-sm font-bold text-white md:grid-cols-4 md:border-white/45 md:text-base"
+            : "grid grid-cols-3 border-b border-white/55 text-center text-sm font-bold text-white md:grid-cols-4 md:border-white/45"
         }
       >
         {tabs.map((tab) => (
@@ -185,7 +185,7 @@ export function FilterBar({
                       ? "border-amber-300 bg-amber-100 text-slate-950"
                       : "border-slate-200 bg-white text-slate-700 hover:border-teal-200 hover:text-teal-800"
                   }`
-                : `relative cursor-pointer px-2 pb-3 pt-0 transition md:px-6 md:pb-4 md:pt-5 ${
+                : `relative cursor-pointer px-2 pb-3 pt-0 transition md:px-4 md:pb-2.5 md:pt-3 ${
                     activeTab === tab.label ? "text-amber-100" : "text-white"
                   } ${tab.label === "Short Let" ? "hidden md:block" : ""}`
             }
@@ -203,19 +203,19 @@ export function FilterBar({
         ))}
       </div>
 
-      <div className={isSide ? "mt-3 flex flex-col gap-3" : "mt-8 flex flex-col gap-4 md:mt-4"}>
+      <div className={isSide ? "mt-3 flex flex-col gap-3" : "mt-8 flex flex-col gap-4 md:mt-3 md:gap-2.5"}>
         <div className={isSide ? "grid gap-3" : "flex flex-col gap-4 md:flex-row md:gap-0"}>
           <label
             className={
               isSide
                 ? "relative flex min-h-12 flex-1 items-center rounded-2xl border border-slate-200 bg-white px-4 text-slate-900 shadow-sm"
-                : "relative flex min-h-14 flex-1 items-center rounded-md border border-[#080f3d] bg-white px-4 text-[#080f3d] md:rounded-l-xl md:rounded-r-none md:px-5"
+                : "relative flex min-h-14 flex-1 items-center rounded-md border border-[#080f3d] bg-white px-4 text-[#080f3d] md:min-h-9 md:rounded-l-xl md:rounded-r-none md:px-3"
             }
           >
             <SearchIcon />
             <input
               aria-label="Search listings"
-              className="ml-3 w-full bg-transparent text-sm text-slate-950 outline-none placeholder:text-slate-400 md:text-base"
+              className="ml-3 w-full bg-transparent text-sm text-slate-950 outline-none placeholder:text-slate-400 md:text-sm"
               placeholder="search sale"
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
@@ -225,7 +225,7 @@ export function FilterBar({
             className={
               isSide
                 ? "min-h-11 cursor-pointer rounded-2xl bg-[#430078] px-6 text-sm font-black text-white shadow-sm transition hover:bg-[#530096]"
-                : "hidden min-h-10 cursor-pointer rounded-md bg-[#430078] px-8 text-sm font-bold text-white shadow-sm md:block md:min-h-14 md:rounded-l-none md:rounded-r-xl md:px-10 md:text-base"
+                : "hidden min-h-10 cursor-pointer rounded-md bg-[#430078] px-8 text-sm font-bold text-white shadow-sm md:block md:min-h-9 md:rounded-l-none md:rounded-r-xl md:px-7 md:text-sm"
             }
           >
             Search
@@ -236,7 +236,7 @@ export function FilterBar({
           className={
             isSide
               ? "grid gap-3"
-              : "grid grid-cols-2 gap-x-4 gap-y-4 pb-2 md:grid-cols-4 md:gap-3 md:pb-0 2xl:grid-cols-8"
+              : "grid grid-cols-2 gap-x-4 gap-y-4 pb-2 md:grid-cols-4 md:gap-2 md:pb-0 2xl:grid-cols-8"
           }
         >
           <label className={fieldWrapClass}>
@@ -410,7 +410,7 @@ export function FilterBar({
           </button>
         </div>
       </div>
-      {!isSide ? <div className="mt-6 hidden h-px w-full bg-white/40 md:block" aria-hidden="true" /> : null}
+      {!isSide ? <div className="mt-3 hidden h-px w-full bg-white/40 md:block" aria-hidden="true" /> : null}
     </form>
   );
 }

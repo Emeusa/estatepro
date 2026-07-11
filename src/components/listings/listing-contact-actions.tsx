@@ -146,7 +146,7 @@ export function ListingContactActions({
           </button>
           <a
             href={`tel:${phone}`}
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-red-600 px-6 py-3 text-sm font-black text-white shadow-sm transition hover:bg-red-700"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
             onClick={() => trackListingEvent(listingId, "phone_click")}
           >
             <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-current">
@@ -158,7 +158,7 @@ export function ListingContactActions({
             href={whatsappHref}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-emerald-600 px-6 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700"
             onClick={() => trackListingEvent(listingId, "whatsapp_click")}
           >
             <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-current">
@@ -209,7 +209,7 @@ export function ListingContactActions({
           className="flex w-full items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-bold text-white"
           onClick={() => trackListingEvent(listingId, "phone_click")}
         >
-          Call {phone}
+          Call agent
         </a>
         <a
           href={whatsappHref}

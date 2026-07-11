@@ -92,19 +92,33 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
 
   return (
     <article ref={cardRef} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-      <div className={`relative bg-slate-950 ${previewImages.length ? "h-36" : "h-52"}`}>
+      <div className={`relative bg-stone-100 ${previewImages.length ? "h-36" : "h-52"}`}>
         <Link href={listingHref} aria-label={`View ${listing.title}`} className="group relative block h-full">
           {image ? (
-            <Image
-              src={image.cardUrl}
-              alt={listing.title}
-              fill
-              className="object-contain transition duration-300 group-hover:opacity-95"
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
-              quality={70}
-              unoptimized={image.isPreprocessed}
-              {...(image.blurDataUrl ? { placeholder: "blur" as const, blurDataURL: image.blurDataUrl } : {})}
-            />
+            <>
+              <Image
+                src={image.cardUrl}
+                alt=""
+                aria-hidden="true"
+                fill
+                className="scale-110 object-cover opacity-25 blur-lg"
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
+                quality={60}
+                unoptimized={image.isPreprocessed}
+                {...(image.blurDataUrl ? { placeholder: "blur" as const, blurDataURL: image.blurDataUrl } : {})}
+              />
+              <span className="absolute inset-0 bg-white/20" aria-hidden="true" />
+              <Image
+                src={image.cardUrl}
+                alt={listing.title}
+                fill
+                className="object-contain transition duration-300 group-hover:opacity-95"
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
+                quality={70}
+                unoptimized={image.isPreprocessed}
+                {...(image.blurDataUrl ? { placeholder: "blur" as const, blurDataURL: image.blurDataUrl } : {})}
+              />
+            </>
           ) : null}
           {images.length > 1 ? (
             <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-slate-950/80 px-2.5 py-1 text-xs font-bold text-white shadow-sm">
@@ -135,8 +149,20 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
               key={`${preview.cardUrl}-${index}`}
               href={listingHref}
               aria-label={`View photo ${index + 2} for ${listing.title}`}
-              className="group relative h-12 overflow-hidden rounded-xl bg-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
+              className="group relative h-12 overflow-hidden rounded-xl bg-stone-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
             >
+              <Image
+                src={preview.cardUrl}
+                alt=""
+                aria-hidden="true"
+                fill
+                className="scale-110 object-cover opacity-25 blur-md"
+                sizes="120px"
+                quality={60}
+                unoptimized={preview.isPreprocessed}
+                {...(preview.blurDataUrl ? { placeholder: "blur" as const, blurDataURL: preview.blurDataUrl } : {})}
+              />
+              <span className="absolute inset-0 bg-white/20" aria-hidden="true" />
               <Image
                 src={preview.cardUrl}
                 alt={listing.title}
