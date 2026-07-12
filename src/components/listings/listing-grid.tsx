@@ -13,6 +13,7 @@ type Props = {
   hasActiveFilters?: boolean;
   nextCursor?: string | null;
   queryParams?: Record<string, string | undefined>;
+  showDiscoveryRail?: boolean;
 };
 
 const popularSearches = ["Flats for rent in Lagos", "Houses for sale in Abuja", "Land for sale in Lagos"];
@@ -85,7 +86,7 @@ function ListingDiscoveryRail({ queryParams }: { queryParams: Record<string, str
   return (
     <aside
       id="listing-discovery-rail"
-      className="sticky top-6 h-fit w-[15.5rem] space-y-5 text-sm text-slate-700 2xl:w-[17rem]"
+      className="h-fit w-[15.5rem] space-y-5 text-sm text-slate-700 2xl:w-[17rem]"
     >
       <section className="border-b border-slate-200 pb-5">
         <h2 className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Explore by state</h2>
@@ -142,12 +143,17 @@ function ListingDiscoveryRail({ queryParams }: { queryParams: Record<string, str
   );
 }
 
-export function ListingGrid({ listings, hasActiveFilters = false, nextCursor = null, queryParams = {} }: Props) {
+export function ListingGrid({
+  listings,
+  hasActiveFilters = false,
+  nextCursor = null,
+  queryParams = {},
+  showDiscoveryRail = false
+}: Props) {
   const [items, setItems] = useState(listings);
   const [cursor, setCursor] = useState(nextCursor);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const showDiscoveryRail = Object.keys(queryParams).length > 0;
 
   useEffect(() => {
     setItems(listings);
@@ -243,7 +249,7 @@ export function ListingGrid({ listings, hasActiveFilters = false, nextCursor = n
         ))}
       </div>
       {showDiscoveryRail ? (
-        <div className="hidden xl:grid xl:grid-cols-[minmax(0,58rem)_15.5rem] xl:items-start xl:justify-center xl:gap-5 2xl:grid-cols-[minmax(0,60rem)_17rem] 2xl:gap-6">
+        <div className="hidden xl:grid xl:grid-cols-[minmax(0,56rem)_15.5rem] xl:items-start xl:justify-start xl:gap-5 2xl:grid-cols-[minmax(0,58rem)_17rem] 2xl:gap-6">
           <div className="min-w-0 space-y-4">
             {items.map((listing) => (
               <ListingDesktopRow key={listing.id} listing={listing} />

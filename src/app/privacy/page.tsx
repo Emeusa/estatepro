@@ -8,6 +8,10 @@ export const metadata: Metadata = {
   description: "Privacy Policy for C59 Estatehub account, listing, verification, billing, and security data.",
   alternates: {
     canonical: "/privacy"
+  },
+  robots: {
+    index: false,
+    follow: true
   }
 };
 

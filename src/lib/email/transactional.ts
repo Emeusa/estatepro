@@ -13,6 +13,13 @@ export type EmailEventType =
   | "subscription_activated"
   | "subscription_failed"
   | "subscription_cancelled"
+  | "subscription_expiring"
+  | "plan_downgraded"
+  | "listing_deactivated"
+  | "media_delete_warning"
+  | "media_deleted"
+  | "hard_delete_warning"
+  | "listing_deleted"
   | "admin_alert";
 
 export type TransactionalEmailInput = {

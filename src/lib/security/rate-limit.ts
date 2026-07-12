@@ -18,6 +18,8 @@ export const RATE_LIMITS = {
   passwordReset: { name: "password-reset", limit: 3, windowSeconds: 60 * 60 },
   listingCreate: { name: "listing-create", limit: 20, windowSeconds: 24 * 60 * 60 },
   imageUpload: { name: "image-upload", limit: 30, windowSeconds: 60 * 60 },
+  listingReportHourly: { name: "listing-report-hourly", limit: 5, windowSeconds: 60 * 60 },
+  listingReportDaily: { name: "listing-report-daily", limit: 20, windowSeconds: 24 * 60 * 60 },
   admin: { name: "admin", limit: 60, windowSeconds: 60 },
   userApi: { name: "user-api", limit: 90, windowSeconds: 60 }
 } satisfies Record<string, RateLimitPolicy>;

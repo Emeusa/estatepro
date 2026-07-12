@@ -123,6 +123,7 @@ export default async function HomePage({ searchParams }: Props) {
           hasActiveFilters={hasActiveFilters}
           nextCursor={listings.nextCursor}
           queryParams={listingQueryParams}
+          showDiscoveryRail
         />
       </section>
     </div>

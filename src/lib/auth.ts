@@ -54,6 +54,14 @@ export async function requireAuth(request: NextRequest): Promise<AuthUser> {
   };
 }
 
+export async function getOptionalAuthUser(request: NextRequest): Promise<AuthUser | null> {
+  const header = request.headers.get("authorization");
+  if (!header) {
+    return null;
+  }
+  return requireAuth(request);
+}
+
 export function requireRole(decoded: AuthUser, role: "admin" | "agent") {
   if (decoded.role !== role && !(role === "agent" && decoded.role === "admin")) {
     throw new AuthError("Insufficient permissions", 403);

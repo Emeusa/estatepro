@@ -1,6 +1,6 @@
 export type UserRole = "agent" | "client" | "admin";
 export type VerificationStatus = "pending" | "approved" | "rejected";
-export type ListingStatus = "pending" | "active" | "blocked";
+export type ListingStatus = "pending" | "active" | "inactive" | "blocked";
 export type PropertyType = "apartment" | "duplex" | "land" | "office" | "shop";
 export type ListingCategory = "for_sale" | "for_rent" | "short_let";
 export type ListingAvailability = "available" | "sold" | "rented" | "booked";
@@ -26,6 +26,26 @@ export type BillingMode = "recurring" | "prepaid";
 export type PaystackCheckoutChannel = "bank_transfer" | "ussd" | "bank";
 export type PromotionCreditType = "boost" | "featured" | "sponsored";
 export type AnalyticsLevel = "none" | "basic" | "advanced";
+export type ListingReportReason =
+  | "fake"
+  | "unavailable"
+  | "duplicate"
+  | "wrong_price"
+  | "scam"
+  | "payment_request"
+  | "impersonation"
+  | "unsafe_agent"
+  | "other";
+export type ListingReportStatus = "open" | "reviewing" | "reviewed" | "dismissed" | "resolved";
+export type ListingReportSeverity = "low" | "medium" | "high" | "critical";
+export type ListingReportActionTaken =
+  | "none"
+  | "listing_hidden"
+  | "agent_blocked"
+  | "agent_contacted"
+  | "duplicate_merged"
+  | "other";
+export type AdminNotificationPriority = "normal" | "high" | "critical";
 
 export type LocationValue = {
   state: string;
@@ -81,6 +101,14 @@ export type ListingRecord = {
   featuredUntil?: string | null;
   sponsoredUntil?: string | null;
   photosVerifiedAt?: string | null;
+  deactivatedAt?: string | null;
+  deactivationReason?: string | null;
+  retentionUntil?: string | null;
+  mediaDeleteAfter?: string | null;
+  hardDeleteAfter?: string | null;
+  mediaDeletedAt?: string | null;
+  legalHoldUntil?: string | null;
+  agentKeepActivePriority?: number | null;
   contactPhone: string;
   contactWhatsapp: string;
   location: LocationValue;
@@ -217,6 +245,54 @@ export type SupportRequestRecord = {
   status: "open" | "reviewing" | "resolved" | "closed";
   createdAt: string;
   updatedAt: string;
+};
+
+export type ListingReportRecord = {
+  id: string;
+  listingId: string;
+  listingTitle?: string | null;
+  listingStatus?: ListingStatus | null;
+  listingAvailability?: ListingAvailability | null;
+  agentId?: string | null;
+  agentName?: string | null;
+  agentEmail?: string | null;
+  reporterUserId: string | null;
+  reporterName: string | null;
+  reporterEmail: string | null;
+  reporterPhone: string | null;
+  reason: ListingReportReason;
+  details: string;
+  status: ListingReportStatus;
+  severity: ListingReportSeverity;
+  adminNotes: string | null;
+  resolutionNotes: string | null;
+  reviewedAt: string | null;
+  resolvedAt: string | null;
+  assignedAdminId: string | null;
+  actionTaken: ListingReportActionTaken | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ListingReportStats = {
+  openReports: number;
+  highRiskReports: number;
+  needsReview: number;
+  recentReports: ListingReportRecord[];
+};
+
+export type AdminNotificationRecord = {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  priority: AdminNotificationPriority;
+  entityType: string;
+  entityId: string | null;
+  href: string | null;
+  isRead: boolean;
+  createdAt: string;
+  readAt: string | null;
 };
 
 export type ListingFilters = {

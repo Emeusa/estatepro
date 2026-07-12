@@ -228,5 +228,12 @@ export const listingFilterSchema = z.object({
 });
 
 export const listingModerationSchema = z.object({
-  status: z.enum(["pending", "active", "blocked"])
+  status: z.enum(["pending", "active", "inactive", "blocked"]).optional(),
+  legalHoldUntil: z.string().datetime().nullable().optional()
+}).strict().refine((value) => value.status !== undefined || value.legalHoldUntil !== undefined, {
+  message: "Provide a listing status or legal hold update."
+});
+
+export const listingRetentionActionSchema = z.object({
+  action: z.enum(["keep_active", "clear_keep_active", "reactivate"])
 }).strict();

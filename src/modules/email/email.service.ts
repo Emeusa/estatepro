@@ -1,9 +1,10 @@
 import "server-only";
 
 import { getPricingPlan } from "@/lib/pricing";
+import { REPORT_REASON_LABELS } from "@/lib/report-labels";
 import { getSiteUrl } from "@/lib/seo";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { ListingRecord, UserRecord } from "@/lib/types";
+import { ListingRecord, ListingReportRecord, UserRecord } from "@/lib/types";
 import { sendTransactionalEmail } from "@/lib/email/transactional";
 import { toUserRecord } from "@/lib/supabase-mappers";
 
@@ -191,6 +192,70 @@ export async function sendListingModerationEmail(listing: ListingRecord) {
   });
 }
 
+export async function sendListingReportAdminAlertEmail(report: ListingReportRecord) {
+  const alertEmail = adminAlertEmail();
+  if (!alertEmail) {
+    return;
+  }
+
+  await sendTransactionalEmail({
+    type: "admin_alert",
+    to: alertEmail,
+    eventKey: `admin_alert:listing_report:${report.id}`,
+    subject: report.severity === "critical" ? "Critical listing report needs review" : "New listing report needs review",
+    heading: "Listing report submitted",
+    body: [
+      `${REPORT_REASON_LABELS[report.reason]} was reported for "${report.listingTitle ?? "a listing"}".`,
+      `Severity: ${report.severity}. Agent: ${report.agentName ?? "Unknown agent"} (${report.agentEmail ?? "No email"}).`,
+      "Review the report before taking enforcement action. Reporter contact details must remain private."
+    ],
+    cta: {
+      label: "Review report",
+      href: new URL(`/admin/reports?reportId=${report.id}`, getSiteUrl()).toString()
+    },
+    metadata: {
+      reportId: report.id,
+      listingId: report.listingId,
+      agentId: report.agentId,
+      reason: report.reason,
+      severity: report.severity
+    }
+  });
+}
+
+export async function sendAgentReportResponseRequestEmail(report: ListingReportRecord, adminMessage: string) {
+  if (!report.agentId) {
+    return;
+  }
+  const user = await getUser(report.agentId);
+  if (!user) {
+    return;
+  }
+
+  await sendTransactionalEmail({
+    type: "admin_alert",
+    to: user.email,
+    userId: user.id,
+    eventKey: `agent_report_response_request:${report.id}:${new Date().toISOString().slice(0, 10)}`,
+    subject: "A listing report needs your response",
+    heading: "Please respond to a listing report",
+    body: [
+      `A user reported "${report.listingTitle ?? "one of your listings"}" for: ${REPORT_REASON_LABELS[report.reason]}.`,
+      adminMessage,
+      "Do not contact or attempt to identify the reporter. Reply through support/admin channels with accurate evidence or corrections."
+    ],
+    cta: {
+      label: "Open your listings",
+      href: new URL("/agents/listings", getSiteUrl()).toString()
+    },
+    metadata: {
+      reportId: report.id,
+      listingId: report.listingId,
+      reason: report.reason
+    }
+  });
+}
+
 export async function sendSubscriptionActivatedEmail(input: {
   agentId: string;
   planSlug: string;
@@ -271,6 +336,106 @@ export async function sendSubscriptionCancelledEmail(agentId: string) {
     cta: {
       label: "View subscription",
       href: new URL("/agents/subscription", getSiteUrl()).toString()
+    }
+  });
+}
+
+export async function sendSubscriptionExpiryReminderEmail(input: {
+  agentId: string;
+  planSlug: string;
+  daysUntilExpiry: number;
+  periodEnd: string;
+}) {
+  const user = await getUser(input.agentId);
+  if (!user) {
+    return;
+  }
+
+  const plan = getPricingPlan(input.planSlug);
+  await sendTransactionalEmail({
+    type: "subscription_expiring",
+    to: user.email,
+    userId: user.id,
+    eventKey: `subscription_expiring:${user.id}:${input.planSlug}:${input.daysUntilExpiry}:${input.periodEnd.slice(0, 10)}`,
+    subject: `${plan.name} expires in ${input.daysUntilExpiry} day${input.daysUntilExpiry === 1 ? "" : "s"}`,
+    heading: "Your paid visibility is about to expire",
+    body: [
+      `Your ${plan.name} plan expires on ${new Date(input.periodEnd).toLocaleDateString("en-NG")}.`,
+      "If it expires, your account will return to the Free Starter active listing limit and overflow listings will become inactive with scheduled media cleanup."
+    ],
+    cta: {
+      label: "Manage subscription",
+      href: new URL("/agents/subscription", getSiteUrl()).toString()
+    },
+    metadata: input
+  });
+}
+
+export async function sendPlanDowngradedEmail(input: {
+  agentId: string;
+  activeListingLimit: number;
+  demotedListings: number;
+}) {
+  const user = await getUser(input.agentId);
+  if (!user || input.demotedListings <= 0) {
+    return;
+  }
+
+  const dateKey = new Date().toISOString().slice(0, 10);
+  await sendTransactionalEmail({
+    type: "plan_downgraded",
+    to: user.email,
+    userId: user.id,
+    eventKey: `plan_downgraded:${user.id}:${dateKey}`,
+    subject: "Some listings were moved inactive",
+    heading: "Your listing visibility was adjusted",
+    body: [
+      `Your current plan allows ${input.activeListingLimit} active available listings.`,
+      `${input.demotedListings} overflow listing${input.demotedListings === 1 ? " was" : "s were"} moved inactive. Their images are kept temporarily, but will be removed if the listings are not reactivated before the retention deadline.`
+    ],
+    cta: {
+      label: "Review listings",
+      href: new URL("/agents/listings", getSiteUrl()).toString()
+    },
+    metadata: input
+  });
+}
+
+export async function sendListingRetentionEmail(input: {
+  type:
+    | "listing_deactivated"
+    | "media_delete_warning"
+    | "media_deleted"
+    | "hard_delete_warning"
+    | "listing_deleted";
+  listing: ListingRecord;
+  eventKey: string;
+  subject: string;
+  heading: string;
+  body: string[];
+}) {
+  const user = await getUser(input.listing.agentId);
+  if (!user) {
+    return;
+  }
+
+  await sendTransactionalEmail({
+    type: input.type,
+    to: user.email,
+    userId: user.id,
+    eventKey: input.eventKey,
+    subject: input.subject,
+    heading: input.heading,
+    body: input.body,
+    cta: {
+      label: "Review listings",
+      href: new URL("/agents/listings", getSiteUrl()).toString()
+    },
+    metadata: {
+      listingId: input.listing.id,
+      title: input.listing.title,
+      status: input.listing.status,
+      availability: input.listing.availability
     }
   });
 }

@@ -1,6 +1,7 @@
 import { listingFilterSchema, listingInputSchema, listingUpdateSchema } from "@/modules/listings/listing.schema";
 import {
   activatePendingListingsForAgent,
+  countMediaBearingListingsForAgent,
   countActiveAvailableListingsForAgent,
   createListing,
   deleteListing,
@@ -15,14 +16,16 @@ import {
   listPublicListings,
   listPublicListingsByAgent,
   listSimilarPublicListings,
-  updateListing
+  updateListing,
+  updateListingRetentionPreference
 } from "@/modules/listings/listing.repository";
 import { getAgentProfile } from "@/modules/agents/agent.repository";
-import { getEffectiveActiveListingLimit } from "@/lib/subscriptions";
+import { getEffectiveActiveListingLimit, getEffectivePlanSlug } from "@/lib/subscriptions";
 import {
   createActiveListingLimitError,
   willConsumeNewActiveAvailableSlot
 } from "@/lib/listing-limits";
+import { createUnavailableLifecycle, hasListingMedia } from "@/lib/listing-retention";
 import type { ListingRecord, SubscriptionRecord } from "@/lib/types";
 
 export async function getPublicListings(input: Record<string, unknown>) {
@@ -125,6 +128,19 @@ async function assertCanAddActiveAvailableListing(
   }
 }
 
+async function assertCanAddMediaBearingListing(
+  agentId: string,
+  planSlug: string,
+  excludeListingId?: string
+) {
+  const { count, allowance } = await countMediaBearingListingsForAgent(agentId, planSlug, excludeListingId);
+  if (count >= allowance) {
+    throw new Error(
+      `Your current plan can keep media for ${allowance} listings. Delete old inactive listings or upgrade before adding more property images.`
+    );
+  }
+}
+
 export async function enforceAgentActiveListingLimit(
   agentId: string,
   subscriptionOverride?: SubscriptionRecord | null
@@ -151,12 +167,19 @@ export async function createAgentListing(agentId: string, input: unknown) {
 
   const payload = listingInputSchema.parse(input);
   const initialStatus = agent.verificationStatus === "approved" ? "active" : "pending";
+  const planSlug = getEffectivePlanSlug(subscription);
+
+  await assertCanAddMediaBearingListing(agentId, planSlug);
 
   if (initialStatus === "active" && payload.availability === "available") {
     await assertCanAddActiveAvailableListing(agentId, getEffectiveActiveListingLimit(subscription));
   }
 
-  return createListing(agentId, payload, initialStatus);
+  const listing = await createListing(agentId, payload, initialStatus);
+  if (payload.availability !== "available") {
+    return updateListing(listing.id, createUnavailableLifecycle());
+  }
+  return listing;
 }
 
 export async function updateAgentListing(agentId: string, listingId: string, input: unknown) {
@@ -173,6 +196,17 @@ export async function updateAgentListing(agentId: string, listingId: string, inp
 
   const currentListing = await ensureAgentOwnsListing(agentId, listingId);
   const payload = listingUpdateSchema.parse(input);
+  const planSlug = getEffectivePlanSlug(subscription);
+
+  const nextHasMedia =
+    (payload.imageUrls !== undefined && payload.imageUrls.length > 0) ||
+    (payload.imageVariants !== undefined && payload.imageVariants.length > 0) ||
+    (payload.imageUrls === undefined && payload.imageVariants === undefined && hasListingMedia(currentListing));
+
+  if (!hasListingMedia(currentListing) && nextHasMedia) {
+    await assertCanAddMediaBearingListing(agentId, planSlug, listingId);
+  }
+
   if (willConsumeNewActiveAvailableSlot(currentListing, payload)) {
     await assertCanAddActiveAvailableListing(
       agentId,
@@ -181,11 +215,61 @@ export async function updateAgentListing(agentId: string, listingId: string, inp
     );
   }
 
-  return updateListing(listingId, payload);
+  const lifecycleUpdate: Partial<ListingRecord> = {};
+  if (payload.availability && payload.availability !== "available" && currentListing.availability === "available") {
+    Object.assign(lifecycleUpdate, createUnavailableLifecycle());
+  }
+  if (payload.availability === "available" && currentListing.availability !== "available" && currentListing.status === "active") {
+    lifecycleUpdate.deactivatedAt = null;
+    lifecycleUpdate.deactivationReason = null;
+    lifecycleUpdate.retentionUntil = null;
+    lifecycleUpdate.mediaDeleteAfter = null;
+    lifecycleUpdate.hardDeleteAfter = null;
+  }
+
+  return updateListing(listingId, { ...payload, ...lifecycleUpdate });
 }
 
 export async function removeAgentListing(agentId: string, listingId: string) {
   await ensureAgentCanManageListings(agentId);
   await ensureAgentOwnsListing(agentId, listingId);
   return deleteListing(listingId);
+}
+
+export async function setAgentListingKeepActivePreference(
+  agentId: string,
+  listingId: string,
+  keepActive: boolean
+) {
+  await ensureAgentCanManageListings(agentId);
+  const listing = await ensureAgentOwnsListing(agentId, listingId);
+  if (keepActive && (listing.status !== "active" || listing.availability !== "available" || listing.mediaDeletedAt)) {
+    throw new Error("Only active available listings with images can be selected as preferred active listings.");
+  }
+
+  return updateListingRetentionPreference(listingId, keepActive ? Date.now() : null);
+}
+
+export async function reactivateAgentListing(agentId: string, listingId: string) {
+  const { subscription } = await getAgentProfile(agentId);
+  await ensureAgentCanManageListings(agentId);
+  const listing = await ensureAgentOwnsListing(agentId, listingId);
+  if (listing.status !== "inactive") {
+    return listing;
+  }
+  if (listing.mediaDeletedAt || !hasListingMedia(listing)) {
+    throw new Error("Images were already removed. Reupload property images before reactivating this listing.");
+  }
+  if (listing.availability === "available") {
+    await assertCanAddActiveAvailableListing(agentId, getEffectiveActiveListingLimit(subscription), listingId);
+  }
+
+  return updateListing(listingId, {
+    status: "active",
+    deactivatedAt: null,
+    deactivationReason: null,
+    retentionUntil: null,
+    mediaDeleteAfter: listing.availability === "available" ? null : listing.mediaDeleteAfter,
+    hardDeleteAfter: listing.availability === "available" ? null : listing.hardDeleteAfter
+  });
 }

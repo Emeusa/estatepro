@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { splitListingsByActiveLimit } from "@/lib/listing-limits";
+import { createPlanLimitLifecycle, getMediaBearingListingAllowance } from "@/lib/listing-retention";
 import { toNameCase } from "@/lib/format";
 import { getListingCardFeatureBadges } from "@/lib/listing-quality";
 import { rankListingsForFeed } from "@/lib/listing-visibility";
@@ -477,6 +478,40 @@ export async function countActiveAvailableListingsForAgent(agentId: string, excl
   return count ?? 0;
 }
 
+export async function countMediaBearingListingsForAgent(
+  agentId: string,
+  planSlug: string,
+  excludeListingId?: string
+) {
+  const supabase = createServerSupabaseClient();
+  let query = supabase
+    .from("listings")
+    .select("id, image_urls, image_variants, media_deleted_at")
+    .eq("agent_id", agentId)
+    .is("media_deleted_at", null)
+    .limit(5000);
+
+  if (excludeListingId) {
+    query = query.neq("id", excludeListingId);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const count = (data ?? []).filter((listing) => {
+    const imageUrls = Array.isArray(listing.image_urls) ? listing.image_urls : [];
+    const imageVariants = Array.isArray(listing.image_variants) ? listing.image_variants : [];
+    return imageUrls.length > 0 || imageVariants.length > 0;
+  }).length;
+
+  return {
+    count,
+    allowance: getMediaBearingListingAllowance(planSlug)
+  };
+}
+
 export type PendingListingActivationSummary = {
   activatedListings: number;
   keptPendingListings: number;
@@ -559,9 +594,17 @@ export async function demoteExcessActiveAvailableListingsForAgent(
   const overflowIds = overflow.map((listing) => listing.id);
 
   if (overflowIds.length) {
+    const lifecycle = createPlanLimitLifecycle();
     const { error: updateError } = await supabase
-    .from("listings")
-      .update({ status: "pending" })
+      .from("listings")
+      .update({
+        status: lifecycle.status,
+        deactivated_at: lifecycle.deactivatedAt,
+        deactivation_reason: lifecycle.deactivationReason,
+        retention_until: lifecycle.retentionUntil,
+        media_delete_after: lifecycle.mediaDeleteAfter,
+        hard_delete_after: lifecycle.hardDeleteAfter
+      })
       .in("id", overflowIds);
 
     if (updateError) {
@@ -651,6 +694,14 @@ export async function updateListing(
   if (payload.featuredUntil !== undefined) updates.featured_until = payload.featuredUntil;
   if (payload.sponsoredUntil !== undefined) updates.sponsored_until = payload.sponsoredUntil;
   if (payload.photosVerifiedAt !== undefined) updates.photos_verified_at = payload.photosVerifiedAt;
+  if (payload.deactivatedAt !== undefined) updates.deactivated_at = payload.deactivatedAt;
+  if (payload.deactivationReason !== undefined) updates.deactivation_reason = payload.deactivationReason;
+  if (payload.retentionUntil !== undefined) updates.retention_until = payload.retentionUntil;
+  if (payload.mediaDeleteAfter !== undefined) updates.media_delete_after = payload.mediaDeleteAfter;
+  if (payload.hardDeleteAfter !== undefined) updates.hard_delete_after = payload.hardDeleteAfter;
+  if (payload.mediaDeletedAt !== undefined) updates.media_deleted_at = payload.mediaDeletedAt;
+  if (payload.legalHoldUntil !== undefined) updates.legal_hold_until = payload.legalHoldUntil;
+  if (payload.agentKeepActivePriority !== undefined) updates.agent_keep_active_priority = payload.agentKeepActivePriority;
   if (payload.imageUrls !== undefined) updates.image_urls = payload.imageUrls;
   if (payload.imageVariants !== undefined) updates.image_variants = payload.imageVariants;
   if (payload.contactPhone !== undefined) updates.contact_phone = payload.contactPhone;
@@ -688,6 +739,41 @@ export async function updateListing(
 
   if (error || !data) {
     throw new Error(error?.message ?? "Could not update listing.");
+  }
+
+  return toListingRecord(data);
+}
+
+export async function updateListingRetentionPreference(
+  listingId: string,
+  priority: number | null
+) {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("listings")
+    .update({ agent_keep_active_priority: priority })
+    .eq("id", listingId)
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? "Could not update listing preference.");
+  }
+
+  return toListingRecord(data);
+}
+
+export async function updateListingLegalHold(listingId: string, legalHoldUntil: string | null) {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("listings")
+    .update({ legal_hold_until: legalHoldUntil })
+    .eq("id", listingId)
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? "Could not update listing legal hold.");
   }
 
   return toListingRecord(data);

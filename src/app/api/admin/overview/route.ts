@@ -5,6 +5,7 @@ import { captureServerError } from "@/lib/security/logger";
 import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
 import { getAgentReviewsForAdmin, getPaidPlanStatsForAdmin } from "@/modules/agents/agent.service";
 import { listSupportRequestsForAdmin } from "@/modules/support/support.service";
+import { getReportStatsForAdmin, listAdminNotifications } from "@/modules/reports/report.service";
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,13 +15,18 @@ export async function GET(request: NextRequest) {
       return limited.response;
     }
 
-    const [agents, supportRequests, paidPlanStats] = await Promise.all([
+    const [agents, supportRequests, paidPlanStats, reportStats, notifications] = await Promise.all([
       getAgentReviewsForAdmin(),
       listSupportRequestsForAdmin(12),
-      getPaidPlanStatsForAdmin()
+      getPaidPlanStatsForAdmin(),
+      getReportStatsForAdmin(),
+      listAdminNotifications(8)
     ]);
 
-    return withRateLimitHeaders(NextResponse.json({ agents, supportRequests, paidPlanStats }), limited.headers);
+    return withRateLimitHeaders(
+      NextResponse.json({ agents, supportRequests, paidPlanStats, reportStats, notifications }),
+      limited.headers
+    );
   } catch (error) {
     captureServerError(error, { route: "/api/admin/overview" });
     return NextResponse.json(

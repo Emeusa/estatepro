@@ -64,6 +64,14 @@ type DatabaseListing = {
   featured_until?: string | null;
   sponsored_until?: string | null;
   photos_verified_at?: string | null;
+  deactivated_at?: string | null;
+  deactivation_reason?: string | null;
+  retention_until?: string | null;
+  media_delete_after?: string | null;
+  hard_delete_after?: string | null;
+  media_deleted_at?: string | null;
+  legal_hold_until?: string | null;
+  agent_keep_active_priority?: number | null;
   contact_phone: string;
   contact_whatsapp: string;
   location: LocationValue;
@@ -197,6 +205,14 @@ export function toListingRecord(row: DatabaseListing): ListingRecord {
     featuredUntil: row.featured_until ?? null,
     sponsoredUntil: row.sponsored_until ?? null,
     photosVerifiedAt: row.photos_verified_at ?? null,
+    deactivatedAt: row.deactivated_at ?? null,
+    deactivationReason: row.deactivation_reason ?? null,
+    retentionUntil: row.retention_until ?? null,
+    mediaDeleteAfter: row.media_delete_after ?? null,
+    hardDeleteAfter: row.hard_delete_after ?? null,
+    mediaDeletedAt: row.media_deleted_at ?? null,
+    legalHoldUntil: row.legal_hold_until ?? null,
+    agentKeepActivePriority: row.agent_keep_active_priority ?? null,
     contactPhone: row.contact_phone,
     contactWhatsapp: row.contact_whatsapp,
     location: row.location,

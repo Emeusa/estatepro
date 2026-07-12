@@ -1,17 +1,27 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { AdminIdentityCard, AdminShell, AdminStatCard } from "@/components/admin/admin-shell";
 import { apiRequest } from "@/lib/api";
 import { getPricingPlan } from "@/lib/pricing";
 import { supabase } from "@/lib/supabase/client";
-import { AdminAgentReview, PaidPlanStats, SupportRequestRecord, UserRecord } from "@/lib/types";
+import {
+  AdminAgentReview,
+  AdminNotificationRecord,
+  ListingReportStats,
+  PaidPlanStats,
+  SupportRequestRecord,
+  UserRecord
+} from "@/lib/types";
 
 type AdminData = {
   agents: AdminAgentReview[];
   supportRequests?: SupportRequestRecord[];
   paidPlanStats?: PaidPlanStats;
+  reportStats?: ListingReportStats;
+  notifications?: AdminNotificationRecord[];
 };
 
 type AdminAccount = {
@@ -133,6 +143,12 @@ export default function AdminPage() {
           <AdminStatCard label="Unapproved Agents" value={stats.unapprovedAgents} tone="amber" />
         </section>
 
+        <section className="grid grid-cols-1 gap-3 px-3 sm:grid-cols-3 sm:px-6">
+          <AdminStatCard label="Open Reports" value={data.reportStats?.openReports ?? 0} tone="amber" />
+          <AdminStatCard label="High-Risk Reports" value={data.reportStats?.highRiskReports ?? 0} tone="amber" />
+          <AdminStatCard label="Needs Review" value={data.reportStats?.needsReview ?? 0} tone="blue" />
+        </section>
+
         <section className="px-3 sm:px-6">
           <div className="rounded-2xl border border-slate-300/80 bg-slate-200 p-4 shadow-sm sm:rounded-3xl sm:p-6">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
@@ -169,6 +185,75 @@ export default function AdminPage() {
         </section>
 
         <section className="px-3 pb-6 sm:px-6">
+          <div className="mb-4 rounded-2xl border border-slate-300/80 bg-slate-200 p-4 shadow-sm sm:rounded-3xl sm:p-6">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Reports</p>
+                <h2 className="mt-1 text-lg font-bold text-slate-950">Recent listing reports</h2>
+              </div>
+              <Link href="/admin/reports" className="text-sm font-bold text-blue-700 hover:text-blue-900">
+                Open reports
+              </Link>
+            </div>
+            <div className="mt-4 space-y-3">
+              {data.reportStats?.recentReports.length ? (
+                data.reportStats.recentReports.map((report) => (
+                  <article key={report.id} className="rounded-2xl bg-slate-300/60 p-4 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-bold text-slate-950">{report.listingTitle ?? "Listing report"}</p>
+                      <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold capitalize text-amber-700">
+                        {report.severity}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">
+                      {report.agentName ?? "Unknown agent"} - {report.status}
+                    </p>
+                    <p className="mt-2 line-clamp-2 text-slate-600">{report.details}</p>
+                  </article>
+                ))
+              ) : (
+                <p className="rounded-2xl bg-slate-300/60 p-4 text-sm text-slate-500">
+                  No recent listing reports.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="mb-4 rounded-2xl border border-slate-300/80 bg-slate-200 p-4 shadow-sm sm:rounded-3xl sm:p-6">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Notifications</p>
+                <h2 className="mt-1 text-lg font-bold text-slate-950">Admin alerts</h2>
+              </div>
+              <span className="text-sm font-semibold text-slate-600">
+                {(data.notifications ?? []).filter((notification) => !notification.isRead).length} unread
+              </span>
+            </div>
+            <div className="mt-4 space-y-3">
+              {data.notifications?.length ? (
+                data.notifications.map((notification) => (
+                  <Link
+                    key={notification.id}
+                    href={notification.href ?? "/admin/reports"}
+                    className={`block rounded-2xl p-4 text-sm transition hover:bg-slate-300 ${
+                      notification.isRead ? "bg-slate-300/35" : "bg-slate-300/70"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-bold text-slate-950">{notification.title}</p>
+                      <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold capitalize text-blue-700">
+                        {notification.priority}
+                      </span>
+                    </div>
+                    <p className="mt-2 line-clamp-2 text-slate-600">{notification.message}</p>
+                  </Link>
+                ))
+              ) : (
+                <p className="rounded-2xl bg-slate-300/60 p-4 text-sm text-slate-500">No admin notifications.</p>
+              )}
+            </div>
+          </div>
+
           <div className="rounded-2xl border border-slate-300/80 bg-slate-200 p-4 shadow-sm sm:rounded-3xl sm:p-6">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
               <div>

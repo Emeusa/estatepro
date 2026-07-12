@@ -12,6 +12,8 @@ export const listingPromotionSchema = z.object({
   promotionType: z.enum(["boost", "featured", "sponsored"])
 });
 
+const BOOST_COOLDOWN_HOURS = 24;
+
 function creditTypeForPromotion(promotionType: z.infer<typeof listingPromotionSchema>["promotionType"]): PromotionCreditType {
   return promotionType === "boost" ? "boost" : promotionType;
 }
@@ -26,6 +28,25 @@ function assertPromotableListing(listing: ListingRecord) {
   }
   if (listing.availability !== "available") {
     throw new Error("Only available listings can be promoted.");
+  }
+}
+
+function isFuture(value?: string | null) {
+  return value ? new Date(value).getTime() > Date.now() : false;
+}
+
+function assertPromotionNotActive(listing: ListingRecord, promotionType: z.infer<typeof listingPromotionSchema>["promotionType"]) {
+  if (promotionType === "boost" && listing.boostedAt) {
+    const nextBoostAt = new Date(listing.boostedAt).getTime() + BOOST_COOLDOWN_HOURS * 60 * 60 * 1000;
+    if (nextBoostAt > Date.now()) {
+      throw new Error("This listing was already boosted recently. You can boost it again after 24 hours.");
+    }
+  }
+  if (promotionType === "sponsored" && isFuture(listing.sponsoredUntil)) {
+    throw new Error("This listing is already sponsored until the current sponsored period expires.");
+  }
+  if (promotionType === "featured" && isFuture(listing.featuredUntil)) {
+    throw new Error("This listing is already featured until the current featured period expires.");
   }
 }
 
@@ -59,6 +80,7 @@ export async function applyListingPromotion(agentId: string, listingId: string, 
 
   const listing = await ensureAgentOwnsListing(agentId, listingId);
   assertPromotableListing(listing);
+  assertPromotionNotActive(listing, promotionType);
 
   const creditType = creditTypeForPromotion(promotionType);
   await consumePromotionCredit({

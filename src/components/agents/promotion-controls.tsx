@@ -17,7 +17,21 @@ const ACTIONS: Array<{ type: PromotionType; label: string; credit: keyof AgentEn
   { type: "sponsored", label: "Sponsor", credit: "sponsored" }
 ];
 
-function disabledReason(listing: ListingRecord, entitlements: AgentEntitlements | undefined, credit: keyof AgentEntitlements["credits"]) {
+const BOOST_COOLDOWN_HOURS = 24;
+
+function isFuture(value?: string | null) {
+  return value ? new Date(value).getTime() > Date.now() : false;
+}
+
+function isRecentlyBoosted(value?: string | null) {
+  return value ? new Date(value).getTime() + BOOST_COOLDOWN_HOURS * 60 * 60 * 1000 > Date.now() : false;
+}
+
+function disabledReason(
+  listing: ListingRecord,
+  entitlements: AgentEntitlements | undefined,
+  action: (typeof ACTIONS)[number]
+) {
   if (!entitlements) {
     return "Plan data unavailable";
   }
@@ -27,7 +41,16 @@ function disabledReason(listing: ListingRecord, entitlements: AgentEntitlements 
   if (listing.availability !== "available") {
     return "Available listings only";
   }
-  if (entitlements.credits[credit].remaining <= 0) {
+  if (action.type === "boost" && isRecentlyBoosted(listing.boostedAt)) {
+    return "Boosted recently";
+  }
+  if (action.type === "sponsored" && isFuture(listing.sponsoredUntil)) {
+    return "Already sponsored";
+  }
+  if (action.type === "featured" && isFuture(listing.featuredUntil)) {
+    return "Already featured";
+  }
+  if (entitlements.credits[action.credit].remaining <= 0) {
     return "No credits left";
   }
   return null;
@@ -39,7 +62,7 @@ export function PromotionControls({ listing, entitlements, busyPromotion, onProm
       <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Promote</p>
       <div className="mt-2 grid gap-2 sm:grid-cols-3">
         {ACTIONS.map((action) => {
-          const reason = disabledReason(listing, entitlements, action.credit);
+          const reason = disabledReason(listing, entitlements, action);
           const isBusy = busyPromotion === action.type;
           return (
             <button

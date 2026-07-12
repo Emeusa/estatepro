@@ -5,7 +5,7 @@ import { ReactNode } from "react";
 
 import { supabase } from "@/lib/supabase/client";
 
-type AdminNavKey = "dashboard" | "agents" | "profile";
+type AdminNavKey = "dashboard" | "agents" | "reports" | "profile";
 
 type AdminShellProps = {
   active: AdminNavKey;
@@ -23,6 +23,7 @@ type AdminStatCardProps = {
 const navItems: Array<{ key: AdminNavKey; label: string; href: string }> = [
   { key: "dashboard", label: "Dashboard", href: "/admin" },
   { key: "agents", label: "Agents", href: "/admin/agents" },
+  { key: "reports", label: "Reports", href: "/admin/reports" },
   { key: "profile", label: "Profile", href: "/admin#profile" }
 ];
 

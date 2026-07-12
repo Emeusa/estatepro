@@ -103,7 +103,7 @@ create table if not exists public.listings (
   property_type text not null check (property_type in ('apartment', 'duplex', 'land', 'office', 'shop')),
   listing_category text not null default 'for_sale' check (listing_category in ('for_sale', 'for_rent', 'short_let')),
   availability text not null default 'available' check (availability in ('available', 'sold', 'rented', 'booked')),
-  status text not null check (status in ('pending', 'active', 'blocked')),
+  status text not null check (status in ('pending', 'active', 'inactive', 'blocked')),
   image_urls text[] not null default '{}',
   image_variants jsonb not null default '[]',
   promotion_type text not null default 'standard',
@@ -113,6 +113,14 @@ create table if not exists public.listings (
   featured_until timestamptz,
   sponsored_until timestamptz,
   photos_verified_at timestamptz,
+  deactivated_at timestamptz,
+  deactivation_reason text,
+  retention_until timestamptz,
+  media_delete_after timestamptz,
+  hard_delete_after timestamptz,
+  media_deleted_at timestamptz,
+  legal_hold_until timestamptz,
+  agent_keep_active_priority bigint,
   contact_phone text not null,
   contact_whatsapp text not null,
   location jsonb not null,
@@ -191,11 +199,40 @@ create table if not exists public.listing_reports (
   id uuid primary key default gen_random_uuid(),
   listing_id uuid not null references public.listings (id) on delete cascade,
   reporter_user_id uuid references public.users (id) on delete set null,
-  reason text not null check (reason in ('fake', 'unavailable', 'duplicate', 'wrong_price', 'scam', 'other')),
+  reporter_name text check (reporter_name is null or char_length(reporter_name) <= 120),
+  reporter_email text check (reporter_email is null or char_length(reporter_email) <= 320),
+  reporter_phone text check (reporter_phone is null or char_length(reporter_phone) <= 40),
+  reporter_contact_hash text,
+  reporter_fingerprint text,
+  duplicate_fingerprint text,
+  ip_hash text,
+  user_agent text,
+  reason text not null check (reason in ('fake', 'unavailable', 'duplicate', 'wrong_price', 'scam', 'payment_request', 'impersonation', 'unsafe_agent', 'other')),
   details text check (details is null or char_length(details) <= 1000),
-  status text not null default 'open' check (status in ('open', 'reviewed', 'dismissed', 'resolved')),
+  status text not null default 'open' check (status in ('open', 'reviewing', 'reviewed', 'dismissed', 'resolved')),
+  severity text not null default 'medium' check (severity in ('low', 'medium', 'high', 'critical')),
+  admin_notes text check (admin_notes is null or char_length(admin_notes) <= 2000),
+  resolution_notes text check (resolution_notes is null or char_length(resolution_notes) <= 2000),
+  reviewed_at timestamptz,
+  resolved_at timestamptz,
+  assigned_admin_id uuid references public.users (id) on delete set null,
+  action_taken text check (action_taken is null or action_taken in ('none', 'listing_hidden', 'agent_blocked', 'agent_contacted', 'duplicate_merged', 'other')),
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.admin_notifications (
+  id uuid primary key default gen_random_uuid(),
+  type text not null,
+  title text not null check (char_length(title) between 4 and 160),
+  message text not null check (char_length(message) between 4 and 500),
+  priority text not null default 'normal' check (priority in ('normal', 'high', 'critical')),
+  entity_type text not null,
+  entity_id uuid,
+  href text,
+  is_read boolean not null default false,
+  read_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now())
 );
 
 create table if not exists public.saved_listings (
@@ -257,6 +294,13 @@ create table if not exists public.email_events (
       'subscription_activated',
       'subscription_failed',
       'subscription_cancelled',
+      'subscription_expiring',
+      'plan_downgraded',
+      'listing_deactivated',
+      'media_delete_warning',
+      'media_deleted',
+      'hard_delete_warning',
+      'listing_deleted',
       'admin_alert'
     )
   ),
@@ -322,6 +366,22 @@ set payment_provider = coalesce(payment_provider, 'paystack'),
     billing_mode = coalesce(billing_mode, 'recurring');
 
 alter table public.listings
+  drop constraint if exists listings_status_check,
+  drop constraint if exists listings_deactivation_reason_check;
+
+alter table public.email_events
+  drop constraint if exists email_events_email_type_check;
+
+alter table public.listing_reports
+  drop constraint if exists listing_reports_reason_check,
+  drop constraint if exists listing_reports_status_check,
+  drop constraint if exists listing_reports_severity_check,
+  drop constraint if exists listing_reports_action_taken_check;
+
+alter table public.admin_notifications
+  drop constraint if exists admin_notifications_priority_check;
+
+alter table public.listings
   add column if not exists promotion_type text not null default 'standard',
   add column if not exists boosted_at timestamptz,
   add column if not exists last_refreshed_at timestamptz,
@@ -329,6 +389,16 @@ alter table public.listings
   add column if not exists featured_until timestamptz,
   add column if not exists sponsored_until timestamptz,
   add column if not exists photos_verified_at timestamptz;
+
+alter table public.listings
+  add column if not exists deactivated_at timestamptz,
+  add column if not exists deactivation_reason text,
+  add column if not exists retention_until timestamptz,
+  add column if not exists media_delete_after timestamptz,
+  add column if not exists hard_delete_after timestamptz,
+  add column if not exists media_deleted_at timestamptz,
+  add column if not exists legal_hold_until timestamptz,
+  add column if not exists agent_keep_active_priority bigint;
 
 alter table public.listings
   add column if not exists bedrooms integer,
@@ -356,6 +426,23 @@ alter table public.listings
 
 alter table public.agents
   add column if not exists nin_number text;
+
+alter table public.listing_reports
+  add column if not exists reporter_name text,
+  add column if not exists reporter_email text,
+  add column if not exists reporter_phone text,
+  add column if not exists reporter_contact_hash text,
+  add column if not exists reporter_fingerprint text,
+  add column if not exists duplicate_fingerprint text,
+  add column if not exists ip_hash text,
+  add column if not exists user_agent text,
+  add column if not exists severity text not null default 'medium',
+  add column if not exists admin_notes text,
+  add column if not exists resolution_notes text,
+  add column if not exists reviewed_at timestamptz,
+  add column if not exists resolved_at timestamptz,
+  add column if not exists assigned_admin_id uuid references public.users (id) on delete set null,
+  add column if not exists action_taken text;
 
 insert into public.plans (
   slug,
@@ -402,6 +489,93 @@ begin
     alter table public.listings
       add constraint listings_availability_check
       check (availability in ('available', 'sold', 'rented', 'booked'));
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint where conname = 'listings_status_check'
+  ) then
+    alter table public.listings
+      add constraint listings_status_check
+      check (status in ('pending', 'active', 'inactive', 'blocked'));
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint where conname = 'listings_deactivation_reason_check'
+  ) then
+    alter table public.listings
+      add constraint listings_deactivation_reason_check
+      check (
+        deactivation_reason is null
+        or deactivation_reason in ('plan_limit', 'subscription_expired', 'unavailable_archived', 'agent_reactivated', 'admin')
+      );
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint where conname = 'email_events_email_type_check'
+  ) then
+    alter table public.email_events
+      add constraint email_events_email_type_check
+      check (
+        email_type in (
+          'welcome',
+          'agent_registration_received',
+          'agent_verification_approved',
+          'agent_verification_rejected',
+          'listing_active',
+          'listing_rejected',
+          'subscription_activated',
+          'subscription_failed',
+          'subscription_cancelled',
+          'subscription_expiring',
+          'plan_downgraded',
+          'listing_deactivated',
+          'media_delete_warning',
+          'media_deleted',
+          'hard_delete_warning',
+          'listing_deleted',
+          'admin_alert'
+        )
+      );
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint where conname = 'listing_reports_reason_check'
+  ) then
+    alter table public.listing_reports
+      add constraint listing_reports_reason_check
+      check (reason in ('fake', 'unavailable', 'duplicate', 'wrong_price', 'scam', 'payment_request', 'impersonation', 'unsafe_agent', 'other'));
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint where conname = 'listing_reports_status_check'
+  ) then
+    alter table public.listing_reports
+      add constraint listing_reports_status_check
+      check (status in ('open', 'reviewing', 'reviewed', 'dismissed', 'resolved'));
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint where conname = 'listing_reports_severity_check'
+  ) then
+    alter table public.listing_reports
+      add constraint listing_reports_severity_check
+      check (severity in ('low', 'medium', 'high', 'critical'));
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint where conname = 'listing_reports_action_taken_check'
+  ) then
+    alter table public.listing_reports
+      add constraint listing_reports_action_taken_check
+      check (action_taken is null or action_taken in ('none', 'listing_hidden', 'agent_blocked', 'agent_contacted', 'duplicate_merged', 'other'));
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint where conname = 'admin_notifications_priority_check'
+  ) then
+    alter table public.admin_notifications
+      add constraint admin_notifications_priority_check
+      check (priority in ('normal', 'high', 'critical'));
   end if;
 
   if not exists (
@@ -604,6 +778,18 @@ create index if not exists listings_feed_visibility_score_idx
 create index if not exists listings_feed_expiry_idx
   on public.listings (availability, status, expires_at, created_at desc);
 
+create index if not exists listings_retention_media_idx
+  on public.listings (status, media_deleted_at, media_delete_after)
+  where media_delete_after is not null;
+
+create index if not exists listings_retention_hard_delete_idx
+  on public.listings (status, hard_delete_after)
+  where hard_delete_after is not null;
+
+create index if not exists listings_keep_active_priority_idx
+  on public.listings (agent_id, agent_keep_active_priority desc)
+  where agent_keep_active_priority is not null;
+
 create index if not exists subscriptions_plan_idx
   on public.subscriptions (plan_slug, is_active);
 
@@ -674,6 +860,27 @@ create index if not exists listing_reports_listing_idx
 
 create index if not exists listing_reports_status_idx
   on public.listing_reports (status, created_at desc);
+
+create index if not exists listing_reports_severity_idx
+  on public.listing_reports (severity, status, created_at desc);
+
+create index if not exists listing_reports_agent_lookup_idx
+  on public.listing_reports (listing_id, severity, status, created_at desc);
+
+create index if not exists listing_reports_duplicate_fingerprint_idx
+  on public.listing_reports (duplicate_fingerprint)
+  where duplicate_fingerprint is not null;
+
+create index if not exists listing_reports_reporter_user_idx
+  on public.listing_reports (reporter_user_id, created_at desc)
+  where reporter_user_id is not null;
+
+create index if not exists admin_notifications_unread_idx
+  on public.admin_notifications (is_read, priority, created_at desc);
+
+create index if not exists admin_notifications_entity_idx
+  on public.admin_notifications (entity_type, entity_id, created_at desc)
+  where entity_id is not null;
 
 create index if not exists saved_listings_user_created_idx
   on public.saved_listings (user_id, created_at desc);
@@ -970,6 +1177,7 @@ alter table public.agent_daily_metrics enable row level security;
 alter table public.support_requests enable row level security;
 alter table public.security_events enable row level security;
 alter table public.email_events enable row level security;
+alter table public.admin_notifications enable row level security;
 alter table public.agent_quota_overrides enable row level security;
 
 drop policy if exists "users can read own row" on public.users;
@@ -997,6 +1205,7 @@ drop policy if exists "admins can read listing events" on public.listing_events;
 drop policy if exists "users can create listing reports" on public.listing_reports;
 drop policy if exists "users can read own listing reports" on public.listing_reports;
 drop policy if exists "admins can manage listing reports" on public.listing_reports;
+drop policy if exists "admins can manage admin notifications" on public.admin_notifications;
 drop policy if exists "users can read own saved listings" on public.saved_listings;
 drop policy if exists "users can save own listings" on public.saved_listings;
 drop policy if exists "users can remove own saved listings" on public.saved_listings;
@@ -1227,6 +1436,23 @@ create policy "users can read own listing reports"
 
 create policy "admins can manage listing reports"
   on public.listing_reports for all
+  using (
+    exists (
+      select 1 from public.users
+      where users.id = auth.uid()
+        and users.role = 'admin'
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.users
+      where users.id = auth.uid()
+        and users.role = 'admin'
+    )
+  );
+
+create policy "admins can manage admin notifications"
+  on public.admin_notifications for all
   using (
     exists (
       select 1 from public.users

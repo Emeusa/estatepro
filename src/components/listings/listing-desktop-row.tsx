@@ -79,8 +79,12 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
   const listingHref = `/listings/${listing.id}`;
   const promotionBadge = getListingPromotionBadge(listing);
   const unavailableBadge = getUnavailableBadge(listing);
-  const qualityBadges = getListingQualityBadges(listing).slice(0, 3);
-  const featureBadges = listing.cardFeatureBadges.slice(0, 2);
+  const detailBadges = [
+    ...getListingQualityBadges(listing)
+      .slice(0, 2)
+      .map((label) => ({ label, withIcon: false })),
+    ...listing.cardFeatureBadges.slice(0, 4).map((label) => ({ label, withIcon: true }))
+  ].slice(0, 6);
   const rowRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -108,13 +112,13 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
   return (
     <article
       ref={rowRef}
-      className="grid min-w-0 grid-cols-[260px_minmax(0,1fr)_178px] gap-4 rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md 2xl:grid-cols-[278px_minmax(0,1fr)_190px] 2xl:gap-5"
+      className="grid min-w-0 grid-cols-[286px_minmax(0,1fr)_172px] gap-4 rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md 2xl:grid-cols-[304px_minmax(0,1fr)_184px] 2xl:gap-5"
     >
       <div className="min-w-0">
         <Link
           href={listingHref}
           aria-label={`View ${listing.title}`}
-          className="group relative block h-[200px] overflow-hidden rounded-2xl bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950 2xl:h-[214px]"
+          className="group relative block h-[236px] overflow-hidden rounded-2xl bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950 2xl:h-[250px]"
         >
           {image ? (
             <Image
@@ -122,7 +126,7 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
               alt={listing.title}
               fill
               className="object-cover transition duration-300 group-hover:scale-[1.02] group-hover:opacity-95"
-              sizes="(max-width: 1536px) 260px, 278px"
+              sizes="(max-width: 1536px) 286px, 304px"
               quality={72}
               unoptimized={image.isPreprocessed}
             />
@@ -146,7 +150,7 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
                 key={`${preview.cardUrl}-${index}`}
                 href={listingHref}
                 aria-label={`View photo ${index + 2} for ${listing.title}`}
-                className="group relative h-14 overflow-hidden rounded-xl bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
+                className="group relative h-16 overflow-hidden rounded-xl bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
               >
                 <Image
                   src={preview.cardUrl}
@@ -165,43 +169,40 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
 
       <Link
         href={listingHref}
-        className="block min-w-0 rounded-2xl p-1 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
+        className="flex min-w-0 flex-col rounded-2xl p-1 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
       >
-        <h3 className="line-clamp-3 text-lg font-black leading-snug text-slate-950">{listing.title}</h3>
-        <p className="mt-1.5 flex min-w-0 items-start gap-1.5 text-xs font-semibold text-slate-500">
-          <svg aria-hidden="true" viewBox="0 0 24 24" className="mt-0.5 h-3.5 w-3.5 shrink-0 fill-current">
-            <path d="M12 2.25A7.25 7.25 0 0 0 4.75 9.5c0 4.74 5.33 10.22 6.43 11.29a1.16 1.16 0 0 0 1.64 0c1.1-1.07 6.43-6.55 6.43-11.29A7.25 7.25 0 0 0 12 2.25Zm0 9.75a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z" />
-          </svg>
-          <span className="truncate">
-            {listing.location.area}, {listing.location.city}
-          </span>
-        </p>
-        {listing.descriptionPreview ? (
-          <p className="mt-2 line-clamp-2 text-sm leading-5 text-slate-700">{listing.descriptionPreview}</p>
-        ) : null}
-        {qualityBadges.length ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {qualityBadges.map((badge) => (
-              <span key={badge} className="rounded-full bg-slate-100 px-2.5 py-1 text-[0.68rem] font-bold text-slate-700">
-                {badge}
-              </span>
-            ))}
-          </div>
-        ) : null}
-        {featureBadges.length ? (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {featureBadges.map((badge) => (
-              <span
-                key={badge}
-                className="inline-flex max-w-full items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-[0.62rem] font-black uppercase tracking-[0.06em] text-blue-700"
-              >
-                <QualityIcon icon={getQualityIconForLabel(badge)} className="h-3 w-3 shrink-0 text-blue-700" />
-                <span className="truncate">{badge}</span>
-              </span>
-            ))}
-          </div>
-        ) : null}
-        <div className="mt-3 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+        <div className="min-w-0">
+          <h3 className="line-clamp-3 text-lg font-black leading-snug text-slate-950">{listing.title}</h3>
+          <p className="mt-1.5 flex min-w-0 items-start gap-1.5 text-xs font-semibold text-slate-500">
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="mt-0.5 h-3.5 w-3.5 shrink-0 fill-current">
+              <path d="M12 2.25A7.25 7.25 0 0 0 4.75 9.5c0 4.74 5.33 10.22 6.43 11.29a1.16 1.16 0 0 0 1.64 0c1.1-1.07 6.43-6.55 6.43-11.29A7.25 7.25 0 0 0 12 2.25Zm0 9.75a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z" />
+            </svg>
+            <span className="truncate">
+              {listing.location.area}, {listing.location.city}
+            </span>
+          </p>
+          {listing.descriptionPreview ? (
+            <p className="mt-2 line-clamp-2 text-sm leading-5 text-slate-700">{listing.descriptionPreview}</p>
+          ) : null}
+          {detailBadges.length ? (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {detailBadges.map((badge) => (
+                <span
+                  key={`${badge.label}-${badge.withIcon ? "feature" : "detail"}`}
+                  className={`inline-flex min-w-0 max-w-full items-center gap-1 rounded-full px-2 py-1 text-[0.62rem] font-black uppercase tracking-[0.06em] ${
+                    badge.withIcon ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-700"
+                  }`}
+                >
+                  {badge.withIcon ? (
+                    <QualityIcon icon={getQualityIconForLabel(badge.label)} className="h-3 w-3 shrink-0" />
+                  ) : null}
+                  <span className="truncate">{badge.label}</span>
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <div className="mt-auto flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 pt-4">
           {listing.agentIsVerified ? <VerifiedAgentBadge agentName={listing.agentName} /> : null}
           <span className="text-[0.7rem] font-semibold text-slate-500">Updated {formatDate(listing.updatedAt)}</span>
         </div>

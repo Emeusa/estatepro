@@ -20,15 +20,20 @@ export async function PATCH(request: NextRequest, { params }: Props) {
     }
     const body = listingModerationSchema.parse(await request.json());
     const { listingId } = await params;
-    const listing = await updateListing(listingId, { status: body.status });
+    const listing = await updateListing(listingId, {
+      status: body.status,
+      legalHoldUntil: body.legalHoldUntil
+    });
     await logSecurityEvent({
       request,
       action: "listing_moderation_change",
       result: "success",
       userId: decoded.uid,
-      metadata: { listingId, status: body.status }
+      metadata: { listingId, status: body.status, legalHoldUntil: body.legalHoldUntil }
     });
-    await sendListingModerationEmail(listing);
+    if (body.status) {
+      await sendListingModerationEmail(listing);
+    }
     return withRateLimitHeaders(NextResponse.json({ listing }), limited.headers);
   } catch (error) {
     captureServerError(error, { route: "/api/admin/listings/[listingId]" });

@@ -4,7 +4,7 @@ type ListingVisibilityUpdate = Partial<Pick<ListingRecord, "status" | "availabil
 
 type ListingActivityInput = Pick<
   ListingRecord,
-  "id" | "createdAt" | "updatedAt" | "boostedAt" | "lastRefreshedAt"
+  "id" | "createdAt" | "updatedAt" | "boostedAt" | "lastRefreshedAt" | "agentKeepActivePriority"
 >;
 
 export class ActiveListingLimitError extends Error {
@@ -50,6 +50,10 @@ export function splitListingsByActiveLimit<T extends ListingActivityInput>(
   activeListingLimit: number
 ) {
   const sorted = [...listings].sort((first, second) => {
+    const priorityDiff = (second.agentKeepActivePriority ?? 0) - (first.agentKeepActivePriority ?? 0);
+    if (priorityDiff) {
+      return priorityDiff;
+    }
     const timeDiff = latestActivityMs(second) - latestActivityMs(first);
     return timeDiff || first.id.localeCompare(second.id);
   });

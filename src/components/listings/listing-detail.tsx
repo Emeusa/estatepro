@@ -4,6 +4,7 @@ import { VerifiedAgentName } from "@/components/agents/verified-agent-name";
 import { ListingContactActions } from "@/components/listings/listing-contact-actions";
 import { ListingDetailEventTracker } from "@/components/listings/listing-detail-event-tracker";
 import { ListingImageGallery } from "@/components/listings/listing-image-gallery";
+import { ReportListingButton } from "@/components/listings/report-listing-button";
 import { SaveListingButton } from "@/components/listings/save-listing-button";
 import { SimilarListingCard } from "@/components/listings/similar-listing-card";
 import { formatDate, formatPrice, whatsappLink } from "@/lib/format";
@@ -144,6 +145,9 @@ export function ListingDetail({ details, similarListings = [] }: Props) {
             between you and the Agent.
           </li>
         </ul>
+        <div className="pt-4">
+          <ReportListingButton listingId={listing.id} listingTitle={listing.title} />
+        </div>
       </div>
     </section>
   );

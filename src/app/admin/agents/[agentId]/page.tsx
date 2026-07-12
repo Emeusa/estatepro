@@ -10,6 +10,8 @@ import { formatDate, formatPrice } from "@/lib/format";
 import { getListingImageCount } from "@/lib/listing-images";
 import { AVAILABILITY_LABELS, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
 import { getListingQualityBadges } from "@/lib/listing-quality";
+import { ADMIN_LEGAL_HOLD_DAYS, addDays, retentionSummary } from "@/lib/listing-retention";
+import { getListingPromotionBadge } from "@/lib/listing-visibility";
 import { formatPlanPrice, getPricingPlan, hasPriorityReview, hasPrioritySupport } from "@/lib/pricing";
 import { getEffectivePlanSlug } from "@/lib/subscriptions";
 import { supabase } from "@/lib/supabase/client";
@@ -137,6 +139,40 @@ export default function AdminAgentDetailPage() {
       setMessage(`Agent ${action} action applied.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Agent moderation failed.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function updateListingLegalHold(listingId: string, hold: boolean) {
+    if (!token) {
+      return;
+    }
+
+    const legalHoldUntil = hold ? addDays(new Date(), ADMIN_LEGAL_HOLD_DAYS).toISOString() : null;
+    try {
+      setBusyAction(`legal-hold:${listingId}`);
+      const response = await apiRequest<{ listing: AdminAgentDetails["listings"][number] }>(
+        `/api/admin/listings/${listingId}`,
+        {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ legalHoldUntil })
+        }
+      );
+      setReview((current) =>
+        current
+          ? {
+              ...current,
+              listings: current.listings.map((listing) =>
+                listing.id === listingId ? response.listing : listing
+              )
+            }
+          : current
+      );
+      setMessage(hold ? "Listing legal hold applied." : "Listing legal hold cleared.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not update listing legal hold.");
     } finally {
       setBusyAction(null);
     }
@@ -314,7 +350,12 @@ export default function AdminAgentDetailPage() {
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <span className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${statusPillClass(listing.status === "active" ? "green" : listing.status === "pending" ? "amber" : "red")}`}>
+                        {getListingPromotionBadge(listing) ? (
+                          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
+                            {getListingPromotionBadge(listing)}
+                          </span>
+                        ) : null}
+                        <span className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${statusPillClass(listing.status === "active" ? "green" : listing.status === "pending" || listing.status === "inactive" ? "amber" : "red")}`}>
                           {listing.status}
                         </span>
                         <span className={`rounded-full px-3 py-1 text-xs font-bold ${statusPillClass(listing.availability === "available" ? "green" : "amber")}`}>
@@ -328,12 +369,25 @@ export default function AdminAgentDetailPage() {
                         {getListingQualityBadges(listing).slice(0, 5).join(" • ")}
                       </p>
                     ) : null}
+                    {retentionSummary(listing) ? (
+                      <p className="mt-2 text-xs font-semibold text-amber-700">{retentionSummary(listing)}</p>
+                    ) : null}
                     <p className="mt-2 line-clamp-2 text-sm text-slate-600">{listing.description}</p>
                     <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2 lg:grid-cols-4">
                       <span>{LISTING_CATEGORY_LABELS[listing.listingCategory]}</span>
                       <span className="capitalize">{listing.propertyType}</span>
                       <span>Created: {formatDate(listing.createdAt)}</span>
                       <span>Images: {getListingImageCount(listing)}</span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 ring-1 ring-slate-300 transition hover:bg-slate-200 disabled:opacity-60"
+                        disabled={busyAction === `legal-hold:${listing.id}`}
+                        onClick={() => updateListingLegalHold(listing.id, !listing.legalHoldUntil)}
+                        type="button"
+                      >
+                        {listing.legalHoldUntil ? "Clear legal hold" : "Hold cleanup"}
+                      </button>
                     </div>
                   </article>
                 ))

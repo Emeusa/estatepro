@@ -8,6 +8,10 @@ export const metadata: Metadata = {
   description: "Terms, listing rules, fraud prevention rules, and platform conditions for C59 Estatehub.",
   alternates: {
     canonical: "/terms"
+  },
+  robots: {
+    index: false,
+    follow: true
   }
 };
 

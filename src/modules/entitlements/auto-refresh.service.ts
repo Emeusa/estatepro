@@ -3,6 +3,8 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isSubscriptionCurrentlyActive } from "@/lib/subscriptions";
 import { toSubscriptionRecord } from "@/lib/supabase-mappers";
 import { enforceAgentActiveListingLimit } from "@/modules/listings/listing.service";
+import { runListingRetentionMaintenance } from "@/modules/listings/listing-retention.service";
+import { sendPlanDowngradedEmail, sendSubscriptionExpiryReminderEmail } from "@/modules/email/email.service";
 
 type SubscriptionRow = Parameters<typeof toSubscriptionRecord>[0];
 
@@ -13,10 +15,15 @@ function isDue(listing: { created_at: string; boosted_at?: string | null; last_r
   return Date.now() - new Date(latest as string).getTime() >= days * 24 * 60 * 60 * 1000;
 }
 
+function daysUntil(value: string) {
+  return Math.ceil((new Date(value).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+}
+
 export async function refreshEligibleListings() {
   const supabase = createServerSupabaseClient();
   let refreshed = 0;
   let demoted = 0;
+  let subscriptionReminders = 0;
   const pageSize = 500;
 
   for (let from = 0; ; from += pageSize) {
@@ -38,9 +45,29 @@ export async function refreshEligibleListings() {
       const subscription = toSubscriptionRecord(row);
       const limitResult = await enforceAgentActiveListingLimit(subscription.agentId, subscription);
       demoted += limitResult.demotedListings;
+      if (limitResult.demotedListings > 0) {
+        await sendPlanDowngradedEmail({
+          agentId: subscription.agentId,
+          activeListingLimit: limitResult.activeListingLimit,
+          demotedListings: limitResult.demotedListings
+        });
+      }
 
       if (!isSubscriptionCurrentlyActive(subscription) || !isPaidPricingPlanSlug(subscription.planSlug)) {
         continue;
+      }
+
+      if (subscription.currentPeriodEnd) {
+        const remaining = daysUntil(subscription.currentPeriodEnd);
+        if ([7, 3, 1].includes(remaining)) {
+          await sendSubscriptionExpiryReminderEmail({
+            agentId: subscription.agentId,
+            planSlug: subscription.planSlug,
+            daysUntilExpiry: remaining,
+            periodEnd: subscription.currentPeriodEnd
+          });
+          subscriptionReminders += 1;
+        }
       }
 
       const plan = getPricingPlan(subscription.planSlug);
@@ -79,5 +106,6 @@ export async function refreshEligibleListings() {
     }
   }
 
-  return { refreshed, demoted };
+  const retention = await runListingRetentionMaintenance();
+  return { refreshed, demoted, subscriptionReminders, ...retention };
 }
