@@ -27,6 +27,21 @@ function getCardImageRatio(image: ReturnType<typeof getListingImages>[number] | 
 }
 
 function ListingPromotionBadge({ label }: { label: string }) {
+  if (label === "Featured") {
+    return (
+      <span
+        aria-label="Featured listing"
+        title="Featured placement"
+        className="pointer-events-none absolute right-3 top-3 inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.14em] text-amber-200 drop-shadow-[0_1px_2px_rgba(15,23,42,0.95)]"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-current">
+          <path d="M12 2.25 14.54 7.4l5.68.82-4.11 4 .97 5.65L12 15.2l-5.08 2.67.97-5.65-4.11-4 5.68-.82L12 2.25Zm0 4.25-1.36 2.75-3.03.44 2.19 2.13-.52 3.01L12 13.4l2.72 1.43-.52-3.01 2.19-2.13-3.03-.44L12 6.5Z" />
+        </svg>
+        Featured
+      </span>
+    );
+  }
+
   if (label === "Sponsored") {
     return (
       <span
@@ -142,13 +157,6 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
           onSavedChange={(saved) => onSavedChange?.(listing.id, saved)}
           className="absolute left-3 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:scale-105 hover:text-rose-600 disabled:cursor-wait disabled:opacity-70"
         />
-        <ReportListingButton
-          listingId={listing.id}
-          listingTitle={listing.title}
-          variant="icon"
-          className="absolute left-14 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-rose-600 shadow-sm ring-1 ring-rose-100 transition hover:scale-105 hover:bg-rose-50 hover:text-rose-700"
-          iconClassName="h-4 w-4 fill-current"
-        />
       </div>
       {previewImages.length ? (
         <div className="flex min-w-0 max-w-full items-start gap-2 overflow-hidden bg-white px-3 pt-3">
@@ -210,9 +218,9 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
               {listing.cardFeatureBadges.map((badge) => (
                 <span
                   key={badge}
-                  className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full bg-blue-50 px-1.5 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.045em] text-blue-700"
+                  className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full bg-transparent px-1.5 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.045em] text-slate-700"
                 >
-                  <QualityIcon icon={getQualityIconForLabel(badge)} className="h-2.5 w-2.5 shrink-0 text-blue-700" />
+                  <QualityIcon icon={getQualityIconForLabel(badge)} className="h-2.5 w-2.5 shrink-0 text-slate-500" />
                   <span className="truncate">{badge}</span>
                 </span>
               ))}
@@ -222,7 +230,7 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
           {listing.agentIsVerified ? <VerifiedAgentBadge agentName={listing.agentName} /> : null}
           <p className="mt-2 text-[0.68rem] font-semibold text-slate-500">Updated {formatDate(listing.updatedAt)}</p>
         </Link>
-        <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+        <div className="mt-3 grid grid-cols-[1fr_auto_auto] gap-2">
           <a
             href={`tel:${listing.contactPhone}`}
             className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-blue-700"
@@ -245,6 +253,13 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
               <path d="M12.04 2.25a9.54 9.54 0 0 0-8.16 14.49L2.75 21.75l5.14-1.07A9.54 9.54 0 1 0 12.04 2.25Zm0 1.75a7.79 7.79 0 0 1 6.63 11.9 7.79 7.79 0 0 1-9.98 2.91l-.28-.14-3.36.7.74-3.25-.17-.3A7.79 7.79 0 0 1 12.04 4Zm-3.2 3.87c-.18 0-.46.07-.7.34-.24.27-.92.9-.92 2.2 0 1.29.94 2.54 1.07 2.71.13.18 1.82 2.9 4.5 3.95 2.23.88 2.69.7 3.17.66.49-.04 1.57-.64 1.8-1.26.22-.62.22-1.15.15-1.26-.07-.11-.25-.18-.53-.32-.28-.14-1.64-.81-1.9-.9-.25-.1-.44-.14-.62.14-.18.27-.71.9-.87 1.08-.16.18-.32.2-.6.07-.28-.14-1.17-.43-2.23-1.38-.82-.73-1.38-1.64-1.54-1.91-.16-.28-.02-.43.12-.57.13-.13.28-.32.42-.48.14-.16.18-.28.28-.46.09-.18.04-.34-.02-.48-.07-.14-.62-1.49-.85-2.03-.22-.54-.45-.46-.62-.47h-.53Z" />
             </svg>
           </a>
+          <ReportListingButton
+            listingId={listing.id}
+            listingTitle={listing.title}
+            variant="icon"
+            className="inline-flex h-10 w-11 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 ring-1 ring-rose-100 transition hover:bg-rose-100 hover:text-rose-700"
+            iconClassName="h-4 w-4 fill-current"
+          />
         </div>
       </div>
     </article>

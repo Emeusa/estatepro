@@ -38,6 +38,21 @@ function PhotoCount({ count }: { count: number }) {
 }
 
 function PromotionBadge({ label }: { label: string }) {
+  if (label === "Featured") {
+    return (
+      <span
+        aria-label="Featured listing"
+        title="Featured placement"
+        className="pointer-events-none absolute right-2.5 top-2.5 inline-flex items-center gap-1 text-[0.62rem] font-black uppercase tracking-[0.13em] text-amber-200 drop-shadow-[0_1px_2px_rgba(15,23,42,0.95)]"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current">
+          <path d="M12 2.25 14.54 7.4l5.68.82-4.11 4 .97 5.65L12 15.2l-5.08 2.67.97-5.65-4.11-4 5.68-.82L12 2.25Zm0 4.25-1.36 2.75-3.03.44 2.19 2.13-.52 3.01L12 13.4l2.72 1.43-.52-3.01 2.19-2.13-3.03-.44L12 6.5Z" />
+        </svg>
+        Featured
+      </span>
+    );
+  }
+
   if (label === "Sponsored") {
     return (
       <span
@@ -164,11 +179,11 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
         ) : null}
       </div>
 
-      <Link
-        href={listingHref}
-        className="flex min-w-0 flex-col rounded-2xl p-1 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
-      >
-        <div className="min-w-0">
+      <div className="flex min-w-0 flex-col">
+        <Link
+          href={listingHref}
+          className="block min-w-0 rounded-2xl p-1 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
+        >
           <h3 className="line-clamp-3 text-lg font-black leading-snug text-slate-950">{listing.title}</h3>
           <p className="mt-1.5 flex min-w-0 items-start gap-1.5 text-xs font-semibold text-slate-500">
             <svg aria-hidden="true" viewBox="0 0 24 24" className="mt-0.5 h-3.5 w-3.5 shrink-0 fill-current">
@@ -194,24 +209,31 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
             </div>
           ) : null}
           {featureBadges.length ? (
-            <div className="mt-2 grid grid-cols-2 gap-1.5">
+            <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1">
               {featureBadges.map((badge) => (
                 <span
                   key={badge}
-                  className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full bg-blue-50 px-1.5 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.045em] text-blue-700"
+                  className="inline-flex min-w-0 max-w-[11rem] items-center gap-1 rounded-full bg-transparent px-0.5 py-0 text-[0.56rem] font-black uppercase tracking-[0.025em] text-slate-700"
                 >
-                  <QualityIcon icon={getQualityIconForLabel(badge)} className="h-2.5 w-2.5 shrink-0" />
+                  <QualityIcon icon={getQualityIconForLabel(badge)} className="h-2.5 w-2.5 shrink-0 text-slate-500" />
                   <span className="truncate">{badge}</span>
                 </span>
               ))}
             </div>
           ) : null}
-        </div>
+        </Link>
         <div className="mt-auto flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 pt-4">
           {listing.agentIsVerified ? <VerifiedAgentBadge agentName={listing.agentName} /> : null}
           <span className="text-[0.7rem] font-semibold text-slate-500">Updated {formatDate(listing.updatedAt)}</span>
+          <ReportListingButton
+            listingId={listing.id}
+            listingTitle={listing.title}
+            variant="icon"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-transparent text-rose-600 ring-1 ring-rose-100 transition hover:bg-rose-50 hover:text-rose-700"
+            iconClassName="h-3.5 w-3.5 fill-current"
+          />
         </div>
-      </Link>
+      </div>
 
       <div className="flex min-w-0 flex-col border-l border-slate-200 pl-4">
         <div className="flex items-start justify-between gap-3">
@@ -229,13 +251,6 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
               initialSaved={initialSaved}
               onSavedChange={(saved) => onSavedChange?.(listing.id, saved)}
               className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:scale-105 hover:text-rose-600 disabled:cursor-wait disabled:opacity-70"
-            />
-            <ReportListingButton
-              listingId={listing.id}
-              listingTitle={listing.title}
-              variant="icon"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-rose-600 shadow-sm ring-1 ring-rose-100 transition hover:scale-105 hover:bg-rose-50 hover:text-rose-700"
-              iconClassName="h-4 w-4 fill-current"
             />
           </div>
         </div>
