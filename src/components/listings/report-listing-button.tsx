@@ -11,6 +11,9 @@ import type { ListingReportReason } from "@/lib/types";
 type Props = {
   listingId: string;
   listingTitle: string;
+  variant?: "text" | "icon";
+  className?: string;
+  iconClassName?: string;
 };
 
 const reasons: ListingReportReason[] = [
@@ -25,7 +28,21 @@ const reasons: ListingReportReason[] = [
   "other"
 ];
 
-export function ReportListingButton({ listingId, listingTitle }: Props) {
+function ReportIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className={className ?? "h-4 w-4 fill-current"}>
+      <path d="M12 2.25 20 5.2v5.78c0 5.07-3.26 9.47-8 10.77-4.74-1.3-8-5.7-8-10.77V5.2l8-2.95Zm0 4.05a.9.9 0 0 0-.9.9v5.15a.9.9 0 1 0 1.8 0V7.2a.9.9 0 0 0-.9-.9Zm0 10.75a1.12 1.12 0 1 0 0-2.24 1.12 1.12 0 0 0 0 2.24Z" />
+    </svg>
+  );
+}
+
+export function ReportListingButton({
+  listingId,
+  listingTitle,
+  variant = "text",
+  className,
+  iconClassName
+}: Props) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -70,13 +87,27 @@ export function ReportListingButton({ listingId, listingTitle }: Props) {
     <>
       <button
         type="button"
-        className="inline-flex items-center justify-center rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-rose-700 transition hover:border-rose-300 hover:bg-rose-100"
+        aria-label="Report listing"
+        title="Report listing"
+        className={
+          className ??
+          (variant === "icon"
+            ? "inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-rose-600 shadow-sm ring-1 ring-rose-100 transition hover:scale-105 hover:bg-rose-50 hover:text-rose-700"
+            : "inline-flex items-center justify-center rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-rose-700 transition hover:border-rose-300 hover:bg-rose-100")
+        }
         onClick={() => {
           setOpen(true);
           setMessage("");
         }}
       >
-        Report listing
+        {variant === "icon" ? (
+          <>
+            <ReportIcon className={iconClassName ?? "h-4 w-4 fill-current"} />
+            <span className="sr-only">Report listing</span>
+          </>
+        ) : (
+          "Report listing"
+        )}
       </button>
 
       {open ? (

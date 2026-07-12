@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef } from "react";
 
 import { VerifiedBadgeIcon } from "@/components/agents/verified-badge";
+import { ReportListingButton } from "@/components/listings/report-listing-button";
 import { SaveListingButton } from "@/components/listings/save-listing-button";
 import { getQualityIconForLabel, QualityIcon } from "@/components/listings/listing-quality-icons";
 import { formatDate, formatPrice, whatsappLink } from "@/lib/format";
@@ -79,12 +80,8 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
   const listingHref = `/listings/${listing.id}`;
   const promotionBadge = getListingPromotionBadge(listing);
   const unavailableBadge = getUnavailableBadge(listing);
-  const detailBadges = [
-    ...getListingQualityBadges(listing)
-      .slice(0, 2)
-      .map((label) => ({ label, withIcon: false })),
-    ...listing.cardFeatureBadges.slice(0, 4).map((label) => ({ label, withIcon: true }))
-  ].slice(0, 6);
+  const qualityBadges = getListingQualityBadges(listing).slice(0, 2);
+  const featureBadges = listing.cardFeatureBadges.slice(0, 6);
   const rowRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -184,19 +181,27 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
           {listing.descriptionPreview ? (
             <p className="mt-2 line-clamp-2 text-sm leading-5 text-slate-700">{listing.descriptionPreview}</p>
           ) : null}
-          {detailBadges.length ? (
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {detailBadges.map((badge) => (
+          {qualityBadges.length ? (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {qualityBadges.map((badge) => (
                 <span
-                  key={`${badge.label}-${badge.withIcon ? "feature" : "detail"}`}
-                  className={`inline-flex min-w-0 max-w-full items-center gap-1 rounded-full px-2 py-1 text-[0.62rem] font-black uppercase tracking-[0.06em] ${
-                    badge.withIcon ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-700"
-                  }`}
+                  key={badge}
+                  className="inline-flex min-w-0 max-w-full items-center rounded-full bg-slate-100 px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.05em] text-slate-700"
                 >
-                  {badge.withIcon ? (
-                    <QualityIcon icon={getQualityIconForLabel(badge.label)} className="h-3 w-3 shrink-0" />
-                  ) : null}
-                  <span className="truncate">{badge.label}</span>
+                  <span className="truncate">{badge}</span>
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {featureBadges.length ? (
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
+              {featureBadges.map((badge) => (
+                <span
+                  key={badge}
+                  className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full bg-blue-50 px-1.5 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.045em] text-blue-700"
+                >
+                  <QualityIcon icon={getQualityIconForLabel(badge)} className="h-2.5 w-2.5 shrink-0" />
+                  <span className="truncate">{badge}</span>
                 </span>
               ))}
             </div>
@@ -218,12 +223,21 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
               {LISTING_CATEGORY_LABELS[listing.listingCategory]}
             </p>
           </div>
-          <SaveListingButton
-            listingId={listing.id}
-            initialSaved={initialSaved}
-            onSavedChange={(saved) => onSavedChange?.(listing.id, saved)}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:scale-105 hover:text-rose-600 disabled:cursor-wait disabled:opacity-70"
-          />
+          <div className="flex shrink-0 items-center gap-2">
+            <SaveListingButton
+              listingId={listing.id}
+              initialSaved={initialSaved}
+              onSavedChange={(saved) => onSavedChange?.(listing.id, saved)}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:scale-105 hover:text-rose-600 disabled:cursor-wait disabled:opacity-70"
+            />
+            <ReportListingButton
+              listingId={listing.id}
+              listingTitle={listing.title}
+              variant="icon"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-rose-600 shadow-sm ring-1 ring-rose-100 transition hover:scale-105 hover:bg-rose-50 hover:text-rose-700"
+              iconClassName="h-4 w-4 fill-current"
+            />
+          </div>
         </div>
         <div className="mt-auto grid grid-cols-[1fr_48px] gap-2 pt-4">
           <a

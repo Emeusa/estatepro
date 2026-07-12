@@ -34,7 +34,16 @@ export function ListingDetail({ details, similarListings = [] }: Props) {
           <div className="rounded-3xl bg-white/65 p-6 shadow-sm">
             <div className="flex items-start justify-between gap-4">
               <h1 className="text-2xl font-semibold text-slate-950">{listing.title}</h1>
-              <SaveListingButton listingId={listing.id} />
+              <div className="flex shrink-0 items-center gap-2">
+                <SaveListingButton listingId={listing.id} />
+                <ReportListingButton
+                  listingId={listing.id}
+                  listingTitle={listing.title}
+                  variant="icon"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-rose-600 shadow-sm ring-1 ring-rose-100 transition hover:scale-105 hover:bg-rose-50 hover:text-rose-700"
+                  iconClassName="h-4 w-4 fill-current"
+                />
+              </div>
             </div>
             <p className="mt-2 text-sm text-slate-600">
               {listing.location.area}, {listing.location.city}, {listing.location.state}
@@ -145,9 +154,6 @@ export function ListingDetail({ details, similarListings = [] }: Props) {
             between you and the Agent.
           </li>
         </ul>
-        <div className="pt-4">
-          <ReportListingButton listingId={listing.id} listingTitle={listing.title} />
-        </div>
       </div>
     </section>
   );

@@ -262,5 +262,5 @@ export function getListingCardFeatureBadges(
     ...listing.extraFeatures
   ]
     .filter((value): value is string => Boolean(value))
-    .slice(0, 2);
+    .slice(0, 6);
 }

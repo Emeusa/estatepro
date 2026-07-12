@@ -13,6 +13,7 @@ import { getListingQualityBadges } from "@/lib/listing-quality";
 import { PublicListingCardRecord } from "@/lib/types";
 import { VerifiedBadgeIcon } from "@/components/agents/verified-badge";
 import { getQualityIconForLabel, QualityIcon } from "@/components/listings/listing-quality-icons";
+import { ReportListingButton } from "@/components/listings/report-listing-button";
 import { SaveListingButton } from "@/components/listings/save-listing-button";
 
 type Props = {
@@ -141,6 +142,13 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
           onSavedChange={(saved) => onSavedChange?.(listing.id, saved)}
           className="absolute left-3 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:scale-105 hover:text-rose-600 disabled:cursor-wait disabled:opacity-70"
         />
+        <ReportListingButton
+          listingId={listing.id}
+          listingTitle={listing.title}
+          variant="icon"
+          className="absolute left-14 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-rose-600 shadow-sm ring-1 ring-rose-100 transition hover:scale-105 hover:bg-rose-50 hover:text-rose-700"
+          iconClassName="h-4 w-4 fill-current"
+        />
       </div>
       {previewImages.length ? (
         <div className="flex min-w-0 max-w-full items-start gap-2 overflow-hidden bg-white px-3 pt-3">
@@ -189,22 +197,22 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
             <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-700">{listing.descriptionPreview}</p>
           ) : null}
           {qualityBadges.length ? (
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {qualityBadges.map((badge) => (
-                <span key={badge} className="rounded-full bg-slate-100 px-2.5 py-1 text-[0.68rem] font-bold text-slate-700">
+                <span key={badge} className="rounded-full bg-slate-100 px-2 py-0.5 text-[0.65rem] font-bold text-slate-700">
                   {badge}
                 </span>
               ))}
             </div>
           ) : null}
           {listing.cardFeatureBadges.length ? (
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
               {listing.cardFeatureBadges.map((badge) => (
                 <span
                   key={badge}
-                  className="inline-flex max-w-full items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-[0.62rem] font-black uppercase tracking-[0.06em] text-blue-700"
+                  className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full bg-blue-50 px-1.5 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.045em] text-blue-700"
                 >
-                  <QualityIcon icon={getQualityIconForLabel(badge)} className="h-3 w-3 shrink-0 text-blue-700" />
+                  <QualityIcon icon={getQualityIconForLabel(badge)} className="h-2.5 w-2.5 shrink-0 text-blue-700" />
                   <span className="truncate">{badge}</span>
                 </span>
               ))}
