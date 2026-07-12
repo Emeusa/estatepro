@@ -75,7 +75,13 @@ export const PRICING_PLANS: PricingPlan[] = [
     featuredCredits: 20,
     sponsoredSlots: 3,
     description: "For agencies that need consistent search visibility.",
-    features: ["250 active listings", "60 manual boosts monthly", "20 featured credits", "3 sponsored search slots"]
+    features: [
+      "250 active listings",
+      "60 manual boosts monthly",
+      "20 featured credits",
+      "3 sponsored search slots",
+      "Agency name watermark"
+    ]
   },
   {
     slug: "agency_plus",
@@ -87,7 +93,14 @@ export const PRICING_PLANS: PricingPlan[] = [
     featuredCredits: 50,
     sponsoredSlots: 8,
     description: "High-volume agency visibility with priority support.",
-    features: ["750 active listings", "150 manual boosts monthly", "50 featured credits", "8 sponsored search slots", "Priority support"]
+    features: [
+      "750 active listings",
+      "150 manual boosts monthly",
+      "50 featured credits",
+      "8 sponsored search slots",
+      "Agency name watermark",
+      "Priority support"
+    ]
   },
   {
     slug: "developer_enterprise",
@@ -144,7 +157,9 @@ const FEATURE_HELP = {
   bulkUpload:
     "Bulk upload support helps high-volume teams publish many listings faster without entering each property manually.",
   bannerPlacements:
-    "Banner placements are custom advertising positions for larger campaigns and are configured manually with the C59 Estatehub team."
+    "Banner placements are custom advertising positions for larger campaigns and are configured manually with the C59 Estatehub team.",
+  photoWatermark:
+    "New optimized listing photos receive a transparent watermark to discourage copying. Pro and Agency Plus use the agent or agency name; lower plans use the C59 Estatehub watermark."
 } as const;
 
 const CUMULATIVE_FEATURES: Array<PlanFeatureDisplayRow & { minRank: number }> = [
@@ -300,6 +315,12 @@ export function getPlanFeatureRows(plan: PricingPlan): PlanFeatureDisplayRow[] {
       label: "Sponsored search slots",
       value: monthlyValue(plan.sponsoredSlots, "slots"),
       helpText: FEATURE_HELP.sponsoredSlots
+    },
+    {
+      key: "photo-watermark",
+      label: "Photo watermark",
+      value: getPlanRank(plan.slug) >= 3 ? "Agency name" : "C59 watermark",
+      helpText: FEATURE_HELP.photoWatermark
     }
   ];
 

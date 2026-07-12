@@ -6,7 +6,7 @@ import { assertBotProtection, botProtectionSchema, isBotProtectionError } from "
 import { captureServerError, logSecurityEvent } from "@/lib/security/logger";
 import { getClientIp } from "@/lib/security/request";
 import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
-import { createListingReport, ReportConflictError } from "@/modules/reports/report.service";
+import { createListingReport, ReportConflictError, ReportForbiddenError } from "@/modules/reports/report.service";
 
 type Props = {
   params: Promise<{ listingId: string }>;
@@ -78,6 +78,10 @@ export async function POST(request: NextRequest, { params }: Props) {
     }
 
     if (error instanceof ReportConflictError) {
+      return NextResponse.json({ message: error.message }, { status: error.status });
+    }
+
+    if (error instanceof ReportForbiddenError) {
       return NextResponse.json({ message: error.message }, { status: error.status });
     }
 

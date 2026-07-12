@@ -80,6 +80,10 @@ export class ReportConflictError extends Error {
   status = 409;
 }
 
+export class ReportForbiddenError extends Error {
+  status = 403;
+}
+
 function severityForReason(reason: ListingReportReason): ListingReportSeverity {
   if (["scam", "payment_request", "impersonation", "unsafe_agent"].includes(reason)) {
     return "critical";
@@ -217,6 +221,9 @@ export async function createListingReport(input: {
   const listing = await getPublicListingById(input.listingId);
   if (!listing) {
     throw new Error("This listing is not available for public reporting.");
+  }
+  if (input.reporterUserId && listing.agentId === input.reporterUserId) {
+    throw new ReportForbiddenError("You cannot report your own listing.");
   }
 
   const ipHash = hashIp(getClientIp(input.request));

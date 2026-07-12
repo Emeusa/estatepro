@@ -30,6 +30,7 @@ export type TransactionalEmailInput = {
   body: string[];
   userId?: string | null;
   eventKey?: string | null;
+  replyTo?: string | null;
   cta?: {
     label: string;
     href: string;
@@ -212,6 +213,7 @@ async function sendViaZoho(input: TransactionalEmailInput, config: EmailConfig) 
   await transporter.sendMail({
     from: `"${config.fromName}" <${config.fromEmail}>`,
     to: input.to,
+    ...(input.replyTo ? { replyTo: input.replyTo } : {}),
     subject: input.subject,
     text: buildText(input),
     html: buildHtml(input)

@@ -13,7 +13,6 @@ import { getListingQualityBadges } from "@/lib/listing-quality";
 import { PublicListingCardRecord } from "@/lib/types";
 import { VerifiedBadgeIcon } from "@/components/agents/verified-badge";
 import { getQualityIconForLabel, QualityIcon } from "@/components/listings/listing-quality-icons";
-import { ReportListingButton } from "@/components/listings/report-listing-button";
 import { SaveListingButton } from "@/components/listings/save-listing-button";
 
 type Props = {
@@ -27,32 +26,32 @@ function getCardImageRatio(image: ReturnType<typeof getListingImages>[number] | 
 }
 
 function ListingPromotionBadge({ label }: { label: string }) {
-  if (label === "Featured") {
-    return (
-      <span
-        aria-label="Featured listing"
-        title="Featured placement"
-        className="pointer-events-none absolute right-3 top-3 inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.14em] text-amber-200 drop-shadow-[0_1px_2px_rgba(15,23,42,0.95)]"
-      >
-        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-current">
-          <path d="M12 2.25 14.54 7.4l5.68.82-4.11 4 .97 5.65L12 15.2l-5.08 2.67.97-5.65-4.11-4 5.68-.82L12 2.25Zm0 4.25-1.36 2.75-3.03.44 2.19 2.13-.52 3.01L12 13.4l2.72 1.43-.52-3.01 2.19-2.13-3.03-.44L12 6.5Z" />
-        </svg>
-        Featured
-      </span>
-    );
-  }
-
   if (label === "Sponsored") {
     return (
       <span
         aria-label="Sponsored listing"
         title="Sponsored placement"
+        className="pointer-events-none absolute right-3 top-3 inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.14em] text-amber-200 drop-shadow-[0_1px_2px_rgba(15,23,42,0.95)]"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-current">
+          <path d="M12 2.25 14.54 7.4l5.68.82-4.11 4 .97 5.65L12 15.2l-5.08 2.67.97-5.65-4.11-4 5.68-.82L12 2.25Zm0 4.25-1.36 2.75-3.03.44 2.19 2.13-.52 3.01L12 13.4l2.72 1.43-.52-3.01 2.19-2.13-3.03-.44L12 6.5Z" />
+        </svg>
+        Sponsored
+      </span>
+    );
+  }
+
+  if (label === "Premium") {
+    return (
+      <span
+        aria-label="Premium listing"
+        title="Premium placement"
         className="pointer-events-none absolute right-3 top-3 inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.14em] text-amber-300 drop-shadow-[0_1px_2px_rgba(15,23,42,0.95)]"
       >
         <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-current">
           <path d="M12 2.2 19.2 5v5.4c0 4.6-2.9 8.8-7.2 11.4-4.3-2.6-7.2-6.8-7.2-11.4V5L12 2.2Zm0 4.05-.95 2.95H7.94l2.52 1.82-.96 2.93L12 12.13l2.5 1.82-.96-2.93 2.52-1.82h-3.11L12 6.25Z" />
         </svg>
-        Sponsored
+        Premium
       </span>
     );
   }
@@ -253,13 +252,6 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
               <path d="M12.04 2.25a9.54 9.54 0 0 0-8.16 14.49L2.75 21.75l5.14-1.07A9.54 9.54 0 1 0 12.04 2.25Zm0 1.75a7.79 7.79 0 0 1 6.63 11.9 7.79 7.79 0 0 1-9.98 2.91l-.28-.14-3.36.7.74-3.25-.17-.3A7.79 7.79 0 0 1 12.04 4Zm-3.2 3.87c-.18 0-.46.07-.7.34-.24.27-.92.9-.92 2.2 0 1.29.94 2.54 1.07 2.71.13.18 1.82 2.9 4.5 3.95 2.23.88 2.69.7 3.17.66.49-.04 1.57-.64 1.8-1.26.22-.62.22-1.15.15-1.26-.07-.11-.25-.18-.53-.32-.28-.14-1.64-.81-1.9-.9-.25-.1-.44-.14-.62.14-.18.27-.71.9-.87 1.08-.16.18-.32.2-.6.07-.28-.14-1.17-.43-2.23-1.38-.82-.73-1.38-1.64-1.54-1.91-.16-.28-.02-.43.12-.57.13-.13.28-.32.42-.48.14-.16.18-.28.28-.46.09-.18.04-.34-.02-.48-.07-.14-.62-1.49-.85-2.03-.22-.54-.45-.46-.62-.47h-.53Z" />
             </svg>
           </a>
-          <ReportListingButton
-            listingId={listing.id}
-            listingTitle={listing.title}
-            variant="icon"
-            className="inline-flex h-10 w-11 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 ring-1 ring-rose-100 transition hover:bg-rose-100 hover:text-rose-700"
-            iconClassName="h-4 w-4 fill-current"
-          />
         </div>
       </div>
     </article>

@@ -8,6 +8,8 @@ import { ListingRecord, ListingReportRecord, UserRecord } from "@/lib/types";
 import { sendTransactionalEmail } from "@/lib/email/transactional";
 import { toUserRecord } from "@/lib/supabase-mappers";
 
+const SUPPORT_EMAIL = "support@c59estatehub.com";
+
 type UserRow = {
   id: string;
   email: string;
@@ -237,12 +239,13 @@ export async function sendAgentReportResponseRequestEmail(report: ListingReportR
     to: user.email,
     userId: user.id,
     eventKey: `agent_report_response_request:${report.id}:${new Date().toISOString().slice(0, 10)}`,
+    replyTo: SUPPORT_EMAIL,
     subject: "A listing report needs your response",
     heading: "Please respond to a listing report",
     body: [
       `A user reported "${report.listingTitle ?? "one of your listings"}" for: ${REPORT_REASON_LABELS[report.reason]}.`,
       adminMessage,
-      "Do not contact or attempt to identify the reporter. Reply through support/admin channels with accurate evidence or corrections."
+      `Do not contact or attempt to identify the reporter. Reply to ${SUPPORT_EMAIL} with accurate evidence or corrections.`
     ],
     cta: {
       label: "Open your listings",

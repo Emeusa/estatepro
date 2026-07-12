@@ -33,6 +33,20 @@ function severityClass(severity: ListingReportRecord["severity"]) {
   return statusPillClass("slate");
 }
 
+function reportMatchesFilter(report: ListingReportRecord, status: string) {
+  if (status === "all") {
+    return true;
+  }
+  if (status === "high_risk") {
+    return (
+      (report.severity === "high" || report.severity === "critical") &&
+      report.status !== "resolved" &&
+      report.status !== "dismissed"
+    );
+  }
+  return report.status === status;
+}
+
 export default function AdminReportsPage() {
   const [highlightedReportId] = useState(() =>
     typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("reportId")
@@ -139,10 +153,24 @@ export default function AdminReportsPage() {
           retries: 0
         }
       );
-      setReports((current) =>
-        current.map((report) => (report.id === response.report.id ? response.report : report))
-      );
-      setSelectedReportId(response.report.id);
+      setReports((current) => {
+        const matchesCurrentFilter = reportMatchesFilter(response.report, selectedStatus);
+        const nextReports = matchesCurrentFilter
+          ? current.map((report) => (report.id === response.report.id ? response.report : report))
+          : current.filter((report) => report.id !== response.report.id);
+
+        setSelectedReportId((currentSelectedId) => {
+          if (matchesCurrentFilter) {
+            return response.report.id;
+          }
+          if (currentSelectedId !== response.report.id) {
+            return currentSelectedId;
+          }
+          return nextReports[0]?.id ?? null;
+        });
+
+        return nextReports;
+      });
       setMessage(successMessage);
     } catch (error) {
       setMessage(error instanceof ApiRequestError ? error.message : "Could not update report.");

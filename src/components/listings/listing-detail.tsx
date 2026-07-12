@@ -39,6 +39,7 @@ export function ListingDetail({ details, similarListings = [] }: Props) {
                 <ReportListingButton
                   listingId={listing.id}
                   listingTitle={listing.title}
+                  ownerAgentId={listing.agentId}
                   variant="icon"
                   className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-rose-600 shadow-sm ring-1 ring-rose-100 transition hover:scale-105 hover:bg-rose-50 hover:text-rose-700"
                   iconClassName="h-4 w-4 fill-current"

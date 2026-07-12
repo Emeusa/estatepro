@@ -16,6 +16,10 @@ type RenderedImage = {
   height: number;
 };
 
+export type ListingImageWatermark =
+  | { type: "platform" }
+  | { type: "agent"; text: string };
+
 export type ProcessedListingImage = {
   hero: File;
   card: File;
@@ -41,6 +45,21 @@ async function loadImage(file: File) {
   }
 }
 
+let platformLogoPromise: Promise<HTMLImageElement> | null = null;
+
+async function loadPlatformLogo() {
+  if (!platformLogoPromise) {
+    platformLogoPromise = new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = "/platform-logo-transparent.png";
+    });
+  }
+
+  return platformLogoPromise;
+}
+
 function getScaledSize(width: number, height: number, maxWidth: number, maxHeight: number) {
   const scale = Math.min(maxWidth / width, maxHeight / height, 1);
   return {
@@ -49,11 +68,78 @@ function getScaledSize(width: number, height: number, maxWidth: number, maxHeigh
   };
 }
 
+function drawAgentWatermark(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  text: string
+) {
+  const label = text.trim().replace(/\s+/g, " ").slice(0, 40) || "C59 Estatehub";
+  const padding = Math.max(14, Math.round(Math.min(width, height) * 0.035));
+  const fontSize = Math.max(18, Math.round(Math.min(width, height) * 0.045));
+  const maxWidth = Math.round(width * 0.48);
+
+  context.save();
+  context.globalAlpha = 0.2;
+  context.font = `900 ${fontSize}px Arial, sans-serif`;
+  context.textAlign = "right";
+  context.textBaseline = "bottom";
+  context.lineWidth = Math.max(2, Math.round(fontSize * 0.1));
+  context.strokeStyle = "rgba(15, 23, 42, 0.5)";
+  context.fillStyle = "rgba(255, 255, 255, 0.95)";
+  context.shadowColor = "rgba(15, 23, 42, 0.35)";
+  context.shadowBlur = Math.max(2, Math.round(fontSize * 0.12));
+  context.strokeText(label, width - padding, height - padding, maxWidth);
+  context.fillText(label, width - padding, height - padding, maxWidth);
+  context.restore();
+}
+
+async function drawPlatformWatermark(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number
+) {
+  const padding = Math.max(14, Math.round(Math.min(width, height) * 0.035));
+  const maxLogoWidth = Math.min(Math.round(width * 0.3), 260);
+  const logo = await loadPlatformLogo();
+  const logoRatio = logo.naturalWidth && logo.naturalHeight ? logo.naturalWidth / logo.naturalHeight : 3;
+  const logoWidth = Math.min(Math.max(72, maxLogoWidth), Math.max(1, width - padding * 2));
+  const logoHeight = Math.round(logoWidth / logoRatio);
+
+  context.save();
+  context.globalAlpha = 0.28;
+  context.drawImage(logo, width - logoWidth - padding, height - logoHeight - padding, logoWidth, logoHeight);
+  context.restore();
+}
+
+async function applyWatermark(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  watermark?: ListingImageWatermark
+) {
+  if (!watermark) {
+    return;
+  }
+
+  if (watermark.type === "agent") {
+    drawAgentWatermark(context, width, height, watermark.text);
+    return;
+  }
+
+  try {
+    await drawPlatformWatermark(context, width, height);
+  } catch {
+    drawAgentWatermark(context, width, height, "C59 Estatehub");
+  }
+}
+
 async function renderImage(
   image: HTMLImageElement,
   maxWidth: number,
   maxHeight: number,
-  quality: number
+  quality: number,
+  watermark?: ListingImageWatermark
 ): Promise<RenderedImage> {
   const sourceWidth = image.naturalWidth || image.width;
   const sourceHeight = image.naturalHeight || image.height;
@@ -73,6 +159,7 @@ async function renderImage(
   }
 
   context.drawImage(image, 0, 0, size.width, size.height);
+  await applyWatermark(context, size.width, size.height, watermark);
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, WEBP_TYPE, quality));
 
   if (!blob) {
@@ -91,15 +178,18 @@ async function blobToDataUrl(blob: Blob) {
   });
 }
 
-export async function processListingImage(file: File): Promise<ProcessedListingImage> {
+export async function processListingImage(
+  file: File,
+  watermark?: ListingImageWatermark
+): Promise<ProcessedListingImage> {
   if (!file.type.startsWith("image/")) {
     throw new Error("Only image uploads are allowed.");
   }
 
   const image = await loadImage(file);
   const [hero, card, blur] = await Promise.all([
-    renderImage(image, HERO_MAX_WIDTH, HERO_MAX_HEIGHT, HERO_QUALITY),
-    renderImage(image, CARD_MAX_WIDTH, CARD_MAX_HEIGHT, CARD_QUALITY),
+    renderImage(image, HERO_MAX_WIDTH, HERO_MAX_HEIGHT, HERO_QUALITY, watermark),
+    renderImage(image, CARD_MAX_WIDTH, CARD_MAX_HEIGHT, CARD_QUALITY, watermark),
     renderImage(image, BLUR_WIDTH, HERO_MAX_HEIGHT, BLUR_QUALITY)
   ]);
 

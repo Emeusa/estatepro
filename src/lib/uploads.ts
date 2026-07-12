@@ -1,6 +1,6 @@
 "use client";
 
-import { processListingImage } from "@/lib/image";
+import { processListingImage, type ListingImageWatermark } from "@/lib/image";
 import { apiRequest } from "@/lib/api";
 import {
   getListingImageExtensionForType,
@@ -13,7 +13,8 @@ import {
   SUPPORTED_LISTING_IMAGE_LABEL
 } from "@/lib/image-limits";
 import { supabase } from "@/lib/supabase/client";
-import { ListingImageVariant } from "@/lib/types";
+import { getEffectivePlanSlug } from "@/lib/subscriptions";
+import type { ListingImageVariant, SubscriptionRecord } from "@/lib/types";
 
 type ListingImageUploadResult = {
   imageUrls: string[];
@@ -21,6 +22,15 @@ type ListingImageUploadResult = {
 };
 
 type UploadStage = "authorize" | "process" | "optimized-upload" | "raw-upload";
+
+type AgentWatermarkResponse = {
+  user: {
+    fullName: string;
+  } | null;
+  profile: {
+    subscription?: SubscriptionRecord | null;
+  };
+};
 
 async function requireUserId() {
   const {
@@ -58,6 +68,26 @@ async function authorizeListingImageUpload(files: File[], token: string) {
       }))
     })
   });
+}
+
+async function getListingImageWatermark(token: string): Promise<ListingImageWatermark> {
+  try {
+    const response = await apiRequest<AgentWatermarkResponse>("/api/agents/me", {
+      headers: { Authorization: `Bearer ${token}` },
+      retries: 0
+    });
+    const planSlug = getEffectivePlanSlug(response.profile.subscription ?? null);
+
+    if (planSlug === "pro_agent" || planSlug === "agency_plus") {
+      return { type: "agent", text: response.user?.fullName ?? "Verified Agent" };
+    }
+  } catch (error) {
+    console.warn("Could not load listing watermark context; using platform watermark.", {
+      reason: error instanceof Error ? error.message : "unknown"
+    });
+  }
+
+  return { type: "platform" };
 }
 
 function getRawImageExtension(file: File) {
@@ -203,10 +233,11 @@ export async function uploadListingImages(files: File[], token: string): Promise
     throw error;
   }
 
+  const watermark = await getListingImageWatermark(token);
   let processedImages: Awaited<ReturnType<typeof processListingImage>>[];
 
   try {
-    processedImages = await Promise.all(acceptedFiles.map((file) => processListingImage(file)));
+    processedImages = await Promise.all(acceptedFiles.map((file) => processListingImage(file, watermark)));
   } catch (error) {
     if (!isImageProcessingFailure(error)) {
       throw error;

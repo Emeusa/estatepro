@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 import { TurnstileFields, readBotFields } from "@/components/security/turnstile-fields";
 import { ApiRequestError, apiRequest } from "@/lib/api";
@@ -14,6 +14,7 @@ type Props = {
   variant?: "text" | "icon";
   className?: string;
   iconClassName?: string;
+  ownerAgentId?: string | null;
 };
 
 const reasons: ListingReportReason[] = [
@@ -41,11 +42,31 @@ export function ReportListingButton({
   listingTitle,
   variant = "text",
   className,
-  iconClassName
+  iconClassName,
+  ownerAgentId
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [hiddenForOwner, setHiddenForOwner] = useState(false);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!ownerAgentId) {
+      setHiddenForOwner(false);
+      return;
+    }
+
+    let active = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (active) {
+        setHiddenForOwner(data.session?.user.id === ownerAgentId);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [ownerAgentId]);
 
   async function submitReport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -81,6 +102,10 @@ export function ReportListingButton({
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (hiddenForOwner) {
+    return null;
   }
 
   return (

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useEffect, useRef } from "react";
 
 import { VerifiedBadgeIcon } from "@/components/agents/verified-badge";
-import { ReportListingButton } from "@/components/listings/report-listing-button";
 import { SaveListingButton } from "@/components/listings/save-listing-button";
 import { getQualityIconForLabel, QualityIcon } from "@/components/listings/listing-quality-icons";
 import { formatDate, formatPrice, whatsappLink } from "@/lib/format";
@@ -38,32 +37,32 @@ function PhotoCount({ count }: { count: number }) {
 }
 
 function PromotionBadge({ label }: { label: string }) {
-  if (label === "Featured") {
-    return (
-      <span
-        aria-label="Featured listing"
-        title="Featured placement"
-        className="pointer-events-none absolute right-2.5 top-2.5 inline-flex items-center gap-1 text-[0.62rem] font-black uppercase tracking-[0.13em] text-amber-200 drop-shadow-[0_1px_2px_rgba(15,23,42,0.95)]"
-      >
-        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current">
-          <path d="M12 2.25 14.54 7.4l5.68.82-4.11 4 .97 5.65L12 15.2l-5.08 2.67.97-5.65-4.11-4 5.68-.82L12 2.25Zm0 4.25-1.36 2.75-3.03.44 2.19 2.13-.52 3.01L12 13.4l2.72 1.43-.52-3.01 2.19-2.13-3.03-.44L12 6.5Z" />
-        </svg>
-        Featured
-      </span>
-    );
-  }
-
   if (label === "Sponsored") {
     return (
       <span
         aria-label="Sponsored listing"
         title="Sponsored placement"
+        className="pointer-events-none absolute right-2.5 top-2.5 inline-flex items-center gap-1 text-[0.62rem] font-black uppercase tracking-[0.13em] text-amber-200 drop-shadow-[0_1px_2px_rgba(15,23,42,0.95)]"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current">
+          <path d="M12 2.25 14.54 7.4l5.68.82-4.11 4 .97 5.65L12 15.2l-5.08 2.67.97-5.65-4.11-4 5.68-.82L12 2.25Zm0 4.25-1.36 2.75-3.03.44 2.19 2.13-.52 3.01L12 13.4l2.72 1.43-.52-3.01 2.19-2.13-3.03-.44L12 6.5Z" />
+        </svg>
+        Sponsored
+      </span>
+    );
+  }
+
+  if (label === "Premium") {
+    return (
+      <span
+        aria-label="Premium listing"
+        title="Premium placement"
         className="pointer-events-none absolute right-2.5 top-2.5 inline-flex items-center gap-1 text-[0.62rem] font-black uppercase tracking-[0.13em] text-amber-300 drop-shadow-[0_1px_2px_rgba(15,23,42,0.95)]"
       >
         <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current">
           <path d="M12 2.2 19.2 5v5.4c0 4.6-2.9 8.8-7.2 11.4-4.3-2.6-7.2-6.8-7.2-11.4V5L12 2.2Zm0 4.05-.95 2.95H7.94l2.52 1.82-.96 2.93L12 12.13l2.5 1.82-.96-2.93 2.52-1.82h-3.11L12 6.25Z" />
         </svg>
-        Sponsored
+        Premium
       </span>
     );
   }
@@ -225,13 +224,6 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
         <div className="mt-auto flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 pt-4">
           {listing.agentIsVerified ? <VerifiedAgentBadge agentName={listing.agentName} /> : null}
           <span className="text-[0.7rem] font-semibold text-slate-500">Updated {formatDate(listing.updatedAt)}</span>
-          <ReportListingButton
-            listingId={listing.id}
-            listingTitle={listing.title}
-            variant="icon"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-transparent text-rose-600 ring-1 ring-rose-100 transition hover:bg-rose-50 hover:text-rose-700"
-            iconClassName="h-3.5 w-3.5 fill-current"
-          />
         </div>
       </div>
 

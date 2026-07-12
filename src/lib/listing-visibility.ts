@@ -67,8 +67,8 @@ function promotionScore(listing: ListingRecord) {
 export function getListingPromotionBadge(
   listing: Pick<ListingRecord, "sponsoredUntil" | "featuredUntil" | "promotionType">
 ) {
-  if (isFuture(listing.sponsoredUntil)) return "Sponsored";
-  if (isFuture(listing.featuredUntil)) return "Featured";
+  if (isFuture(listing.sponsoredUntil)) return "Premium";
+  if (isFuture(listing.featuredUntil)) return "Sponsored";
   if (listing.promotionType === "premium") return "Premium";
   return null;
 }
