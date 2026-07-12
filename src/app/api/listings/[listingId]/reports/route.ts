@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 
 import { AuthError, getOptionalAuthUser } from "@/lib/auth";
-import { assertBotProtection, botProtectionSchema, isBotProtectionError } from "@/lib/security/bot";
 import { captureServerError, logSecurityEvent } from "@/lib/security/logger";
 import { getClientIp } from "@/lib/security/request";
 import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
@@ -39,9 +38,6 @@ export async function POST(request: NextRequest, { params }: Props) {
     }
 
     const body = (await request.json()) as Record<string, unknown>;
-    const botFields = botProtectionSchema.parse(body);
-    await assertBotProtection(request, botFields, "listing_report");
-
     const { listingId } = await params;
     const report = await createListingReport({
       listingId,
@@ -71,10 +67,6 @@ export async function POST(request: NextRequest, { params }: Props) {
         { message: "Please provide a valid report reason and at least 20 characters of detail." },
         { status: 400 }
       );
-    }
-
-    if (isBotProtectionError(error)) {
-      return NextResponse.json({ message: error.message }, { status: 403 });
     }
 
     if (error instanceof ReportConflictError) {

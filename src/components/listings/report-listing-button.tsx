@@ -2,7 +2,6 @@
 
 import { FormEvent, useEffect, useState } from "react";
 
-import { TurnstileFields, readBotFields } from "@/components/security/turnstile-fields";
 import { ApiRequestError, apiRequest } from "@/lib/api";
 import { REPORT_REASON_LABELS } from "@/lib/report-labels";
 import { supabase } from "@/lib/supabase/client";
@@ -48,6 +47,7 @@ export function ReportListingButton({
   const [open, setOpen] = useState(false);
   const [hiddenForOwner, setHiddenForOwner] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"success" | "notice" | "error" | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -81,6 +81,7 @@ export function ReportListingButton({
 
     setSubmitting(true);
     setMessage("");
+    setMessageTone(null);
     try {
       const response = await apiRequest<{ message: string }>(`/api/listings/${listingId}/reports`, {
         method: "POST",
@@ -90,15 +91,17 @@ export function ReportListingButton({
           details: form.get("details")?.toString(),
           reporterName: form.get("reporterName")?.toString(),
           reporterEmail: form.get("reporterEmail")?.toString(),
-          reporterPhone: form.get("reporterPhone")?.toString(),
-          ...readBotFields(form)
+          reporterPhone: form.get("reporterPhone")?.toString()
         }),
         retries: 0
       });
       setMessage(response.message);
+      setMessageTone("success");
       event.currentTarget.reset();
     } catch (error) {
-      setMessage(error instanceof ApiRequestError ? error.message : "Could not submit report.");
+      const errorMessage = error instanceof ApiRequestError ? error.message : "Could not submit report.";
+      setMessage(errorMessage);
+      setMessageTone(error instanceof ApiRequestError && error.status === 409 ? "notice" : "error");
     } finally {
       setSubmitting(false);
     }
@@ -123,6 +126,7 @@ export function ReportListingButton({
         onClick={() => {
           setOpen(true);
           setMessage("");
+          setMessageTone(null);
         }}
       >
         {variant === "icon" ? (
@@ -209,10 +213,18 @@ export function ReportListingButton({
                 />
               </div>
 
-              <TurnstileFields />
-
               {message ? (
-                <p className="rounded-2xl bg-slate-100 p-3 text-sm font-semibold text-slate-700">{message}</p>
+                <p
+                  className={
+                    messageTone === "success"
+                      ? "rounded-2xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-100"
+                      : messageTone === "notice"
+                        ? "rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-800 ring-1 ring-amber-100"
+                        : "rounded-2xl bg-rose-50 p-3 text-sm font-semibold text-rose-800 ring-1 ring-rose-100"
+                  }
+                >
+                  {message}
+                </p>
               ) : null}
 
               <button

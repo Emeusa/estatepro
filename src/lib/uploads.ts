@@ -55,6 +55,29 @@ async function upload(bucket: string, path: string, file: File) {
   }
 }
 
+async function uploadViaServerFallback(file: Blob, token: string, filename: string) {
+  const form = new FormData();
+  form.append("file", file, filename);
+
+  const response = await fetch("/api/uploads/listing-images/fallback", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.message ?? "Image upload failed. Please try again.");
+  }
+
+  const body = (await response.json()) as { url?: string };
+  if (!body.url) {
+    throw new Error("Image upload failed. Please try again.");
+  }
+
+  return body.url;
+}
+
 async function authorizeListingImageUpload(files: File[], token: string) {
   await apiRequest("/api/uploads/listing-images/authorize", {
     method: "POST",
@@ -108,7 +131,7 @@ function safeImageName(index: number, type: ReturnType<typeof normalizeListingIm
   return `listing-image-${index + 1}.${getListingImageExtensionForType(type)}`;
 }
 
-function normalizeListingImageFile(file: File, index: number) {
+export function normalizeListingImageFile(file: File, index: number) {
   if (isUnsupportedHeicImage(file)) {
     throw new Error("HEIC images are not supported yet. Please choose JPG, PNG, or WebP.");
   }
@@ -138,16 +161,11 @@ function warnUploadFallback(stage: UploadStage, files: File[], error: unknown) {
   });
 }
 
-async function uploadOriginalListingImages(files: File[], userId: string): Promise<string[]> {
+async function uploadOriginalListingImages(files: File[], token: string): Promise<string[]> {
   return Promise.all(
     files.map(async (file, index) => {
-      const imageId = crypto.randomUUID();
       const extension = getRawImageExtension(file);
-      const path = `${userId}/${imageId}-${index}-original.${extension}`;
-
-      await upload("listing-images", path, file);
-
-      return supabase.storage.from("listing-images").getPublicUrl(path).data.publicUrl;
+      return uploadViaServerFallback(file, token, `listing-image-${index + 1}-original.${extension}`);
     })
   );
 }
@@ -246,7 +264,7 @@ export async function uploadListingImages(files: File[], token: string): Promise
     warnUploadFallback("process", acceptedFiles, error);
     try {
       return {
-        imageUrls: await uploadOriginalListingImages(acceptedFiles, userId),
+        imageUrls: await uploadOriginalListingImages(acceptedFiles, token),
         imageVariants: []
       };
     } catch (rawUploadError) {
@@ -286,9 +304,29 @@ export async function uploadListingImages(files: File[], token: string): Promise
 
     warnUploadFallback("optimized-upload", acceptedFiles, error);
     try {
+      const fallbackVariants = await Promise.all(
+        processedImages.map(async (optimized, index): Promise<ListingImageVariant> => {
+          const [heroUrl, cardUrl] = await Promise.all([
+            uploadViaServerFallback(optimized.hero, token, `listing-image-${index + 1}-hero.webp`),
+            uploadViaServerFallback(optimized.card, token, `listing-image-${index + 1}-card.webp`)
+          ]);
+
+          return {
+            heroUrl,
+            cardUrl,
+            blurDataUrl: optimized.blurDataUrl,
+            width: optimized.width,
+            height: optimized.height,
+            cardWidth: optimized.cardWidth,
+            cardHeight: optimized.cardHeight,
+            order: index
+          };
+        })
+      );
+
       return {
-        imageUrls: await uploadOriginalListingImages(acceptedFiles, userId),
-        imageVariants: []
+        imageUrls: fallbackVariants.map((image) => image.heroUrl),
+        imageVariants: fallbackVariants
       };
     } catch (rawUploadError) {
       warnUploadFallback("raw-upload", acceptedFiles, rawUploadError);

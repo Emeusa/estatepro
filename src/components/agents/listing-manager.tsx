@@ -134,8 +134,8 @@ export function ListingManager({
         promotionType === "boost"
           ? "Listing boosted."
           : promotionType === "featured"
-            ? "Listing featured for 7 days."
-            : "Listing sponsored for 7 days."
+            ? "Listing sponsored for 7 days."
+            : "Listing upgraded to premium for 7 days."
       );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not promote listing.");

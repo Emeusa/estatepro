@@ -75,22 +75,21 @@ function drawAgentWatermark(
   text: string
 ) {
   const label = text.trim().replace(/\s+/g, " ").slice(0, 40) || "C59 Estatehub";
-  const padding = Math.max(14, Math.round(Math.min(width, height) * 0.035));
-  const fontSize = Math.max(18, Math.round(Math.min(width, height) * 0.045));
-  const maxWidth = Math.round(width * 0.48);
+  const fontSize = Math.max(18, Math.round(Math.min(width, height) * 0.05));
+  const maxWidth = Math.round(width * 0.62);
 
   context.save();
   context.globalAlpha = 0.2;
   context.font = `900 ${fontSize}px Arial, sans-serif`;
-  context.textAlign = "right";
-  context.textBaseline = "bottom";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
   context.lineWidth = Math.max(2, Math.round(fontSize * 0.1));
   context.strokeStyle = "rgba(15, 23, 42, 0.5)";
   context.fillStyle = "rgba(255, 255, 255, 0.95)";
   context.shadowColor = "rgba(15, 23, 42, 0.35)";
   context.shadowBlur = Math.max(2, Math.round(fontSize * 0.12));
-  context.strokeText(label, width - padding, height - padding, maxWidth);
-  context.fillText(label, width - padding, height - padding, maxWidth);
+  context.strokeText(label, width / 2, height / 2, maxWidth);
+  context.fillText(label, width / 2, height / 2, maxWidth);
   context.restore();
 }
 
@@ -99,16 +98,15 @@ async function drawPlatformWatermark(
   width: number,
   height: number
 ) {
-  const padding = Math.max(14, Math.round(Math.min(width, height) * 0.035));
-  const maxLogoWidth = Math.min(Math.round(width * 0.3), 260);
+  const maxLogoWidth = Math.min(Math.round(width * 0.36), 300);
   const logo = await loadPlatformLogo();
   const logoRatio = logo.naturalWidth && logo.naturalHeight ? logo.naturalWidth / logo.naturalHeight : 3;
-  const logoWidth = Math.min(Math.max(72, maxLogoWidth), Math.max(1, width - padding * 2));
+  const logoWidth = Math.min(Math.max(90, maxLogoWidth), Math.max(1, width * 0.72));
   const logoHeight = Math.round(logoWidth / logoRatio);
 
   context.save();
   context.globalAlpha = 0.28;
-  context.drawImage(logo, width - logoWidth - padding, height - logoHeight - padding, logoWidth, logoHeight);
+  context.drawImage(logo, (width - logoWidth) / 2, (height - logoHeight) / 2, logoWidth, logoHeight);
   context.restore();
 }
 

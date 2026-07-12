@@ -13,8 +13,8 @@ type Props = {
 
 const ACTIONS: Array<{ type: PromotionType; label: string; credit: keyof AgentEntitlements["credits"] }> = [
   { type: "boost", label: "Boost", credit: "boost" },
-  { type: "featured", label: "Feature", credit: "featured" },
-  { type: "sponsored", label: "Sponsor", credit: "sponsored" }
+  { type: "featured", label: "Sponsor", credit: "featured" },
+  { type: "sponsored", label: "Premium", credit: "sponsored" }
 ];
 
 const BOOST_COOLDOWN_HOURS = 24;
@@ -45,10 +45,10 @@ function disabledReason(
     return "Boosted recently";
   }
   if (action.type === "sponsored" && isFuture(listing.sponsoredUntil)) {
-    return "Already sponsored";
+    return "Already premium";
   }
   if (action.type === "featured" && isFuture(listing.featuredUntil)) {
-    return "Already featured";
+    return "Already sponsored";
   }
   if (entitlements.credits[action.credit].remaining <= 0) {
     return "No credits left";

@@ -37,7 +37,7 @@ import {
 } from "@/lib/listing-quality";
 import { getLgasForState, NIGERIA_STATES } from "@/lib/nigeria-locations";
 import { ListingCategory, ListingImageVariant, ListingRecord } from "@/lib/types";
-import { uploadListingImages } from "@/lib/uploads";
+import { normalizeListingImageFile, uploadListingImages } from "@/lib/uploads";
 
 type Props = {
   token: string;
@@ -201,7 +201,21 @@ export function ListingForm({ token, listing, onSaved }: Props) {
       return;
     }
 
-    const acceptedFiles = files.slice(0, MAX_LISTING_IMAGES);
+    let acceptedFiles: File[];
+    try {
+      acceptedFiles = files.slice(0, MAX_LISTING_IMAGES).map(normalizeListingImageFile);
+    } catch (error) {
+      event.target.value = "";
+      setSelectedFiles([]);
+      setPreviewUrls([]);
+      setUploadThumbnailIndex(0);
+      setFieldErrors((current) => ({
+        ...current,
+        images: getUploadFailureMessage(error)
+      }));
+      return;
+    }
+
     setUploadThumbnailIndex(0);
     setFieldErrors((current) => {
       const next = { ...current };

@@ -62,7 +62,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     featuredCredits: 5,
     sponsoredSlots: 0,
     description: "Best launch plan for serious agents who need more reach.",
-    features: ["80 active listings", "20 manual boosts monthly", "5 featured credits", "Priority verification review"],
+    features: ["80 active listings", "20 manual boosts monthly", "5 sponsored credits", "Priority verification review"],
     isPopular: true
   },
   {
@@ -78,8 +78,8 @@ export const PRICING_PLANS: PricingPlan[] = [
     features: [
       "250 active listings",
       "60 manual boosts monthly",
-      "20 featured credits",
-      "3 sponsored search slots",
+      "20 sponsored credits",
+      "3 premium search slots",
       "Agency name watermark"
     ]
   },
@@ -96,8 +96,8 @@ export const PRICING_PLANS: PricingPlan[] = [
     features: [
       "750 active listings",
       "150 manual boosts monthly",
-      "50 featured credits",
-      "8 sponsored search slots",
+      "50 sponsored credits",
+      "8 premium search slots",
       "Agency name watermark",
       "Priority support"
     ]
@@ -118,8 +118,8 @@ export const PRICING_PLANS: PricingPlan[] = [
 
 export const ADD_ON_PRICING = [
   { name: "Manual Boost", price: "NGN 500 per boost" },
-  { name: "Featured Listing", price: "NGN 2,500/day or NGN 10,000/week" },
-  { name: "Sponsored Search Slot", price: "NGN 15,000/week" },
+  { name: "Sponsored Listing", price: "NGN 2,500/day or NGN 10,000/week" },
+  { name: "Premium Search Slot", price: "NGN 15,000/week" },
   { name: "Homepage Feature", price: "NGN 30,000/week" },
   { name: "Inline Banner Ad", price: "NGN 40,000/month launch price" },
   { name: "Verified Photo Badge", price: "Free after admin confirmation" }
@@ -133,9 +133,9 @@ const FEATURE_HELP = {
   autoRefresh:
     "Auto refresh periodically renews eligible listings for you, so older active listings do not become buried as quickly. The shorter the interval, the more often the plan refreshes visibility.",
   featuredCredits:
-    "Featured credits are used to give selected listings stronger visibility, such as future featured areas or highlighted placement. Listings must still be approved, active, available, and safe.",
+    "Sponsored credits are used to give selected listings stronger visibility through a clearly labelled Sponsored placement. Listings must still be approved, active, available, and safe.",
   sponsoredSlots:
-    "Sponsored search slots are paid, labelled placements for high-intent searches. They improve exposure but do not bypass agent approval, listing quality, availability, or safety checks.",
+    "Premium search slots are stronger paid, labelled placements for high-intent searches. They improve exposure but do not bypass agent approval, listing quality, availability, or safety checks.",
   basicAnalytics:
     "Basic analytics helps you understand interest in your listings, such as views, calls, WhatsApp clicks, and contact activity when tracking is available.",
   priorityVerification:
@@ -306,13 +306,13 @@ export function getPlanFeatureRows(plan: PricingPlan): PlanFeatureDisplayRow[] {
     },
     {
       key: "featured-credits",
-      label: "Featured credits",
+      label: "Sponsored credits",
       value: monthlyValue(plan.featuredCredits, "credits"),
       helpText: FEATURE_HELP.featuredCredits
     },
     {
       key: "sponsored-slots",
-      label: "Sponsored search slots",
+      label: "Premium search slots",
       value: monthlyValue(plan.sponsoredSlots, "slots"),
       helpText: FEATURE_HELP.sponsoredSlots
     },

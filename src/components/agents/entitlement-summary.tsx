@@ -13,8 +13,8 @@ export function EntitlementSummary({ entitlements }: Props) {
 
   const credits = [
     { label: "Boosts", value: entitlements.credits.boost },
-    { label: "Featured", value: entitlements.credits.featured },
-    { label: "Sponsored", value: entitlements.credits.sponsored }
+    { label: "Sponsored", value: entitlements.credits.featured },
+    { label: "Premium", value: entitlements.credits.sponsored }
   ];
 
   return (
