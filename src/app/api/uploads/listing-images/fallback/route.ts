@@ -14,6 +14,7 @@ import {
 import { captureServerError, logSecurityEvent } from "@/lib/security/logger";
 import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getListingImageUploadBlockReason } from "@/lib/upload-permissions";
 
 function jsonError(message: string, status: number) {
   return NextResponse.json({ message }, { status });
@@ -38,8 +39,9 @@ export async function POST(request: NextRequest) {
       .eq("id", decoded.uid)
       .single();
 
-    if (agentError || !agent || agent.is_blocked || agent.verification_status !== "approved") {
-      return jsonError("Your agent account must be approved and active before uploading listing images.", 403);
+    const blockReason = getListingImageUploadBlockReason(agentError ? null : agent);
+    if (blockReason) {
+      return jsonError(blockReason, 403);
     }
 
     const form = await request.formData();
