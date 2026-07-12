@@ -114,7 +114,10 @@ export default async function HomePage({ searchParams }: Props) {
         deferUntilElementId="listing-discovery-rail"
         {...filterValues}
       />
-      <section id="search-results" className="scroll-mt-24">
+      <section
+        id="search-results"
+        className="relative left-1/2 w-screen max-w-[82rem] -translate-x-1/2 scroll-mt-24 px-4 sm:px-6"
+      >
         <ListingGrid
           listings={listings.items}
           hasActiveFilters={hasActiveFilters}

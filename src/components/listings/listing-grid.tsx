@@ -83,7 +83,10 @@ function buildSearchHref(
 
 function ListingDiscoveryRail({ queryParams }: { queryParams: Record<string, string | undefined> }) {
   return (
-    <aside id="listing-discovery-rail" className="sticky top-6 h-fit w-[17rem] space-y-5 text-sm text-slate-700">
+    <aside
+      id="listing-discovery-rail"
+      className="sticky top-6 h-fit w-[15.5rem] space-y-5 text-sm text-slate-700 2xl:w-[17rem]"
+    >
       <section className="border-b border-slate-200 pb-5">
         <h2 className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Explore by state</h2>
         <div className="mt-3 flex flex-wrap gap-x-2 gap-y-1.5">
@@ -240,7 +243,7 @@ export function ListingGrid({ listings, hasActiveFilters = false, nextCursor = n
         ))}
       </div>
       {showDiscoveryRail ? (
-        <div className="hidden xl:grid xl:grid-cols-[minmax(0,1fr)_17rem] xl:items-start xl:gap-6">
+        <div className="hidden xl:grid xl:grid-cols-[minmax(0,58rem)_15.5rem] xl:items-start xl:justify-center xl:gap-5 2xl:grid-cols-[minmax(0,60rem)_17rem] 2xl:gap-6">
           <div className="min-w-0 space-y-4">
             {items.map((listing) => (
               <ListingDesktopRow key={listing.id} listing={listing} />
@@ -250,7 +253,7 @@ export function ListingGrid({ listings, hasActiveFilters = false, nextCursor = n
         </div>
       ) : (
         <div className="hidden xl:block">
-          <div className="space-y-4">
+          <div className="mx-auto max-w-[58rem] space-y-4 2xl:max-w-[60rem]">
             {items.map((listing) => (
               <ListingDesktopRow key={listing.id} listing={listing} />
             ))}

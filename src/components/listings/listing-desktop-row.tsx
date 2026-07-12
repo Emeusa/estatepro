@@ -108,13 +108,13 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
   return (
     <article
       ref={rowRef}
-      className="grid min-w-0 grid-cols-[248px_minmax(0,1fr)_210px] gap-5 rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md"
+      className="grid min-w-0 grid-cols-[260px_minmax(0,1fr)_178px] gap-4 rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md 2xl:grid-cols-[278px_minmax(0,1fr)_190px] 2xl:gap-5"
     >
       <div className="min-w-0">
         <Link
           href={listingHref}
           aria-label={`View ${listing.title}`}
-          className="group relative block h-[170px] overflow-hidden rounded-2xl bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
+          className="group relative block h-[200px] overflow-hidden rounded-2xl bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950 2xl:h-[214px]"
         >
           {image ? (
             <Image
@@ -122,7 +122,7 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
               alt={listing.title}
               fill
               className="object-cover transition duration-300 group-hover:scale-[1.02] group-hover:opacity-95"
-              sizes="248px"
+              sizes="(max-width: 1536px) 260px, 278px"
               quality={72}
               unoptimized={image.isPreprocessed}
             />
@@ -146,7 +146,7 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
                 key={`${preview.cardUrl}-${index}`}
                 href={listingHref}
                 aria-label={`View photo ${index + 2} for ${listing.title}`}
-                className="group relative h-12 overflow-hidden rounded-xl bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
+                className="group relative h-14 overflow-hidden rounded-xl bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
               >
                 <Image
                   src={preview.cardUrl}
@@ -167,7 +167,7 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
         href={listingHref}
         className="block min-w-0 rounded-2xl p-1 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
       >
-        <h3 className="line-clamp-2 text-lg font-black leading-snug text-slate-950">{listing.title}</h3>
+        <h3 className="line-clamp-3 text-lg font-black leading-snug text-slate-950">{listing.title}</h3>
         <p className="mt-1.5 flex min-w-0 items-start gap-1.5 text-xs font-semibold text-slate-500">
           <svg aria-hidden="true" viewBox="0 0 24 24" className="mt-0.5 h-3.5 w-3.5 shrink-0 fill-current">
             <path d="M12 2.25A7.25 7.25 0 0 0 4.75 9.5c0 4.74 5.33 10.22 6.43 11.29a1.16 1.16 0 0 0 1.64 0c1.1-1.07 6.43-6.55 6.43-11.29A7.25 7.25 0 0 0 12 2.25Zm0 9.75a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z" />
@@ -210,7 +210,9 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
       <div className="flex min-w-0 flex-col border-l border-slate-200 pl-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="break-words text-lg font-black leading-snug text-slate-950">{formatPrice(listing.price)}</p>
+            <p className="break-words text-base font-black leading-snug text-slate-950 2xl:text-lg">
+              {formatPrice(listing.price)}
+            </p>
             <p className="mt-1 inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[0.68rem] font-bold text-amber-700">
               {LISTING_CATEGORY_LABELS[listing.listingCategory]}
             </p>
