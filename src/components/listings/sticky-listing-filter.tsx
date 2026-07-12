@@ -6,10 +6,12 @@ import { FilterBar, FilterBarProps } from "@/components/listings/filter-bar";
 
 type Props = Omit<FilterBarProps, "variant"> & {
   anchorId: string;
+  deferUntilElementId?: string;
 };
 
-export function StickyListingFilter({ anchorId, ...filterProps }: Props) {
+export function StickyListingFilter({ anchorId, deferUntilElementId, ...filterProps }: Props) {
   const [anchorVisible, setAnchorVisible] = useState(true);
+  const [deferredElementVisible, setDeferredElementVisible] = useState(false);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -34,7 +36,34 @@ export function StickyListingFilter({ anchorId, ...filterProps }: Props) {
     return () => observer.disconnect();
   }, [anchorId]);
 
-  if (anchorVisible) {
+  useEffect(() => {
+    if (!deferUntilElementId) {
+      setDeferredElementVisible(false);
+      return;
+    }
+
+    const deferredElement = document.getElementById(deferUntilElementId);
+    if (!deferredElement || typeof IntersectionObserver === "undefined") {
+      setDeferredElementVisible(false);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const isVisible = Boolean(entry?.isIntersecting);
+        setDeferredElementVisible(isVisible);
+        if (isVisible) {
+          setOpen(false);
+        }
+      },
+      { rootMargin: "-80px 0px 0px 0px", threshold: 0.05 }
+    );
+
+    observer.observe(deferredElement);
+    return () => observer.disconnect();
+  }, [deferUntilElementId]);
+
+  if (anchorVisible || deferredElementVisible) {
     return null;
   }
 

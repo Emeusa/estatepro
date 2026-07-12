@@ -109,7 +109,11 @@ export default async function HomePage({ searchParams }: Props) {
           </div>
         </div>
       </section>
-      <StickyListingFilter anchorId="homepage-filter-anchor" {...filterValues} />
+      <StickyListingFilter
+        anchorId="homepage-filter-anchor"
+        deferUntilElementId="listing-discovery-rail"
+        {...filterValues}
+      />
       <section id="search-results" className="scroll-mt-24">
         <ListingGrid
           listings={listings.items}

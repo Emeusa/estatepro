@@ -110,6 +110,7 @@ function toPublicListingCardRecord(
     listingCategory: listing.listingCategory,
     availability: listing.availability,
     status: listing.status,
+    updatedAt: listing.updatedAt,
     imageUrls: listing.imageUrls,
     imageVariants: listing.imageVariants,
     promotionType: listing.promotionType,

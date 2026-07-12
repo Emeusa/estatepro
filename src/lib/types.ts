@@ -119,6 +119,7 @@ export type PublicListingCardRecord = Pick<
   | "listingCategory"
   | "availability"
   | "status"
+  | "updatedAt"
   | "imageUrls"
   | "imageVariants"
   | "promotionType"

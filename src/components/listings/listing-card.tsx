@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { formatPrice, whatsappLink } from "@/lib/format";
+import { formatDate, formatPrice, whatsappLink } from "@/lib/format";
 import { trackListingEvent } from "@/lib/listing-events";
 import { getListingImages } from "@/lib/listing-images";
 import { getListingPromotionBadge } from "@/lib/listing-visibility";
@@ -212,6 +212,7 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
           ) : null}
           <p className="mt-2 text-base font-black text-slate-950">{formatPrice(listing.price)}</p>
           {listing.agentIsVerified ? <VerifiedAgentBadge agentName={listing.agentName} /> : null}
+          <p className="mt-2 text-[0.68rem] font-semibold text-slate-500">Updated {formatDate(listing.updatedAt)}</p>
         </Link>
         <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
           <a
