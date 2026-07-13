@@ -4,71 +4,28 @@ import Image from "next/image";
 import { FilterBar } from "@/components/listings/filter-bar";
 import { ListingGrid } from "@/components/listings/listing-grid";
 import { StickyListingFilter } from "@/components/listings/sticky-listing-filter";
-import { DEFAULT_SITE_DESCRIPTION, SITE_NAME } from "@/lib/seo";
+import {
+  buildHomepageMetadata,
+  getHomepageFilterValues,
+  getHomepageListingQueryParams,
+  hasHomepageActiveFilters,
+  type HomeSearchParams
+} from "@/lib/homepage-filters";
 import { getPublicListings } from "@/modules/listings/listing.service";
 
-const homeTitle = `Verified Property Listings in Nigeria | ${SITE_NAME}`;
-
-export const metadata: Metadata = {
-  title: {
-    absolute: homeTitle
-  },
-  description: DEFAULT_SITE_DESCRIPTION,
-  alternates: {
-    canonical: "/"
-  },
-  openGraph: {
-    title: homeTitle,
-    description: DEFAULT_SITE_DESCRIPTION,
-    url: "/",
-    type: "website"
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: homeTitle,
-    description: DEFAULT_SITE_DESCRIPTION
-  }
-};
-
 type Props = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<HomeSearchParams>;
 };
+
+export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+  return buildHomepageMetadata(await searchParams);
+}
 
 export default async function HomePage({ searchParams }: Props) {
   const params = await searchParams;
-  const filterValues = {
-    initialKeyword: typeof params.q === "string" ? params.q : undefined,
-    initialState: typeof params.state === "string" ? params.state : undefined,
-    initialCity: typeof params.city === "string" ? params.city : undefined,
-    initialMinPrice: typeof params.minPrice === "string" ? Number(params.minPrice) : undefined,
-    initialMaxPrice: typeof params.maxPrice === "string" ? Number(params.maxPrice) : undefined,
-    initialBedrooms: typeof params.bedrooms === "string" ? Number(params.bedrooms) : undefined,
-    initialBathrooms: typeof params.bathrooms === "string" ? Number(params.bathrooms) : undefined,
-    initialType: typeof params.propertyType === "string" ? params.propertyType : undefined,
-    initialCategory: typeof params.listingCategory === "string" ? params.listingCategory : undefined
-  };
-  const listingQueryParams = {
-    q: typeof params.q === "string" ? params.q : undefined,
-    state: typeof params.state === "string" ? params.state : undefined,
-    city: typeof params.city === "string" ? params.city : undefined,
-    minPrice: typeof params.minPrice === "string" ? params.minPrice : undefined,
-    maxPrice: typeof params.maxPrice === "string" ? params.maxPrice : undefined,
-    bedrooms: typeof params.bedrooms === "string" ? params.bedrooms : undefined,
-    bathrooms: typeof params.bathrooms === "string" ? params.bathrooms : undefined,
-    propertyType: typeof params.propertyType === "string" ? params.propertyType : undefined,
-    listingCategory: typeof params.listingCategory === "string" ? params.listingCategory : undefined
-  };
-  const hasActiveFilters = [
-    "q",
-    "state",
-    "city",
-    "minPrice",
-    "maxPrice",
-    "bedrooms",
-    "bathrooms",
-    "propertyType",
-    "listingCategory"
-  ].some((key) => typeof params[key] === "string" && Boolean(params[key]));
+  const filterValues = getHomepageFilterValues(params);
+  const listingQueryParams = getHomepageListingQueryParams(params);
+  const hasActiveFilters = hasHomepageActiveFilters(params);
   const listings = await getPublicListings({
     keyword: filterValues.initialKeyword,
     state: filterValues.initialState,

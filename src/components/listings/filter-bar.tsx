@@ -26,6 +26,7 @@ type FilterTab = {
 };
 
 const tabs: FilterTab[] = [
+  { label: "All" },
   { label: "Buy", listingCategory: "for_sale" },
   { label: "Rent", listingCategory: "for_rent" },
   { label: "Short Let", listingCategory: "short_let" },
@@ -45,7 +46,7 @@ function getInitialTab(category?: string, propertyType?: string) {
     return "Land";
   }
 
-  return tabs.find((tab) => tab.listingCategory === category)?.label ?? "Buy";
+  return tabs.find((tab) => tab.listingCategory === category)?.label ?? "All";
 }
 
 function SearchIcon() {
@@ -114,6 +115,12 @@ export function FilterBar({
   function applyTab(tab: FilterTab) {
     setActiveTab(tab.label);
 
+    if (!tab.propertyType && !tab.listingCategory) {
+      setPropertyType("");
+      setListingCategory("");
+      return;
+    }
+
     if (tab.propertyType === "land") {
       setPropertyType("land");
       setListingCategory("");
@@ -171,7 +178,7 @@ export function FilterBar({
         className={
           isSide
             ? "grid grid-cols-2 gap-2 text-center text-xs font-black uppercase tracking-[0.08em] text-slate-700"
-            : "grid grid-cols-3 border-b border-white/55 text-center text-sm font-bold text-white md:grid-cols-4 md:border-white/45"
+            : "grid grid-cols-4 border-b border-white/55 text-center text-sm font-bold text-white md:grid-cols-5 md:border-white/45"
         }
       >
         {tabs.map((tab) => (
