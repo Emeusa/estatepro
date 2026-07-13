@@ -47,6 +47,7 @@ export async function saveUserAccount(input: {
   userId: string;
   fullName: string;
   phone: string | null;
+  businessName?: string | null;
 }) {
   return updateUserProfile(input);
 }

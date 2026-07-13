@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { normalizeBusinessName } from "@/lib/agent-display";
 import { toNameCase } from "@/lib/format";
 import { normalizePhone, sanitizeText } from "@/lib/sanitize";
 import { botProtectionSchema } from "@/lib/security/bot";
@@ -27,6 +28,18 @@ const optionalPhoneSchema = z
     }
     return normalizePhone(value);
   });
+
+const optionalBusinessNameSchema = z
+  .preprocess((value) => {
+    if (value === undefined || value === null) {
+      return null;
+    }
+    if (typeof value === "string" && !value.trim()) {
+      return null;
+    }
+    return value;
+  }, z.union([z.null(), z.string().trim().min(2).max(120)]))
+  .transform((value) => (value === null ? null : normalizeBusinessName(value)));
 
 export const agentRegistrationSchema = z.object({
   email: normalizedEmailSchema,
@@ -67,7 +80,8 @@ export const clientRegistrationRequestSchema = clientRegistrationSchema
 
 export const userProfileSchema = z.object({
   fullName: z.string().min(2).max(120).transform((value) => toNameCase(sanitizeText(value))),
-  phone: optionalPhoneSchema
+  phone: optionalPhoneSchema,
+  businessName: optionalBusinessNameSchema.optional()
 }).strict();
 
 export const agentModerationSchema = z.object({

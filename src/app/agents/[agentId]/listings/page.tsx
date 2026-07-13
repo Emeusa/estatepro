@@ -29,8 +29,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     };
   }
 
-  const title = `Properties from ${data.agent.fullName} | ${SITE_NAME}`;
-  const description = `Browse active verified property listings from ${data.agent.fullName} on ${SITE_NAME}.`;
+  const title = `Properties from ${data.agent.displayName} | ${SITE_NAME}`;
+  const description = `Browse active verified property listings from ${data.agent.displayName} on ${SITE_NAME}.`;
 
   return {
     title: {
@@ -68,7 +68,7 @@ export default async function AgentListingsPage({ params }: Props) {
         <p className="text-xs uppercase tracking-[0.2em] text-amber-700">Agent properties</p>
         <h1 className="mt-2 text-2xl font-semibold text-slate-950">
           Other properties from{" "}
-          <VerifiedAgentName fullName={data.agent.fullName} isVerified={data.agent.isVerified} />
+          <VerifiedAgentName fullName={data.agent.displayName} isVerified={data.agent.isVerified} />
         </h1>
         <p className="mt-2 text-sm text-slate-500">
           These are active listings from an approved agent.

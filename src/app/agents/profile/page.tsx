@@ -8,13 +8,14 @@ import { formatDate } from "@/lib/format";
 import { formatPlanPrice, getPricingPlan } from "@/lib/pricing";
 import { getEffectivePlanSlug } from "@/lib/subscriptions";
 import { supabase } from "@/lib/supabase/client";
-import { SubscriptionRecord, UserRecord } from "@/lib/types";
+import { AgentProfile, SubscriptionRecord, UserRecord } from "@/lib/types";
 
 type ProfileData = {
   user: UserRecord | null;
   profile: {
     agent?: {
       verificationStatus: string;
+      businessName: string | null;
       trialEndsAt: string;
       isBlocked: boolean;
     };
@@ -59,6 +60,7 @@ export default function AgentProfilePage() {
   const [data, setData] = useState<ProfileData | null>(null);
   const [token, setToken] = useState("");
   const [fullName, setFullName] = useState("");
+  const [businessName, setBusinessName] = useState("");
   const [phone, setPhone] = useState("");
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -87,7 +89,11 @@ export default function AgentProfilePage() {
           setData(response);
           setToken(session.access_token);
           setFullName(response.user?.fullName ?? "");
+          setBusinessName(response.profile.agent?.businessName ?? "");
           setPhone(response.user?.phone ?? "");
+          if (new URLSearchParams(window.location.search).get("edit") === "business") {
+            setEditing(true);
+          }
           setMessage("");
         }
       } catch (error) {
@@ -127,16 +133,29 @@ export default function AgentProfilePage() {
     setMessage("");
 
     try {
-      const response = await apiRequest<{ user: UserRecord }>("/api/auth/me", {
+      const response = await apiRequest<{ user: UserRecord; agent?: AgentProfile }>("/api/auth/me", {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           fullName,
+          businessName,
           phone: phone.trim() || undefined
         })
       });
-      setData((current) => (current ? { ...current, user: response.user } : current));
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              user: response.user,
+              profile: {
+                ...current.profile,
+                agent: response.agent ?? current.profile.agent
+              }
+            }
+          : current
+      );
       setFullName(response.user.fullName);
+      setBusinessName(response.agent?.businessName ?? "");
       setPhone(response.user.phone ?? "");
       setEditing(false);
       setMessage("Profile updated.");
@@ -158,6 +177,7 @@ export default function AgentProfilePage() {
   }
 
   const agentName = data.user.fullName;
+  const publicDisplayName = data.profile.agent?.businessName || agentName;
   const verificationStatus = data.profile.agent?.verificationStatus ?? "pending";
   const isVerified = verificationStatus === "approved";
   const accountStatus = data.profile.agent?.isBlocked ? "Blocked" : "Operational";
@@ -270,6 +290,18 @@ export default function AgentProfilePage() {
                     />
                   </label>
                   <label className="text-sm font-semibold text-slate-700">
+                    Business name
+                    <input
+                      className="mt-2 w-full rounded-2xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-950 outline-none"
+                      value={businessName}
+                      onChange={(event) => setBusinessName(event.target.value)}
+                      placeholder="Agency or business name"
+                    />
+                    <span className="mt-1 block text-xs font-normal text-slate-500">
+                      Optional. Listings and top-plan watermarks use this name when provided.
+                    </span>
+                  </label>
+                  <label className="text-sm font-semibold text-slate-700">
                     Phone number
                     <input
                       className="mt-2 w-full rounded-2xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-950 outline-none"
@@ -292,6 +324,8 @@ export default function AgentProfilePage() {
               <div className="rounded-2xl border border-slate-300/80 bg-slate-200 p-4 shadow-sm sm:rounded-3xl sm:p-5">
                 <h2 className="text-lg font-semibold text-slate-950">Personal Details</h2>
                 <div className="mt-4 grid gap-5 border-t border-slate-300 pt-4 sm:grid-cols-2">
+                  <DetailCard label="Public Listing Name" value={publicDisplayName} />
+                  <DetailCard label="Business Name" value={data.profile.agent?.businessName ?? "Not provided"} />
                   <DetailCard label="Phone Number" value={data.user.phone ?? "Not provided"} />
                   <DetailCard label="Email Address" value={data.user.email} />
                 </div>

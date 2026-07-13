@@ -74,7 +74,8 @@ export function ReportListingButton({
       return;
     }
 
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const {
       data: { session }
     } = await supabase.auth.getSession();
@@ -97,7 +98,7 @@ export function ReportListingButton({
       });
       setMessage(response.message);
       setMessageTone("success");
-      event.currentTarget.reset();
+      formElement.reset();
     } catch (error) {
       const errorMessage = error instanceof ApiRequestError ? error.message : "Could not submit report.";
       setMessage(errorMessage);

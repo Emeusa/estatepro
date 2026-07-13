@@ -20,7 +20,7 @@ type AccountResponse = {
   } | null;
 };
 
-type ClientRegistrationResponse = {
+type RegistrationResponse = {
   checkEmailUrl?: string;
 };
 
@@ -329,7 +329,7 @@ export function ClientRegisterForm() {
 
     try {
       const phone = form.get("phone")?.toString().trim() ?? "";
-      const response = await apiRequest<ClientRegistrationResponse>("/api/auth/register", {
+      const response = await apiRequest<RegistrationResponse>("/api/auth/register", {
         method: "POST",
         retries: 0,
         body: JSON.stringify({
@@ -340,10 +340,8 @@ export function ClientRegisterForm() {
           ...readBotFields(form)
         })
       });
-      event.currentTarget.reset();
-      setPassword("");
-      setConfirmPassword("");
       redirectToCheckEmail(email, "client", response.checkEmailUrl);
+      return;
     } catch (error) {
       const fallback = error instanceof Error ? error.message : "We could not create your account. Please try again.";
       setMessage(getFriendlyAuthMessage(error, fallback));
@@ -434,7 +432,7 @@ export function AgentRegisterForm() {
     setIsSubmitting(true);
 
     try {
-      await apiRequest("/api/agents/register", {
+      const response = await apiRequest<RegistrationResponse>("/api/agents/register", {
         method: "POST",
         retries: 0,
         body: JSON.stringify({
@@ -447,10 +445,8 @@ export function AgentRegisterForm() {
           ...readBotFields(form)
         })
       });
-      event.currentTarget.reset();
-      setPassword("");
-      setConfirmPassword("");
-      redirectToCheckEmail(email, "agent");
+      redirectToCheckEmail(email, "agent", response.checkEmailUrl);
+      return;
     } catch (error) {
       if (error instanceof ApiRequestError) {
         setMessage(error.message);

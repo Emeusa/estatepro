@@ -32,6 +32,7 @@ create table if not exists public.users (
 create table if not exists public.agents (
   id uuid primary key references public.users (id) on delete cascade,
   verification_status text not null check (verification_status in ('pending', 'approved', 'rejected')),
+  business_name text,
   nin_number text,
   is_blocked boolean not null default false,
   trial_ends_at timestamptz not null
@@ -425,7 +426,8 @@ alter table public.listings
   add column if not exists road_access text;
 
 alter table public.agents
-  add column if not exists nin_number text;
+  add column if not exists nin_number text,
+  add column if not exists business_name text;
 
 alter table public.listing_reports
   add column if not exists reporter_name text,
@@ -584,6 +586,14 @@ begin
     alter table public.agents
       add constraint agents_nin_number_check
       check (nin_number is null or nin_number ~ '^[0-9]{11}$');
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint where conname = 'agents_business_name_length_check'
+  ) then
+    alter table public.agents
+      add constraint agents_business_name_length_check
+      check (business_name is null or char_length(trim(business_name)) between 2 and 120);
   end if;
 
   if not exists (

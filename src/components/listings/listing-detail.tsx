@@ -24,6 +24,7 @@ export function ListingDetail({ details, similarListings = [] }: Props) {
   const heroImage = images[0];
   const unavailableBadge = getUnavailableBadge(listing);
   const listingWhatsappHref = whatsappLink(listing.contactWhatsapp, listing.title);
+  const agentDisplayName = agent.displayName;
 
   return (
     <section className="rounded-[2rem] bg-gradient-to-br from-stone-300 via-stone-200 to-slate-300 p-3 shadow-sm sm:p-5">
@@ -52,7 +53,7 @@ export function ListingDetail({ details, similarListings = [] }: Props) {
             <p className="mt-3 text-sm text-slate-700">
               Listed by{" "}
               <VerifiedAgentName
-                fullName={agent.fullName}
+                fullName={agentDisplayName}
                 isVerified={agent.isVerified}
                 className="font-medium text-slate-950"
               />
@@ -69,7 +70,7 @@ export function ListingDetail({ details, similarListings = [] }: Props) {
             className="mt-3 block rounded-2xl bg-white/55 px-4 py-3 text-base text-slate-700 transition hover:bg-white/75 hover:text-slate-950"
           >
             <VerifiedAgentName
-              fullName={agent.fullName}
+              fullName={agentDisplayName}
               isVerified={agent.isVerified}
               className="font-semibold text-slate-950"
             />
@@ -142,7 +143,7 @@ export function ListingDetail({ details, similarListings = [] }: Props) {
           The information displayed about this property comprises a property advertisement. C59 Estatehub makes no
           warranty as to the accuracy or completeness of the advertisement or any linked or associated information, and
           C59 Estatehub has no control over the content. This property listing does not constitute property particulars.
-          The information is provided and maintained by {agent.fullName}. C59 Estatehub shall not in any way be held
+          The information is provided and maintained by {agentDisplayName}. C59 Estatehub shall not in any way be held
           liable for the actions of any agent or property owner/landlord on or off this website.
         </p>
         <p className="pt-3 font-semibold text-slate-900">Safety Tips</p>

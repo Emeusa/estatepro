@@ -34,12 +34,12 @@ export async function PATCH(request: NextRequest) {
     }
     const body = await request.json();
     const payload = userProfileSchema.parse(body);
-    const user = await saveUserAccount({ userId: decoded.uid, ...payload });
-    return withRateLimitHeaders(NextResponse.json({ user }), limited.headers);
+    const result = await saveUserAccount({ userId: decoded.uid, ...payload });
+    return withRateLimitHeaders(NextResponse.json(result), limited.headers);
   } catch (error) {
     const message =
       error instanceof ZodError
-        ? "Enter a valid name and phone number."
+        ? "Enter a valid name, business name, and phone number."
         : error instanceof Error
           ? error.message
           : "Could not update your profile.";

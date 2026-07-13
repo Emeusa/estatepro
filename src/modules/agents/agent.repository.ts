@@ -307,6 +307,7 @@ export async function updateUserProfile(input: {
   userId: string;
   fullName: string;
   phone: string | null;
+  businessName?: string | null;
 }) {
   const supabase = createServerSupabaseClient();
   const { error: authError } = await supabase.auth.admin.updateUserById(input.userId, {
@@ -333,7 +334,37 @@ export async function updateUserProfile(input: {
     throw new Error(error?.message ?? "Could not update profile.");
   }
 
-  return toUserRecord(data);
+  let agent: AgentProfile | undefined;
+  if (data.role === "agent") {
+    if (input.businessName !== undefined) {
+      const { data: agentData, error: agentError } = await supabase
+        .from("agents")
+        .update({
+          business_name: input.businessName
+        })
+        .eq("id", input.userId)
+        .select("*")
+        .single();
+
+      if (agentError || !agentData) {
+        throw new Error(agentError?.message ?? "Could not update agent profile.");
+      }
+
+      agent = toAgentProfile(agentData);
+    } else {
+      const { data: agentData, error: agentError } = await supabase
+        .from("agents")
+        .select("*")
+        .eq("id", input.userId)
+        .single();
+
+      if (!agentError && agentData) {
+        agent = toAgentProfile(agentData);
+      }
+    }
+  }
+
+  return { user: toUserRecord(data), agent };
 }
 
 export async function listAgentsForAdmin() {

@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getAgentDisplayName, normalizeBusinessName } from "@/lib/agent-display";
 import { splitListingsByActiveLimit } from "@/lib/listing-limits";
 import { createPlanLimitLifecycle, getMediaBearingListingAllowance } from "@/lib/listing-retention";
 import { toNameCase } from "@/lib/format";
@@ -130,7 +131,7 @@ function toPublicListingCardRecord(
     contactPhone: listing.contactPhone,
     contactWhatsapp: listing.contactWhatsapp,
     cardFeatureBadges: getListingCardFeatureBadges(listing),
-    agentName: agent?.fullName ?? null,
+    agentName: agent?.displayName ?? null,
     agentIsVerified: Boolean(agent?.isVerified)
   };
 }
@@ -146,7 +147,7 @@ async function listPublicAgentSummaries(agentIds: string[]) {
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase
     .from("agents")
-    .select("id, verification_status, is_blocked, users!inner(full_name)")
+    .select("*, users!inner(full_name)")
     .in("id", uniqueAgentIds)
     .eq("verification_status", "approved")
     .eq("is_blocked", false);
@@ -157,9 +158,13 @@ async function listPublicAgentSummaries(agentIds: string[]) {
 
   for (const row of data ?? []) {
     const user = Array.isArray(row.users) ? row.users[0] : row.users;
+    const fullName = toNameCase(user?.full_name ?? "Verified agent");
+    const businessName = normalizeBusinessName(row.business_name);
     summaries.set(row.id, {
       id: row.id,
-      fullName: toNameCase(user?.full_name ?? "Verified agent"),
+      fullName,
+      businessName,
+      displayName: getAgentDisplayName(fullName, businessName),
       isVerified: row.verification_status === "approved"
     });
   }
@@ -372,7 +377,7 @@ export async function getPublicAgentSummary(agentId: string): Promise<PublicAgen
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase
     .from("agents")
-    .select("id, verification_status, is_blocked, users!inner(full_name)")
+    .select("*, users!inner(full_name)")
     .eq("id", agentId)
     .eq("verification_status", "approved")
     .eq("is_blocked", false)
@@ -383,10 +388,14 @@ export async function getPublicAgentSummary(agentId: string): Promise<PublicAgen
   }
 
   const user = Array.isArray(data.users) ? data.users[0] : data.users;
+  const fullName = toNameCase(user?.full_name ?? "Verified agent");
+  const businessName = normalizeBusinessName(data.business_name);
 
   return {
     id: data.id,
-    fullName: toNameCase(user?.full_name ?? "Verified agent"),
+    fullName,
+    businessName,
+    displayName: getAgentDisplayName(fullName, businessName),
     isVerified: data.verification_status === "approved"
   };
 }

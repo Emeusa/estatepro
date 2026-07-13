@@ -1,6 +1,7 @@
 "use client";
 
 import { processListingImage, type ListingImageWatermark } from "@/lib/image";
+import { getAgentDisplayName } from "@/lib/agent-display";
 import { apiRequest } from "@/lib/api";
 import {
   getListingImageExtensionForType,
@@ -28,6 +29,9 @@ type AgentWatermarkResponse = {
     fullName: string;
   } | null;
   profile: {
+    agent?: {
+      businessName: string | null;
+    } | null;
     subscription?: SubscriptionRecord | null;
   };
 };
@@ -102,7 +106,8 @@ async function getListingImageWatermark(token: string): Promise<ListingImageWate
     const planSlug = getEffectivePlanSlug(response.profile.subscription ?? null);
 
     if (planSlug === "pro_agent" || planSlug === "agency_plus") {
-      return { type: "agent", text: response.user?.fullName ?? "Verified Agent" };
+      const fullName = response.user?.fullName ?? "Verified Agent";
+      return { type: "agent", text: getAgentDisplayName(fullName, response.profile.agent?.businessName) };
     }
   } catch (error) {
     console.warn("Could not load listing watermark context; using platform watermark.", {

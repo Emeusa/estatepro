@@ -24,6 +24,7 @@ type DashboardData = {
   profile: {
     agent?: {
       verificationStatus: string;
+      businessName: string | null;
       trialEndsAt: string;
       isBlocked: boolean;
     };
@@ -167,6 +168,7 @@ export default function AgentDashboardPage() {
   }
 
   const agentName = data.user?.fullName ?? "Agent";
+  const hasBusinessName = Boolean(data.profile.agent?.businessName?.trim());
   const verificationStatus = data.profile.agent?.verificationStatus ?? "pending";
   const isVerified = verificationStatus === "approved";
   const isBlocked = data.profile.agent?.isBlocked ?? false;
@@ -286,6 +288,25 @@ export default function AgentDashboardPage() {
                 </div>
               </div>
             </section>
+
+            {!hasBusinessName ? (
+              <section className="px-3 sm:px-6">
+                <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50/85 p-4 text-sm shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-bold text-amber-950">Add your business name</p>
+                    <p className="mt-1 text-amber-900">
+                      Show your agency or brand name on listings and eligible top-plan watermarks.
+                    </p>
+                  </div>
+                  <a
+                    href="/agents/profile?edit=business"
+                    className="inline-flex shrink-0 items-center justify-center rounded-xl bg-amber-500 px-4 py-2 text-xs font-black uppercase tracking-[0.12em] text-amber-950 transition hover:bg-amber-400"
+                  >
+                    Add business name
+                  </a>
+                </div>
+              </section>
+            ) : null}
 
             <section className="grid grid-cols-2 gap-2 px-3 sm:gap-4 sm:px-6 xl:grid-cols-4">
               <StatCard label="Total Listings" value={stats.total} />

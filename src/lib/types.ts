@@ -77,6 +77,7 @@ export type UserRecord = {
 export type AgentProfile = {
   id: string;
   verificationStatus: VerificationStatus;
+  businessName: string | null;
   ninNumber: string | null;
   isBlocked: boolean;
   trialEndsAt: string;
@@ -343,6 +344,8 @@ export type AdminAgentDetails = AdminAgentSummary & {
 export type PublicAgentSummary = {
   id: string;
   fullName: string;
+  businessName: string | null;
+  displayName: string;
   isVerified: boolean;
 };
 

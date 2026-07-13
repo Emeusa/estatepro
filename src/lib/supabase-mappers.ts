@@ -1,4 +1,5 @@
 import { toNameCase, toTitleCase } from "@/lib/format";
+import { normalizeBusinessName } from "@/lib/agent-display";
 import {
   AgentProfile,
   ListingImageVariant,
@@ -20,6 +21,7 @@ type DatabaseUser = {
 type DatabaseAgent = {
   id: string;
   verification_status: AgentProfile["verificationStatus"];
+  business_name?: string | null;
   nin_number: string | null;
   is_blocked: boolean;
   trial_ends_at: string;
@@ -157,6 +159,7 @@ export function toAgentProfile(row: DatabaseAgent): AgentProfile {
   return {
     id: row.id,
     verificationStatus: row.verification_status,
+    businessName: normalizeBusinessName(row.business_name),
     ninNumber: row.nin_number ?? null,
     isBlocked: row.is_blocked,
     trialEndsAt: row.trial_ends_at
