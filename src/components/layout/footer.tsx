@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { SITE_SOCIAL_LINKS } from "@/lib/seo";
+
 const popularKeywords = [
   "Flats for rent in Abuja",
   "Houses for rent in Abuja",
@@ -18,12 +20,12 @@ const popularKeywords = [
 const socialLinks = [
   {
     label: "X",
-    href: "https://x.com",
+    href: SITE_SOCIAL_LINKS.x,
     icon: <path d="m5 5 5.5 7.4L5.4 19h2.4l3.8-4.9 3.6 4.9H19l-5.9-8L17.8 5h-2.4l-3.3 4.3L8.9 5H5Z" />
   },
   {
     label: "LinkedIn",
-    href: "https://www.linkedin.com",
+    href: SITE_SOCIAL_LINKS.linkedin,
     icon: (
       <path d="M6.2 9.5h3V19h-3V9.5Zm1.5-4.7a1.7 1.7 0 1 1 0 3.4 1.7 1.7 0 0 1 0-3.4Zm3.6 4.7h2.9v1.3h.1c.4-.8 1.4-1.6 2.8-1.6 3 0 3.6 2 3.6 4.6V19h-3v-4.6c0-1.1 0-2.5-1.5-2.5s-1.8 1.2-1.8 2.4V19h-3V9.5Z" />
     )
