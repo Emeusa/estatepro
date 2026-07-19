@@ -127,7 +127,11 @@ export async function rateLimit(
   return {
     allowed: false as const,
     response: NextResponse.json(
-      { error: "Too many requests", retryAfter },
+      {
+        error: "Too many requests",
+        message: "Too many requests. Please wait a moment and try again.",
+        retryAfter
+      },
       { status: 429, headers: rateLimitHeaders(result) }
     )
   };

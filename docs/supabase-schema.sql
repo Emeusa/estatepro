@@ -97,6 +97,7 @@ create table if not exists public.billing_transactions (
 
 create table if not exists public.listings (
   id uuid primary key default gen_random_uuid(),
+  slug text,
   agent_id uuid not null references public.users (id) on delete cascade,
   title text not null,
   description text not null,
@@ -324,6 +325,7 @@ create table if not exists public.agent_quota_overrides (
 );
 
 alter table public.listings
+  add column if not exists slug text,
   add column if not exists listing_category text not null default 'for_sale';
 
 alter table public.listings
@@ -378,6 +380,106 @@ alter table public.listing_reports
   drop constraint if exists listing_reports_status_check,
   drop constraint if exists listing_reports_severity_check,
   drop constraint if exists listing_reports_action_taken_check;
+
+create or replace function public.slugify_listing_text(input text)
+returns text
+language sql
+immutable
+as $$
+  select coalesce(
+    nullif(
+      trim(both '-' from regexp_replace(regexp_replace(lower(coalesce(input, '')), '[^a-z0-9]+', '-', 'g'), '-+', '-', 'g')),
+      ''
+    ),
+    'property-listing'
+  );
+$$;
+
+create or replace function public.build_listing_slug_base(
+  listing_title text,
+  listing_category text,
+  listing_location jsonb
+)
+returns text
+language sql
+immutable
+as $$
+  with location_parts as (
+    select part, ord
+    from unnest(array[
+      listing_location->>'area',
+      listing_location->>'city',
+      listing_location->>'state'
+    ]) with ordinality as parts(part, ord)
+    where coalesce(trim(part), '') <> ''
+  ),
+  deduped_location_parts as (
+    select distinct on (public.slugify_listing_text(part))
+      part,
+      ord
+    from location_parts
+    order by public.slugify_listing_text(part), ord
+  ),
+  category_text as (
+    select case listing_category
+      when 'for_rent' then 'for rent'
+      when 'for_sale' then 'for sale'
+      when 'short_let' then 'short let'
+      else ''
+    end as value
+  )
+  select coalesce(
+    nullif(
+      trim(both '-' from left(public.slugify_listing_text(concat_ws(
+        ' ',
+        listing_title,
+        case
+          when public.slugify_listing_text(listing_title) like '%' || public.slugify_listing_text((select value from category_text)) || '%'
+            then ''
+          else (select value from category_text)
+        end,
+        (select string_agg(part, ' ' order by ord) from deduped_location_parts)
+      )), 120)),
+      ''
+    ),
+    'property-listing'
+  );
+$$;
+
+do $$
+declare
+  listing_row record;
+  base_slug text;
+  candidate_slug text;
+  suffix integer;
+begin
+  for listing_row in
+    select
+      id,
+      public.build_listing_slug_base(title, listing_category, location) as generated_slug
+    from public.listings
+    where slug is null or slug = ''
+    order by created_at, id
+  loop
+    base_slug := listing_row.generated_slug;
+    candidate_slug := base_slug;
+    suffix := 2;
+
+    while exists (
+      select 1
+      from public.listings
+      where slug = candidate_slug
+        and id <> listing_row.id
+    ) loop
+      candidate_slug := trim(both '-' from left(base_slug, greatest(1, 120 - length('-' || suffix::text)))) || '-' || suffix::text;
+      suffix := suffix + 1;
+    end loop;
+
+    update public.listings
+    set slug = candidate_slug
+    where id = listing_row.id;
+  end loop;
+end $$;
 
 alter table public.admin_notifications
   drop constraint if exists admin_notifications_priority_check;
@@ -713,6 +815,14 @@ begin
   end if;
 
   if not exists (
+    select 1 from pg_constraint where conname = 'listings_slug_format_check'
+  ) then
+    alter table public.listings
+      add constraint listings_slug_format_check
+      check (slug is null or slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$');
+  end if;
+
+  if not exists (
     select 1 from pg_constraint where conname = 'listings_promotion_dates_check'
   ) then
     alter table public.listings
@@ -733,6 +843,14 @@ create index if not exists listings_agent_idx
 
 create index if not exists listings_public_agent_idx
   on public.listings (agent_id, status, created_at desc);
+
+create unique index if not exists listings_slug_unique_idx
+  on public.listings (slug)
+  where slug is not null;
+
+create index if not exists listings_slug_lookup_idx
+  on public.listings (slug)
+  where slug is not null;
 
 create index if not exists listings_title_search_idx
   on public.listings using gin (title gin_trgm_ops);

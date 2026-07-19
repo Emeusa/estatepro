@@ -80,9 +80,12 @@ export default function AgentSubscriptionPage() {
       }
 
       try {
-        const profile = await apiRequest<Omit<SubscriptionPageData, "token">>("/api/agents/me", {
-          headers: { Authorization: `Bearer ${session.access_token}` }
-        });
+        const profile = await apiRequest<Omit<SubscriptionPageData, "token">>(
+          "/api/agents/me?listLimit=0&includeAnalytics=false",
+          {
+            headers: { Authorization: `Bearer ${session.access_token}` }
+          }
+        );
         if (active) {
           setData({ ...profile, token: session.access_token });
           setMessage("");

@@ -20,6 +20,18 @@ describe("getFriendlyAuthMessage", () => {
     );
   });
 
+  it("shows a clear login rate-limit message", () => {
+    expect(getFriendlyAuthMessage(new Error("Too many requests. Please wait a moment and try again."), "fallback")).toBe(
+      "Too many login attempts. Please wait a moment and try again."
+    );
+  });
+
+  it("shows a support message for incomplete profiles", () => {
+    expect(getFriendlyAuthMessage(new Error("Account profile was not found."), "fallback")).toBe(
+      "Your account exists, but the profile is incomplete. Please contact support."
+    );
+  });
+
   it("maps confirmed login query state to a success notice", () => {
     expect(getLoginConfirmationMessage("1")).toBe("Email confirmed. You can now sign in.");
     expect(getLoginConfirmationMessage("0")).toBeNull();

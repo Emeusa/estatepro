@@ -28,6 +28,16 @@ type Props = {
   onListingsChanged?: (listings: ListingRecord[]) => void;
 };
 
+function scrollToEditor() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    document.getElementById("listing-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
 export function ListingManager({
   token,
   initialListings,
@@ -57,12 +67,25 @@ export function ListingManager({
     });
   }
 
+  function startNewListing() {
+    setSelected(undefined);
+    setMessage("Ready to create a new listing.");
+    scrollToEditor();
+  }
+
+  function selectListingForEdit(listing: ListingRecord) {
+    setSelected(listing);
+    setMessage(`Editing: ${listing.title}`);
+    scrollToEditor();
+  }
+
   useEffect(() => {
     if (!createRequestKey) {
       return;
     }
     setSelected(undefined);
-    document.getElementById("listing-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setMessage("Ready to create a new listing.");
+    scrollToEditor();
   }, [createRequestKey]);
 
   useEffect(() => {
@@ -80,9 +103,14 @@ export function ListingManager({
       return;
     }
 
+    if (selected?.id === listing.id) {
+      return;
+    }
+
     setSelected(listing);
-    document.getElementById("listing-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [enableEditQueryParam, listings]);
+    setMessage(`Editing: ${listing.title}`);
+    scrollToEditor();
+  }, [enableEditQueryParam, listings, selected?.id]);
 
   async function deleteListing(listingId: string) {
     try {
@@ -181,7 +209,7 @@ export function ListingManager({
     return (
       <button
         className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-800 ring-1 ring-slate-300 transition hover:bg-slate-300"
-        onClick={() => setSelected(listing)}
+        onClick={() => selectListingForEdit(listing)}
       >
         Edit
       </button>
@@ -208,7 +236,7 @@ export function ListingManager({
             {showForm ? (
               <button
                 className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
-                onClick={() => setSelected(undefined)}
+                onClick={startNewListing}
               >
                 New listing
               </button>
@@ -295,7 +323,7 @@ export function ListingManager({
       </section>
 
       {showForm ? (
-        <section id="listing-editor" className="scroll-mt-6">
+        <section id="listing-editor" className="scroll-mt-24">
           <div className="mb-2 sm:mb-3">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
               {selected ? "Edit property" : "Post a property"}

@@ -9,6 +9,29 @@ import { getAgentDashboardData, getUserAccount } from "@/modules/agents/agent.se
 import { getAgentEntitlements } from "@/modules/entitlements/entitlement.service";
 import { getAgentListings } from "@/modules/listings/listing.service";
 
+function readBooleanFlag(request: NextRequest, key: string, defaultValue: boolean) {
+  const value = request.nextUrl.searchParams.get(key);
+  if (value === null) {
+    return defaultValue;
+  }
+
+  return value !== "false" && value !== "0";
+}
+
+function readListLimit(request: NextRequest) {
+  const value = request.nextUrl.searchParams.get("listLimit");
+  if (value === null) {
+    return 50;
+  }
+
+  const limit = Number(value);
+  if (!Number.isFinite(limit) || limit < 0) {
+    return 50;
+  }
+
+  return Math.min(Math.trunc(limit), 50);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const decoded = await requireAgent(request);
@@ -17,27 +40,39 @@ export async function GET(request: NextRequest) {
       return limited.response;
     }
 
+    const listLimit = readListLimit(request);
+    const includeEntitlements = readBooleanFlag(request, "includeEntitlements", true);
+    const includeAnalytics = readBooleanFlag(request, "includeAnalytics", true);
     const [profile, listings, user] = await Promise.all([
       getAgentDashboardData(decoded.uid),
-      getAgentListings(decoded.uid),
+      getAgentListings(decoded.uid, listLimit),
       getUserAccount(decoded.uid)
     ]);
+    const subscription = profile.subscription ?? null;
     const [entitlements, analytics] = await Promise.all([
-      getAgentEntitlements(decoded.uid, profile.subscription),
-      getAgentAnalytics(decoded.uid, "30d")
+      includeEntitlements ? getAgentEntitlements(decoded.uid, subscription) : Promise.resolve(undefined),
+      includeAnalytics ? getAgentAnalytics(decoded.uid, "30d", subscription) : Promise.resolve(undefined)
     ]);
 
+    const payload: Record<string, unknown> = {
+      profile,
+      listings,
+      user,
+      billing: {
+        liveEnabled: isBillingLiveEnabled()
+      }
+    };
+
+    if (includeEntitlements) {
+      payload.entitlements = entitlements;
+    }
+
+    if (includeAnalytics) {
+      payload.analytics = analytics;
+    }
+
     return withRateLimitHeaders(
-      NextResponse.json({
-        profile,
-        listings,
-        user,
-        entitlements,
-        analytics,
-        billing: {
-          liveEnabled: isBillingLiveEnabled()
-        }
-      }),
+      NextResponse.json(payload),
       limited.headers
     );
   } catch (error) {

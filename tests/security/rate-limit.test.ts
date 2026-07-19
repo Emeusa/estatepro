@@ -21,6 +21,11 @@ describe("rateLimit", () => {
     if (!second.allowed) {
       expect(second.response.status).toBe(429);
       expect(second.response.headers.get("X-RateLimit-Limit")).toBe("1");
+      await expect(second.response.json()).resolves.toMatchObject({
+        error: "Too many requests",
+        message: "Too many requests. Please wait a moment and try again.",
+        retryAfter: expect.any(Number)
+      });
     }
   });
 });

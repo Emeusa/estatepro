@@ -22,6 +22,10 @@ export function getFriendlyAuthMessage(error: unknown, fallback: string) {
     return "Incorrect email or password.";
   }
 
+  if (message.includes("too many requests") || message.includes("too many login attempts")) {
+    return "Too many login attempts. Please wait a moment and try again.";
+  }
+
   if (message.includes("email not confirmed") || message.includes("email_not_confirmed") || message.includes("confirm your email")) {
     return "Please confirm your email before signing in.";
   }
@@ -78,8 +82,11 @@ export function getFriendlyAuthMessage(error: unknown, fallback: string) {
     return "Agent account setup is incomplete. Please try again.";
   }
 
-  if (message.includes("missing") && message.includes("profile")) {
-    return "Your account was found, but the profile is incomplete. Please contact support.";
+  if (
+    (message.includes("missing") && message.includes("profile")) ||
+    (message.includes("profile") && message.includes("not found"))
+  ) {
+    return "Your account exists, but the profile is incomplete. Please contact support.";
   }
 
   return fallback;

@@ -49,6 +49,7 @@ type DatabaseSubscription = {
 
 type DatabaseListing = {
   id: string;
+  slug?: string | null;
   agent_id: string;
   title: string;
   description: string;
@@ -191,6 +192,7 @@ export function toSubscriptionRecord(row: DatabaseSubscription): SubscriptionRec
 export function toListingRecord(row: DatabaseListing): ListingRecord {
   return {
     id: row.id,
+    slug: row.slug ?? row.id,
     agentId: row.agent_id,
     title: toTitleCase(row.title),
     description: row.description,

@@ -173,6 +173,8 @@ export function LoginForm() {
   const [showResetForm, setShowResetForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResetSubmitting, setIsResetSubmitting] = useState(false);
+  const [loginTurnstileKey, setLoginTurnstileKey] = useState(0);
+  const [resetTurnstileKey, setResetTurnstileKey] = useState(0);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -189,6 +191,7 @@ export function LoginForm() {
     } catch (error) {
       setMessage(getFriendlyAuthMessage(error, "We could not sign you in. Please try again."));
       setIsSubmitting(false);
+      setLoginTurnstileKey((current) => current + 1);
     }
   }
 
@@ -219,6 +222,7 @@ export function LoginForm() {
       setResetMessage(getFriendlyAuthMessage(error, "We could not send reset instructions. Please try again."));
       setResetMessageType("error");
     } finally {
+      setResetTurnstileKey((current) => current + 1);
       setIsResetSubmitting(false);
     }
   }
@@ -253,7 +257,7 @@ export function LoginForm() {
             Forgot password?
           </button>
         </div>
-        <TurnstileFields />
+        <TurnstileFields key={`login-${loginTurnstileKey}`} />
         <button className="button-primary inline-flex w-full items-center justify-center gap-2" disabled={isSubmitting}>
           {isSubmitting ? <ButtonSpinner /> : null}
           {isSubmitting ? "Logging in..." : "Login"}
@@ -282,7 +286,7 @@ export function LoginForm() {
             value={resetEmail}
             onChange={(e) => setResetEmail(e.target.value.toLowerCase())}
           />
-          <TurnstileFields />
+          <TurnstileFields key={`password-reset-${resetTurnstileKey}`} />
           <button className="button-primary inline-flex w-full items-center justify-center gap-2" disabled={isResetSubmitting}>
             {isResetSubmitting ? <ButtonSpinner /> : null}
             {isResetSubmitting ? "Sending..." : "Send reset link"}
@@ -304,6 +308,7 @@ export function ClientRegisterForm() {
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState<"error" | "success">("error");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [turnstileKey, setTurnstileKey] = useState(0);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -346,6 +351,7 @@ export function ClientRegisterForm() {
       const fallback = error instanceof Error ? error.message : "We could not create your account. Please try again.";
       setMessage(getFriendlyAuthMessage(error, fallback));
       setIsSubmitting(false);
+      setTurnstileKey((current) => current + 1);
     }
   }
 
@@ -368,7 +374,7 @@ export function ClientRegisterForm() {
         value={confirmPassword}
         onChange={setConfirmPassword}
       />
-      <TurnstileFields />
+      <TurnstileFields key={`client-register-${turnstileKey}`} />
       <button className="button-primary inline-flex w-full items-center justify-center gap-2" disabled={isSubmitting}>
         {isSubmitting ? <ButtonSpinner /> : null}
         {isSubmitting ? "Creating account..." : "Create account"}
@@ -396,6 +402,7 @@ export function AgentRegisterForm() {
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState<"error" | "success">("error");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [turnstileKey, setTurnstileKey] = useState(0);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -451,12 +458,14 @@ export function AgentRegisterForm() {
       if (error instanceof ApiRequestError) {
         setMessage(error.message);
         setIsSubmitting(false);
+        setTurnstileKey((current) => current + 1);
         return;
       }
 
       const fallback = error instanceof Error ? error.message : "We could not create the agent account. Please try again.";
       setMessage(getFriendlyAuthMessage(error, fallback));
       setIsSubmitting(false);
+      setTurnstileKey((current) => current + 1);
     }
   }
 
@@ -481,7 +490,7 @@ export function AgentRegisterForm() {
         value={confirmPassword}
         onChange={setConfirmPassword}
       />
-      <TurnstileFields />
+      <TurnstileFields key={`agent-register-${turnstileKey}`} />
       <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
         <input
           name="acceptedLegalTerms"

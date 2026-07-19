@@ -8,7 +8,7 @@ import {
   demoteExcessActiveAvailableListingsForAgent,
   getPublicAgentSummary,
   getListingById,
-  getPublicListingById,
+  getPublicListingByIdentifier,
   listAgentListings,
   listListingsByAgentIds,
   listListingCountsByAgentIds,
@@ -37,7 +37,7 @@ export async function getListingDetails(listingId: string) {
 }
 
 export async function getPublicListingDetails(listingId: string) {
-  const listing = await getPublicListingById(listingId);
+  const listing = await getPublicListingByIdentifier(listingId);
   if (!listing) {
     return null;
   }
@@ -67,8 +67,8 @@ export async function getPublicAgentListings(agentId: string) {
   return { agent, listings };
 }
 
-export async function getAgentListings(agentId: string) {
-  return listAgentListings(agentId);
+export async function getAgentListings(agentId: string, limit = 50) {
+  return listAgentListings(agentId, limit);
 }
 
 export async function getListingsForAdmin() {

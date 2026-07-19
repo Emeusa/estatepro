@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { formatDate, formatPrice, whatsappLink } from "@/lib/format";
 import { trackListingEvent } from "@/lib/listing-events";
 import { getListingImages } from "@/lib/listing-images";
+import { getListingHref } from "@/lib/listing-urls";
 import { getListingPromotionBadge } from "@/lib/listing-visibility";
 import { getUnavailableBadge, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
 import { getListingQualityBadges } from "@/lib/listing-quality";
@@ -84,7 +85,7 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
   const previewImages = images.slice(1, 4);
   const [previewRatios, setPreviewRatios] = useState<Record<number, number>>({});
   const promotionBadge = getListingPromotionBadge(listing);
-  const listingHref = `/listings/${listing.id}`;
+  const listingHref = getListingHref(listing);
   const cardRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {

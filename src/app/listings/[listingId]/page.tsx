@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { cache } from "react";
 
 import { ListingDetail } from "@/components/listings/listing-detail";
 import { getListingHeroImage } from "@/lib/listing-images";
+import { isUuidListingIdentifier } from "@/lib/listing-slugs";
+import { getListingHref } from "@/lib/listing-urls";
 import { buildListingMetaDescription, buildListingMetaTitle, SITE_NAME } from "@/lib/seo";
 import { getPublicListingDetails, getSimilarListingsForPublicListing } from "@/modules/listings/listing.service";
 
@@ -33,6 +35,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const title = buildListingMetaTitle(listing);
   const description = buildListingMetaDescription(listing);
   const image = getListingHeroImage(listing)?.heroUrl;
+  const listingHref = getListingHref(listing);
 
   return {
     title: {
@@ -40,12 +43,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     },
     description,
     alternates: {
-      canonical: `/listings/${listing.id}`
+      canonical: listingHref
     },
     openGraph: {
       title,
       description,
-      url: `/listings/${listing.id}`,
+      url: listingHref,
       type: "article",
       images: image ? [{ url: image, alt: listing.title }] : undefined
     },
@@ -64,6 +67,10 @@ export default async function ListingPage({ params }: Props) {
 
   if (!details) {
     notFound();
+  }
+
+  if (isUuidListingIdentifier(listingId) && details.listing.slug !== details.listing.id) {
+    permanentRedirect(getListingHref(details.listing));
   }
 
   const similarListings = await getSimilarListingsForPublicListing(details.listing, 3);

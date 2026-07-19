@@ -95,10 +95,22 @@ function StatCard({ label, value, tone = "blue" }: StatCardProps) {
   );
 }
 
+function DashboardLoadingPanel({ label }: { label: string }) {
+  return (
+    <section className="px-3 sm:px-6">
+      <div className="rounded-2xl border border-slate-300/80 bg-slate-200 p-4 text-sm font-semibold text-slate-500 shadow-sm sm:rounded-3xl sm:p-5">
+        {label}
+      </div>
+    </section>
+  );
+}
+
 export default function AgentDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [message, setMessage] = useState("Loading dashboard...");
   const [createRequestKey, setCreateRequestKey] = useState(0);
+  const [entitlementsLoading, setEntitlementsLoading] = useState(false);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -116,16 +128,55 @@ export default function AgentDashboardPage() {
       }
 
       try {
-        const profile = await apiRequest<Omit<DashboardData, "token">>("/api/agents/me", {
-          headers: { Authorization: `Bearer ${session.access_token}` }
-        });
+        const token = session.access_token;
+        const profile = await apiRequest<Omit<DashboardData, "token">>(
+          "/api/agents/me?listLimit=3&includeEntitlements=false&includeAnalytics=false",
+          {
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
         if (active) {
-          setData({ ...profile, token: session.access_token });
+          setData({ ...profile, token });
           setMessage("");
+          setEntitlementsLoading(true);
+          setAnalyticsLoading(true);
+        }
+
+        const [entitlementsResult, analyticsResult] = await Promise.allSettled([
+          apiRequest<{ entitlements: AgentEntitlements }>("/api/agents/entitlements", {
+            headers: { Authorization: `Bearer ${token}` }
+          }),
+          apiRequest<{ analytics: AgentAnalyticsSummary }>("/api/agents/analytics?range=30d", {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+        ]);
+
+        if (active) {
+          setData((current) => {
+            if (!current) {
+              return current;
+            }
+
+            return {
+              ...current,
+              entitlements:
+                entitlementsResult.status === "fulfilled"
+                  ? entitlementsResult.value.entitlements
+                  : current.entitlements,
+              analytics:
+                analyticsResult.status === "fulfilled"
+                  ? analyticsResult.value.analytics
+                  : current.analytics
+            };
+          });
+          setEntitlementsLoading(false);
+          setAnalyticsLoading(false);
         }
       } catch (error) {
         if (active) {
           setMessage(error instanceof Error ? error.message : "Failed to load dashboard.");
+          setEntitlementsLoading(false);
+          setAnalyticsLoading(false);
         }
       }
     }
@@ -134,8 +185,16 @@ export default function AgentDashboardPage() {
 
     const {
       data: { subscription }
-    } = supabase.auth.onAuthStateChange(() => {
-      loadDashboard();
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        setData(null);
+        setMessage("Sign in first to access the dashboard.");
+        return;
+      }
+
+      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+        loadDashboard();
+      }
     });
 
     return () => {
@@ -337,8 +396,16 @@ export default function AgentDashboardPage() {
               </div>
             </section>
 
-            <EntitlementSummary entitlements={data.entitlements} />
-            <AnalyticsSummary analytics={data.analytics} />
+            {data.entitlements ? (
+              <EntitlementSummary entitlements={data.entitlements} />
+            ) : entitlementsLoading ? (
+              <DashboardLoadingPanel label="Loading plan usage..." />
+            ) : null}
+            {data.analytics ? (
+              <AnalyticsSummary analytics={data.analytics} />
+            ) : analyticsLoading ? (
+              <DashboardLoadingPanel label="Loading analytics..." />
+            ) : null}
 
             {!hasActivePaidPlan ? (
               <section className="px-3 sm:px-6">

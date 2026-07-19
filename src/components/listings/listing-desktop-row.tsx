@@ -10,6 +10,7 @@ import { getQualityIconForLabel, QualityIcon } from "@/components/listings/listi
 import { formatDate, formatPrice, whatsappLink } from "@/lib/format";
 import { trackListingEvent } from "@/lib/listing-events";
 import { getListingImages } from "@/lib/listing-images";
+import { getListingHref } from "@/lib/listing-urls";
 import { LISTING_CATEGORY_LABELS, getUnavailableBadge } from "@/lib/listing-labels";
 import { getListingQualityBadges } from "@/lib/listing-quality";
 import { getListingPromotionBadge } from "@/lib/listing-visibility";
@@ -91,7 +92,7 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
   const images = getListingImages(listing);
   const image = images[0];
   const previewImages = images.slice(1, 4);
-  const listingHref = `/listings/${listing.id}`;
+  const listingHref = getListingHref(listing);
   const promotionBadge = getListingPromotionBadge(listing);
   const unavailableBadge = getUnavailableBadge(listing);
   const qualityBadges = getListingQualityBadges(listing).slice(0, 2);

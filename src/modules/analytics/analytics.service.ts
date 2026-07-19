@@ -3,7 +3,7 @@ import { createHash } from "crypto";
 import { getPlanAnalyticsLevel } from "@/lib/pricing";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getEffectivePlanSlug } from "@/lib/subscriptions";
-import { AgentAnalyticsSummary } from "@/lib/types";
+import { AgentAnalyticsSummary, SubscriptionRecord } from "@/lib/types";
 import { getAgentProfile } from "@/modules/agents/agent.repository";
 
 type AnalyticsRange = "7d" | "30d";
@@ -35,9 +35,14 @@ function hashSession(value?: string | null) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-export async function getAgentAnalytics(agentId: string, range: AnalyticsRange = "30d"): Promise<AgentAnalyticsSummary> {
+export async function getAgentAnalytics(
+  agentId: string,
+  range: AnalyticsRange = "30d",
+  subscriptionOverride?: SubscriptionRecord | null
+): Promise<AgentAnalyticsSummary> {
   const supabase = createServerSupabaseClient();
-  const { subscription } = await getAgentProfile(agentId);
+  const subscription =
+    subscriptionOverride === undefined ? (await getAgentProfile(agentId)).subscription : subscriptionOverride;
   const analyticsLevel = getPlanAnalyticsLevel(getEffectivePlanSlug(subscription));
   const startDate = startDateForRange(range);
 

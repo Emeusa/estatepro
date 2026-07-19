@@ -1,5 +1,10 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getAgentDisplayName, normalizeBusinessName } from "@/lib/agent-display";
+import {
+  buildListingSlugBase,
+  getAvailableListingSlug,
+  isUuidListingIdentifier
+} from "@/lib/listing-slugs";
 import { splitListingsByActiveLimit } from "@/lib/listing-limits";
 import { createPlanLimitLifecycle, getMediaBearingListingAllowance } from "@/lib/listing-retention";
 import { toNameCase } from "@/lib/format";
@@ -32,6 +37,11 @@ type SimilarListingFilters = {
   listingCategory?: ListingCategory;
 };
 
+export type ListingSitemapEntry = {
+  slug: string;
+  updatedAt: string;
+};
+
 function normalizeKeyword(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -44,6 +54,14 @@ function createDescriptionPreview(value: string, maxLength = 110) {
 
   const clipped = normalized.slice(0, maxLength).replace(/\s+\S*$/, "").trim();
   return `${clipped || normalized.slice(0, maxLength).trim()}...`;
+}
+
+function isMissingSlugColumnError(error: { message?: string; code?: string } | null | undefined) {
+  return error?.code === "42703" || /column .*slug.* does not exist/i.test(error?.message ?? "");
+}
+
+function isDuplicateSlugError(error: { message?: string; code?: string } | null | undefined) {
+  return error?.code === "23505" && /slug/i.test(error?.message ?? "");
 }
 
 function parseKeywordFilters(keyword?: string): KeywordFilters {
@@ -106,6 +124,7 @@ function toPublicListingCardRecord(
 ): PublicListingCardRecord {
   return {
     id: listing.id,
+    slug: listing.slug,
     title: listing.title,
     price: listing.price,
     propertyType: listing.propertyType,
@@ -331,12 +350,29 @@ async function getListingRowById(listingId: string, source: "listings" | "public
   return toListingRecord(data);
 }
 
+async function getListingRowBySlug(slug: string, source: "listings" | "public_listings") {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.from(source).select("*").eq("slug", slug).single();
+  if (error || !data) {
+    return null;
+  }
+  return toListingRecord(data);
+}
+
 export async function getListingById(listingId: string) {
   return getListingRowById(listingId, "listings");
 }
 
 export async function getPublicListingById(listingId: string) {
   return getListingRowById(listingId, "public_listings");
+}
+
+export async function getPublicListingByIdentifier(identifier: string) {
+  if (isUuidListingIdentifier(identifier)) {
+    return getPublicListingById(identifier);
+  }
+
+  return getListingRowBySlug(identifier, "public_listings");
 }
 
 export async function listPublicListingsByAgent(agentId: string) {
@@ -373,6 +409,30 @@ export async function listPublicListingCardsByIds(listingIds: string[]) {
   return uniqueListingIds.map((listingId) => byId.get(listingId)).filter((listing): listing is PublicListingCardRecord => Boolean(listing));
 }
 
+export async function listPublicListingSitemapEntries(limit = 1000): Promise<ListingSitemapEntry[]> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from(PUBLIC_FEED_LISTINGS_SOURCE)
+    .select("id, slug, updated_at")
+    .not("slug", "is", null)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    if (isMissingSlugColumnError(error)) {
+      return [];
+    }
+    throw new Error(error.message);
+  }
+
+  return (data ?? [])
+    .map((row) => ({
+      slug: typeof row.slug === "string" && row.slug ? row.slug : row.id,
+      updatedAt: row.updated_at
+    }))
+    .filter((row) => Boolean(row.slug));
+}
+
 export async function getPublicAgentSummary(agentId: string): Promise<PublicAgentSummary | null> {
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase
@@ -400,14 +460,18 @@ export async function getPublicAgentSummary(agentId: string): Promise<PublicAgen
   };
 }
 
-export async function listAgentListings(agentId: string) {
+export async function listAgentListings(agentId: string, limit = 50) {
+  if (limit <= 0) {
+    return [];
+  }
+
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase
     .from("listings")
     .select("*")
     .eq("agent_id", agentId)
     .order("created_at", { ascending: false })
-    .limit(50);
+    .limit(Math.min(Math.trunc(limit), 50));
   if (error) {
     throw new Error(error.message);
   }
@@ -627,16 +691,48 @@ export async function demoteExcessActiveAvailableListingsForAgent(
   };
 }
 
-export async function createListing(
-  agentId: string,
-  payload: Omit<ListingRecord, "id" | "status" | "createdAt" | "updatedAt" | "agentId">,
-  initialStatus: Extract<ListingStatus, "active" | "pending">
+async function createUniqueListingSlug(
+  payload: Omit<ListingRecord, "id" | "slug" | "status" | "createdAt" | "updatedAt" | "agentId">
 ) {
+  const base = buildListingSlugBase({
+    title: payload.title,
+    listingCategory: payload.listingCategory,
+    location: payload.location
+  });
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase
     .from("listings")
-    .insert({
+    .select("slug")
+    .gte("slug", base)
+    .lte("slug", `${base}\uffff`);
+
+  if (error) {
+    if (isMissingSlugColumnError(error)) {
+      return null;
+    }
+    throw new Error(error.message);
+  }
+
+  return getAvailableListingSlug(
+    base,
+    (data ?? [])
+      .map((row) => row.slug)
+      .filter((slug): slug is string => typeof slug === "string" && (slug === base || slug.startsWith(`${base}-`)))
+  );
+}
+
+export async function createListing(
+  agentId: string,
+  payload: Omit<ListingRecord, "id" | "slug" | "status" | "createdAt" | "updatedAt" | "agentId">,
+  initialStatus: Extract<ListingStatus, "active" | "pending">
+) {
+  const supabase = createServerSupabaseClient();
+  let slug = await createUniqueListingSlug(payload);
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const insertPayload: Record<string, unknown> = {
       agent_id: agentId,
+      slug,
       title: payload.title,
       description: payload.description,
       price: payload.price,
@@ -671,20 +767,41 @@ export async function createListing(
       title_document_type: payload.titleDocumentType,
       zoning_type: payload.zoningType,
       road_access: payload.roadAccess
-    })
-    .select("*")
-    .single();
+    };
 
-  if (error || !data) {
+    if (!slug) {
+      delete insertPayload.slug;
+    }
+
+    const { data, error } = await supabase
+      .from("listings")
+      .insert(insertPayload)
+      .select("*")
+      .single();
+
+    if (!error && data) {
+      return toListingRecord(data);
+    }
+
+    if (slug && isMissingSlugColumnError(error)) {
+      slug = null;
+      continue;
+    }
+
+    if (slug && isDuplicateSlugError(error)) {
+      slug = await createUniqueListingSlug(payload);
+      continue;
+    }
+
     throw new Error(error?.message ?? "Could not create listing.");
   }
 
-  return toListingRecord(data);
+  throw new Error("Could not create a unique listing URL.");
 }
 
 export async function updateListing(
   listingId: string,
-  payload: Partial<Omit<ListingRecord, "id" | "agentId" | "createdAt">>
+  payload: Partial<Omit<ListingRecord, "id" | "slug" | "agentId" | "createdAt">>
 ) {
   const supabase = createServerSupabaseClient();
   const updates: Record<string, unknown> = {};

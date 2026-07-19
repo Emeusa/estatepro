@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
@@ -13,6 +13,26 @@ const loginSchema = z.object({
   password: z.string().min(1).max(72),
   ...botProtectionSchema.shape
 }).strict();
+
+async function sendWelcomeEmailSafely(userId: string) {
+  try {
+    await sendWelcomeEmailForUser(userId);
+  } catch (error) {
+    console.error("Welcome email failed after login", {
+      userId,
+      error: error instanceof Error ? error.message : "unknown"
+    });
+  }
+}
+
+function scheduleWelcomeEmail(userId: string) {
+  try {
+    after(() => sendWelcomeEmailSafely(userId));
+  } catch {
+    // Vitest and some non-Next runtimes do not provide an after() request scope.
+    void sendWelcomeEmailSafely(userId);
+  }
+}
 
 export async function POST(request: NextRequest) {
   let userEmailHash = "unknown";
@@ -65,7 +85,7 @@ export async function POST(request: NextRequest) {
       metadata: { emailHash: userEmailHash }
     });
     if (data.user?.id) {
-      await sendWelcomeEmailForUser(data.user.id);
+      scheduleWelcomeEmail(data.user.id);
     }
 
     return withRateLimitHeaders(NextResponse.json({

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { formatPrice } from "@/lib/format";
 import { getListingHeroImage } from "@/lib/listing-images";
 import { LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
+import { getListingHref } from "@/lib/listing-urls";
 import { PublicListingCardRecord } from "@/lib/types";
 
 type Props = {
@@ -12,7 +13,7 @@ type Props = {
 
 export function SimilarListingCard({ listing }: Props) {
   const image = getListingHeroImage(listing);
-  const listingHref = `/listings/${listing.id}`;
+  const listingHref = getListingHref(listing);
 
   return (
     <Link

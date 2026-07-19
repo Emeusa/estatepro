@@ -91,4 +91,16 @@ describe("registration confirmation flow", () => {
     expect(source).toContain('redirectToCheckEmail(email, "client", response.checkEmailUrl);');
     expect(source).toContain('redirectToCheckEmail(email, "agent", response.checkEmailUrl);');
   });
+
+  it("remounts auth Turnstile widgets after failed submissions", () => {
+    const source = readFileSync(path.join(process.cwd(), "src/components/forms/auth-forms.tsx"), "utf8");
+
+    expect(source).toContain("setLoginTurnstileKey((current) => current + 1);");
+    expect(source).toContain("setResetTurnstileKey((current) => current + 1);");
+    expect(source).toContain("setTurnstileKey((current) => current + 1);");
+    expect(source).toContain("key={`login-${loginTurnstileKey}`}");
+    expect(source).toContain("key={`password-reset-${resetTurnstileKey}`}");
+    expect(source).toContain("key={`client-register-${turnstileKey}`}");
+    expect(source).toContain("key={`agent-register-${turnstileKey}`}");
+  });
 });

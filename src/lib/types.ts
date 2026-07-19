@@ -85,6 +85,7 @@ export type AgentProfile = {
 
 export type ListingRecord = {
   id: string;
+  slug: string;
   agentId: string;
   title: string;
   description: string;
@@ -142,6 +143,7 @@ export type ListingRecord = {
 export type PublicListingCardRecord = Pick<
   ListingRecord,
   | "id"
+  | "slug"
   | "title"
   | "price"
   | "propertyType"

@@ -82,9 +82,12 @@ export default function AgentProfilePage() {
       }
 
       try {
-        const response = await apiRequest<ProfileData>("/api/agents/me", {
-          headers: { Authorization: `Bearer ${session.access_token}` }
-        });
+        const response = await apiRequest<ProfileData>(
+          "/api/agents/me?listLimit=0&includeEntitlements=false&includeAnalytics=false",
+          {
+            headers: { Authorization: `Bearer ${session.access_token}` }
+          }
+        );
         if (active) {
           setData(response);
           setToken(session.access_token);

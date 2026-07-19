@@ -61,7 +61,7 @@ export default function AgentListingsPage() {
       }
 
       try {
-        const profile = await apiRequest<Omit<ListingsPageData, "token">>("/api/agents/me", {
+        const profile = await apiRequest<Omit<ListingsPageData, "token">>("/api/agents/me?includeAnalytics=false", {
           headers: { Authorization: `Bearer ${session.access_token}` }
         });
         if (active) {
