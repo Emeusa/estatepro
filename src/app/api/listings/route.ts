@@ -4,7 +4,7 @@ import { ZodError } from "zod";
 import { requireAgent } from "@/lib/auth";
 import { captureServerError } from "@/lib/security/logger";
 import { RATE_LIMITS, rateLimitByIp, withRateLimitHeaders } from "@/lib/security/rate-limit";
-import { mapListingErrors } from "@/modules/listings/listing-error-mapper";
+import { mapListingErrors, mapListingRuntimeError } from "@/modules/listings/listing-error-mapper";
 import { createAgentListing, getPublicListings } from "@/modules/listings/listing.service";
 
 export async function GET(request: NextRequest) {
@@ -56,6 +56,11 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 }
       );
+    }
+
+    const mappedError = mapListingRuntimeError(error);
+    if (mappedError) {
+      return NextResponse.json(mappedError, { status: 400 });
     }
 
     return NextResponse.json(

@@ -6,6 +6,7 @@ export const MAX_LISTING_ORIGINAL_IMAGE_MB = MAX_LISTING_ORIGINAL_IMAGE_BYTES / 
 export const MAX_LISTING_IMAGE_BYTES = MAX_LISTING_ORIGINAL_IMAGE_BYTES;
 export const MAX_LISTING_IMAGE_MB = MAX_LISTING_ORIGINAL_IMAGE_MB;
 export const BROWSER_PROCESSABLE_LISTING_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+export const LISTING_PHONE_GALLERY_ACCEPT = "image/*";
 export const LISTING_GALLERY_PICKER_ACCEPT = `${BROWSER_PROCESSABLE_LISTING_IMAGE_TYPES.join(
   ","
 )},.jpg,.jpeg,.jpe,.jfif,.png,.webp`;

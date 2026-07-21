@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { MAX_LISTING_IMAGES } from "../../src/lib/image-limits";
-import { mapListingErrors } from "../../src/modules/listings/listing-error-mapper";
+import { mapListingErrors, mapListingRuntimeError } from "../../src/modules/listings/listing-error-mapper";
 import { listingInputSchema } from "../../src/modules/listings/listing.schema";
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
@@ -56,5 +56,14 @@ describe("listingInputSchema", () => {
     if (!result.success) {
       expect(mapListingErrors(result.error).images).toMatch(/could not be verified/i);
     }
+  });
+
+  it("maps the old database image-variant constraint to a setup message", () => {
+    const mapped = mapListingRuntimeError(
+      new Error('new row for relation "listings" violates check constraint "listings_image_variants_check"')
+    );
+
+    expect(mapped?.message).toMatch(/database image limit is not updated/i);
+    expect(mapped?.fields.images).toMatch(/15 images/i);
   });
 });

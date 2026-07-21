@@ -71,3 +71,21 @@ export function mapListingErrors(error: ZodError) {
 
   return fields;
 }
+
+export function mapListingRuntimeError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return null;
+  }
+
+  if (error.message.includes("listings_image_variants_check")) {
+    return {
+      message: "The database image limit is not updated for 15 photos yet. Run the latest Supabase schema, then try again.",
+      fields: {
+        images:
+          "This listing has more images than the current database constraint allows. Run the latest Supabase schema update for 15 images."
+      }
+    };
+  }
+
+  return null;
+}

@@ -788,16 +788,15 @@ begin
       );
   end if;
 
-  if not exists (
-    select 1 from pg_constraint where conname = 'listings_image_variants_check'
-  ) then
-    alter table public.listings
-      add constraint listings_image_variants_check
-      check (
-        jsonb_typeof(image_variants) = 'array'
-        and jsonb_array_length(image_variants) <= 10
-      );
-  end if;
+  alter table public.listings
+    drop constraint if exists listings_image_variants_check;
+
+  alter table public.listings
+    add constraint listings_image_variants_check
+    check (
+      jsonb_typeof(image_variants) = 'array'
+      and jsonb_array_length(image_variants) <= 15
+    );
 
   if not exists (
     select 1 from pg_constraint where conname = 'subscriptions_plan_slug_fk'
