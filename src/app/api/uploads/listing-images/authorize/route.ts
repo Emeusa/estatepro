@@ -3,18 +3,18 @@ import { z } from "zod";
 
 import { requireAgent } from "@/lib/auth";
 import {
-  MAX_LISTING_IMAGE_BYTES,
+  MAX_LISTING_ORIGINAL_IMAGE_BYTES,
   MAX_LISTING_IMAGES,
   SUPPORTED_LISTING_IMAGE_TYPES
 } from "@/lib/image-limits";
 import { captureServerError, logSecurityEvent } from "@/lib/security/logger";
 import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
 
-const allowedExtensions = [".jpg", ".jpeg", ".png", ".webp"];
+const allowedExtensions = [".jpg", ".jpeg", ".jpe", ".jfif", ".png", ".webp", ".heic", ".heif", ".avif"];
 
 const imageMetadataSchema = z.object({
   name: z.string().min(1).max(180),
-  size: z.number().int().positive().max(MAX_LISTING_IMAGE_BYTES),
+  size: z.number().int().positive().max(MAX_LISTING_ORIGINAL_IMAGE_BYTES),
   type: z.enum(SUPPORTED_LISTING_IMAGE_TYPES)
 }).strict().refine(
   (file) => allowedExtensions.some((extension) => file.name.toLowerCase().endsWith(extension)),
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       metadata: { reason: error instanceof Error ? error.message : "unknown" }
     });
     return NextResponse.json(
-      { message: "These images could not be accepted. Use JPG, PNG, or WebP files under 5 MB." },
+      { message: "These images could not be accepted. Use JPG, PNG, WebP, HEIC/HEIF, or AVIF files under 15 MB." },
       { status: 400 }
     );
   }

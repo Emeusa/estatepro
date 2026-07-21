@@ -4,9 +4,9 @@ import { ChangeEvent, FormEvent, ReactNode, useEffect, useState } from "react";
 
 import { ApiRequestError, apiRequest } from "@/lib/api";
 import {
+  getListingImageFormatErrorMessage,
   getListingImageCountLimitMessage,
   isSupportedListingImageFile,
-  isUnsupportedHeicImage,
   MAX_LISTING_IMAGES,
   MAX_LISTING_IMAGE_BYTES,
   MAX_LISTING_IMAGE_MB,
@@ -172,7 +172,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
   function onImageChange(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
     const countLimitMessage = getListingImageCountLimitMessage(files.length);
-    const heicFile = files.find(isUnsupportedHeicImage);
+    const formatError = files.map(getListingImageFormatErrorMessage).find(Boolean);
     const unsupportedFile = files.find((file) => !isSupportedListingImageFile(file));
     const oversizedFile = files.find((file) => file.size > MAX_LISTING_IMAGE_BYTES);
 
@@ -186,22 +186,12 @@ export function ListingForm({ token, listing, onSaved }: Props) {
       return;
     }
 
-    if (heicFile) {
+    if (formatError || unsupportedFile) {
       event.target.value = "";
       resetImageSelection();
       setFieldErrors((current) => ({
         ...current,
-        images: "HEIC images are not supported yet. Please choose JPG, PNG, or WebP."
-      }));
-      return;
-    }
-
-    if (unsupportedFile) {
-      event.target.value = "";
-      resetImageSelection();
-      setFieldErrors((current) => ({
-        ...current,
-        images: `Only ${SUPPORTED_LISTING_IMAGE_LABEL} images are supported.`
+        images: formatError ?? `This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`
       }));
       return;
     }
@@ -211,7 +201,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
       resetImageSelection();
       setFieldErrors((current) => ({
         ...current,
-        images: `Each property image must be ${MAX_LISTING_IMAGE_MB} MB or less.`
+        images: `Each image must be ${MAX_LISTING_IMAGE_MB} MB or less before compression.`
       }));
       return;
     }
@@ -249,8 +239,12 @@ export function ListingForm({ token, listing, onSaved }: Props) {
       return "Your session expired. Log in again before uploading images.";
     }
 
-    if (message.includes("heic") || message.includes("heif")) {
-      return "HEIC images are not supported yet. Please choose JPG, PNG, or WebP.";
+    if (message.includes("raw photos")) {
+      return "RAW photos are too large for listing uploads. Export as JPG first.";
+    }
+
+    if (message.includes("phone photo")) {
+      return "We could not process this phone photo. Try exporting it as JPG and upload again.";
     }
 
     if (message.includes("bucket") || message.includes("not found")) {
@@ -268,11 +262,11 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     }
 
     if (message.includes("mime") || message.includes("type") || message.includes("format") || message.includes("not allowed")) {
-      return `This image format is not supported. Use ${SUPPORTED_LISTING_IMAGE_LABEL}.`;
+      return `This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`;
     }
 
     if (message.includes("size") || message.includes("too large")) {
-      return `Each property image must be ${MAX_LISTING_IMAGE_MB} MB or less.`;
+      return `Each image must be ${MAX_LISTING_IMAGE_MB} MB or less before compression.`;
     }
 
     return error.message;
@@ -575,8 +569,9 @@ export function ListingForm({ token, listing, onSaved }: Props) {
           onChange={onImageChange}
         />
         <p className="mt-1 text-xs text-slate-500">
-          Upload up to {MAX_LISTING_IMAGES} {SUPPORTED_LISTING_IMAGE_LABEL} images. Each image must be{" "}
-          {MAX_LISTING_IMAGE_MB} MB or less. The first selected image becomes the listing thumbnail.
+          Upload up to {MAX_LISTING_IMAGES} images. Supports {SUPPORTED_LISTING_IMAGE_LABEL}. Large phone photos are
+          compressed automatically. Each original image must be {MAX_LISTING_IMAGE_MB} MB or less. The first selected
+          image becomes the listing thumbnail.
         </p>
         {fieldErrors.images ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.images}</p> : null}
       </div>

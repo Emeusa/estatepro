@@ -4,15 +4,17 @@ import { processListingImage, type ListingImageWatermark } from "@/lib/image";
 import { getAgentDisplayName } from "@/lib/agent-display";
 import { apiRequest } from "@/lib/api";
 import {
+  getListingImageFormatErrorMessage,
   getListingImageExtensionForType,
   getListingImageCountLimitMessage,
+  isServerConvertedListingImageFile,
   isSupportedListingImageFile,
-  isUnsupportedHeicImage,
   MAX_LISTING_IMAGE_BYTES,
   MAX_LISTING_IMAGE_MB,
   normalizeListingImageType,
   SUPPORTED_LISTING_IMAGE_LABEL
 } from "@/lib/image-limits";
+import { createListingOriginalPath, LISTING_IMAGE_ORIGINALS_BUCKET } from "@/lib/listing-image-originals";
 import { supabase } from "@/lib/supabase/client";
 import { getEffectivePlanSlug } from "@/lib/subscriptions";
 import type { ListingImageVariant, SubscriptionRecord } from "@/lib/types";
@@ -22,7 +24,13 @@ type ListingImageUploadResult = {
   imageVariants: ListingImageVariant[];
 };
 
-type UploadStage = "authorize" | "process" | "optimized-upload" | "raw-upload";
+type UploadStage =
+  | "authorize"
+  | "process"
+  | "optimized-upload"
+  | "processed-server-upload"
+  | "temp-upload"
+  | "server-convert";
 
 type AgentWatermarkResponse = {
   user: {
@@ -82,6 +90,24 @@ async function uploadViaServerFallback(file: Blob, token: string, filename: stri
   return body.url;
 }
 
+async function convertViaServer(originals: Array<{ path: string; order: number }>, token: string) {
+  const response = await fetch("/api/uploads/listing-images/convert", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ originals })
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.message ?? "We could not process this phone photo. Try exporting it as JPG and upload again.");
+  }
+
+  return (await response.json()) as ListingImageUploadResult;
+}
+
 async function authorizeListingImageUpload(files: File[], token: string) {
   await apiRequest("/api/uploads/listing-images/authorize", {
     method: "POST",
@@ -118,32 +144,20 @@ async function getListingImageWatermark(token: string): Promise<ListingImageWate
   return { type: "platform" };
 }
 
-function getRawImageExtension(file: File) {
-  const normalizedType = normalizeListingImageType(file);
-
-  if (!normalizedType) {
-    throw new Error(`Only ${SUPPORTED_LISTING_IMAGE_LABEL} images are supported.`);
-  }
-
-  return getListingImageExtensionForType(normalizedType);
-}
-
 function safeImageName(index: number, type: ReturnType<typeof normalizeListingImageType>) {
   if (!type) {
-    throw new Error(`Only ${SUPPORTED_LISTING_IMAGE_LABEL} images are supported.`);
+    throw new Error(`This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`);
   }
 
   return `listing-image-${index + 1}.${getListingImageExtensionForType(type)}`;
 }
 
 export function normalizeListingImageFile(file: File, index: number) {
-  if (isUnsupportedHeicImage(file)) {
-    throw new Error("HEIC images are not supported yet. Please choose JPG, PNG, or WebP.");
-  }
-
+  const formatError = getListingImageFormatErrorMessage(file);
   const normalizedType = normalizeListingImageType(file);
-  if (!normalizedType) {
-    throw new Error(`Only ${SUPPORTED_LISTING_IMAGE_LABEL} images are supported.`);
+
+  if (formatError || !normalizedType) {
+    throw new Error(formatError ?? `This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`);
   }
 
   const normalizedName = safeImageName(index, normalizedType);
@@ -166,13 +180,35 @@ function warnUploadFallback(stage: UploadStage, files: File[], error: unknown) {
   });
 }
 
-async function uploadOriginalListingImages(files: File[], token: string): Promise<string[]> {
-  return Promise.all(
-    files.map(async (file, index) => {
-      const extension = getRawImageExtension(file);
-      return uploadViaServerFallback(file, token, `listing-image-${index + 1}-original.${extension}`);
-    })
-  );
+async function uploadOriginalsForServerConversion(files: File[], token: string, userId: string) {
+  const originals: Array<{ path: string; order: number }> = [];
+
+  try {
+    for (const [index, file] of files.entries()) {
+      const path = createListingOriginalPath(userId, index, file);
+      originals.push({ path, order: index });
+      const { error } = await supabase.storage.from(LISTING_IMAGE_ORIGINALS_BUCKET).upload(path, file, {
+        contentType: file.type,
+        upsert: false
+      });
+
+      if (error) {
+        throw error;
+      }
+    }
+
+    return await convertViaServer(originals, token);
+  } catch (error) {
+    if (originals.length) {
+      await supabase.storage
+        .from(LISTING_IMAGE_ORIGINALS_BUCKET)
+        .remove(originals.map((original) => original.path))
+        .catch(() => undefined);
+    }
+
+    warnUploadFallback("server-convert", files, error);
+    throw error;
+  }
 }
 
 function isImageProcessingFailure(error: unknown) {
@@ -248,11 +284,11 @@ export async function uploadListingImages(files: File[], token: string): Promise
   const oversizedFile = acceptedFiles.find((file) => file.size > MAX_LISTING_IMAGE_BYTES);
 
   if (unsupportedFile) {
-    throw new Error(`Only ${SUPPORTED_LISTING_IMAGE_LABEL} images are supported.`);
+    throw new Error(`This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`);
   }
 
   if (oversizedFile) {
-    throw new Error(`Each property image must be ${MAX_LISTING_IMAGE_MB} MB or less.`);
+    throw new Error(`Each image must be ${MAX_LISTING_IMAGE_MB} MB or less before compression.`);
   }
 
   try {
@@ -260,6 +296,15 @@ export async function uploadListingImages(files: File[], token: string): Promise
   } catch (error) {
     warnUploadFallback("authorize", acceptedFiles, error);
     throw error;
+  }
+
+  if (acceptedFiles.some(isServerConvertedListingImageFile)) {
+    try {
+      return await uploadOriginalsForServerConversion(acceptedFiles, token, userId);
+    } catch (error) {
+      warnUploadFallback("temp-upload", acceptedFiles, error);
+      throw error;
+    }
   }
 
   const watermark = await getListingImageWatermark(token);
@@ -274,13 +319,10 @@ export async function uploadListingImages(files: File[], token: string): Promise
 
     warnUploadFallback("process", acceptedFiles, error);
     try {
-      return {
-        imageUrls: await uploadOriginalListingImages(acceptedFiles, token),
-        imageVariants: []
-      };
-    } catch (rawUploadError) {
-      warnUploadFallback("raw-upload", acceptedFiles, rawUploadError);
-      throw rawUploadError;
+      return await uploadOriginalsForServerConversion(acceptedFiles, token, userId);
+    } catch (conversionError) {
+      warnUploadFallback("server-convert", acceptedFiles, conversionError);
+      throw conversionError;
     }
   }
 
@@ -339,9 +381,9 @@ export async function uploadListingImages(files: File[], token: string): Promise
         imageUrls: fallbackVariants.map((image) => image.heroUrl),
         imageVariants: fallbackVariants
       };
-    } catch (rawUploadError) {
-      warnUploadFallback("raw-upload", acceptedFiles, rawUploadError);
-      throw rawUploadError;
+    } catch (serverUploadError) {
+      warnUploadFallback("processed-server-upload", acceptedFiles, serverUploadError);
+      throw serverUploadError;
     }
   }
 

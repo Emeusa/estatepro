@@ -4,10 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { AuthError, requireAgent } from "@/lib/auth";
 import {
+  BROWSER_PROCESSABLE_LISTING_IMAGE_TYPES,
   getListingImageExtensionForType,
-  isUnsupportedHeicImage,
-  MAX_LISTING_IMAGE_BYTES,
-  MAX_LISTING_IMAGE_MB,
+  MAX_LISTING_FINAL_IMAGE_BYTES,
+  MAX_LISTING_FINAL_IMAGE_MB,
   normalizeListingImageType,
   SUPPORTED_LISTING_IMAGE_LABEL
 } from "@/lib/image-limits";
@@ -50,17 +50,16 @@ export async function POST(request: NextRequest) {
       return jsonError("No image file was provided.", 400);
     }
 
-    if (isUnsupportedHeicImage(file)) {
-      return jsonError("HEIC images are not supported yet. Please choose JPG, PNG, or WebP.", 400);
-    }
-
     const normalizedType = normalizeListingImageType(file);
-    if (!normalizedType) {
-      return jsonError(`Only ${SUPPORTED_LISTING_IMAGE_LABEL} images are supported.`, 400);
+    if (
+      !normalizedType ||
+      !BROWSER_PROCESSABLE_LISTING_IMAGE_TYPES.includes(normalizedType as (typeof BROWSER_PROCESSABLE_LISTING_IMAGE_TYPES)[number])
+    ) {
+      return jsonError(`This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`, 400);
     }
 
-    if (file.size <= 0 || file.size > MAX_LISTING_IMAGE_BYTES) {
-      return jsonError(`Each property image must be ${MAX_LISTING_IMAGE_MB} MB or less.`, 400);
+    if (file.size <= 0 || file.size > MAX_LISTING_FINAL_IMAGE_BYTES) {
+      return jsonError(`Each processed image must be ${MAX_LISTING_FINAL_IMAGE_MB} MB or less.`, 400);
     }
 
     const extension = getListingImageExtensionForType(normalizedType);
@@ -99,6 +98,6 @@ export async function POST(request: NextRequest) {
       return jsonError(error.message, error.status);
     }
 
-    return jsonError("Image upload failed. Please try again or choose a smaller JPG, PNG, or WebP image.", 500);
+    return jsonError("Image upload failed. Please try again or choose a smaller supported image.", 500);
   }
 }

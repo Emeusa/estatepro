@@ -69,6 +69,17 @@ const nextConfig = {
         headers: getSecurityHeaders()
       }
     ];
+  },
+  webpack(config) {
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings ?? []),
+      {
+        module: /libheif-js[\\/]libheif-wasm[\\/]libheif-bundle\.js/,
+        message: /Critical dependency: require function is used in a way/
+      }
+    ];
+
+    return config;
   }
 };
 
