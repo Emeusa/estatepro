@@ -1,18 +1,19 @@
 "use client";
 
-import { ChangeEvent, FormEvent, ReactNode, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 
 import { ApiRequestError, apiRequest } from "@/lib/api";
 import {
   getListingImageFormatErrorMessage,
-  getListingImageCountLimitMessage,
   isSupportedListingImageFile,
   MAX_LISTING_IMAGES,
   MAX_LISTING_IMAGE_BYTES,
   MAX_LISTING_IMAGE_MB,
+  normalizeListingImageType,
   SUPPORTED_LISTING_IMAGE_ACCEPT,
   SUPPORTED_LISTING_IMAGE_LABEL
 } from "@/lib/image-limits";
+import { getThumbnailIndexAfterImageRemoval, mergeListingImageSelection } from "@/lib/listing-image-selection";
 import { getListingImages, reorderListingImageVariants } from "@/lib/listing-images";
 import { AVAILABILITY_LABELS, CATEGORY_AVAILABILITY, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
 import {
@@ -106,6 +107,8 @@ export function ListingForm({ token, listing, onSaved }: Props) {
   const [imageInputKey, setImageInputKey] = useState(0);
   const [uploadThumbnailIndex, setUploadThumbnailIndex] = useState(0);
   const [existingThumbnailIndex, setExistingThumbnailIndex] = useState(0);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const browseInputRef = useRef<HTMLInputElement>(null);
 
   const lgas = getLgasForState(selectedState);
   const cityOptions = selectedLga && !lgas.includes(selectedLga) ? [selectedLga, ...lgas] : lgas;
@@ -169,63 +172,97 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     setImageInputKey((current) => current + 1);
   }
 
-  function onImageChange(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
-    const countLimitMessage = getListingImageCountLimitMessage(files.length);
-    const formatError = files.map(getListingImageFormatErrorMessage).find(Boolean);
-    const unsupportedFile = files.find((file) => !isSupportedListingImageFile(file));
-    const oversizedFile = files.find((file) => file.size > MAX_LISTING_IMAGE_BYTES);
-
-    if (countLimitMessage) {
-      event.target.value = "";
-      resetImageSelection();
-      setFieldErrors((current) => ({
-        ...current,
-        images: countLimitMessage
-      }));
-      return;
-    }
-
-    if (formatError || unsupportedFile) {
-      event.target.value = "";
-      resetImageSelection();
-      setFieldErrors((current) => ({
-        ...current,
-        images: formatError ?? `This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`
-      }));
-      return;
-    }
-
-    if (oversizedFile) {
-      event.target.value = "";
-      resetImageSelection();
-      setFieldErrors((current) => ({
-        ...current,
-        images: `Each image must be ${MAX_LISTING_IMAGE_MB} MB or less before compression.`
-      }));
-      return;
-    }
-
-    let acceptedFiles: File[];
-    try {
-      acceptedFiles = files.map(normalizeListingImageFile);
-    } catch (error) {
-      event.target.value = "";
-      resetImageSelection();
-      setFieldErrors((current) => ({
-        ...current,
-        images: getUploadFailureMessage(error)
-      }));
-      return;
-    }
-
-    setUploadThumbnailIndex(0);
+  function clearImageError() {
     setFieldErrors((current) => {
       const next = { ...current };
       delete next.images;
       return next;
     });
-    setSelectedFiles(acceptedFiles);
+  }
+
+  function setImageError(message: string) {
+    setFieldErrors((current) => ({
+      ...current,
+      images: message
+    }));
+  }
+
+  function onImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+
+    if (!files.length) {
+      return;
+    }
+
+    const mergedSelection = mergeListingImageSelection(selectedFiles, files);
+    if (mergedSelection.errorMessage) {
+      setImageError(mergedSelection.errorMessage);
+      return;
+    }
+
+    const filesToAdd = mergedSelection.addedFiles;
+    if (!filesToAdd.length) {
+      clearImageError();
+      return;
+    }
+
+    const formatError = filesToAdd.map(getListingImageFormatErrorMessage).find(Boolean);
+    const unsupportedFile = filesToAdd.find((file) => !isSupportedListingImageFile(file));
+    const oversizedFile = filesToAdd.find((file) => file.size > MAX_LISTING_IMAGE_BYTES);
+
+    if (formatError || unsupportedFile) {
+      setImageError(formatError ?? `This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`);
+      return;
+    }
+
+    if (oversizedFile) {
+      setImageError(`Each image must be ${MAX_LISTING_IMAGE_MB} MB or less before compression.`);
+      return;
+    }
+
+    let acceptedFiles: File[];
+    try {
+      acceptedFiles = filesToAdd.map((file, index) => normalizeListingImageFile(file, selectedFiles.length + index));
+    } catch (error) {
+      setImageError(getUploadFailureMessage(error));
+      return;
+    }
+
+    clearImageError();
+    setSelectedFiles((current) => [...current, ...acceptedFiles]);
+    if (!selectedFiles.length) {
+      setUploadThumbnailIndex(0);
+    }
+  }
+
+  function removeSelectedImage(index: number) {
+    setSelectedFiles((current) => {
+      const nextFiles = current.filter((_, currentIndex) => currentIndex !== index);
+      setUploadThumbnailIndex((currentIndex) => getThumbnailIndexAfterImageRemoval(currentIndex, index, nextFiles.length));
+      return nextFiles;
+    });
+    clearImageError();
+  }
+
+  function formatImageSize(bytes: number) {
+    const megabytes = bytes / (1024 * 1024);
+    return `${megabytes >= 1 ? megabytes.toFixed(1) : Math.max(1, Math.round(bytes / 1024))} ${
+      megabytes >= 1 ? "MB" : "KB"
+    }`;
+  }
+
+  function getImageFormatLabel(file: File) {
+    const normalizedType = normalizeListingImageType(file);
+    if (!normalizedType) {
+      return "Image";
+    }
+
+    if (normalizedType === "image/heic" || normalizedType === "image/heif") {
+      return "HEIC/HEIF";
+    }
+
+    return normalizedType.replace("image/", "").toUpperCase();
   }
 
   function getUploadFailureMessage(error: unknown) {
@@ -558,45 +595,120 @@ export function ListingForm({ token, listing, onSaved }: Props) {
           ) : null}
         </div>
       </div>
-      <div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <input
-          className="input"
-          name="images"
-          key={imageInputKey}
+          ref={galleryInputRef}
+          key={`gallery-${imageInputKey}`}
+          className="sr-only"
+          type="file"
+          multiple
+          accept="image/*"
+          aria-label="Select listing photos from gallery"
+          onChange={onImageChange}
+        />
+        <input
+          ref={browseInputRef}
+          key={`browse-${imageInputKey}`}
+          className="sr-only"
           type="file"
           multiple
           accept={SUPPORTED_LISTING_IMAGE_ACCEPT}
+          aria-label="Browse listing image files"
           onChange={onImageChange}
         />
-        <p className="mt-1 text-xs text-slate-500">
-          Upload up to {MAX_LISTING_IMAGES} images. Supports {SUPPORTED_LISTING_IMAGE_LABEL}. Large phone photos are
-          compressed automatically. Each original image must be {MAX_LISTING_IMAGE_MB} MB or less. The first selected
-          image becomes the listing thumbnail.
-        </p>
-        {fieldErrors.images ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.images}</p> : null}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-bold text-slate-950">Listing photos</p>
+            <p className="mt-1 text-xs text-slate-500">
+              {selectedFiles.length}/{MAX_LISTING_IMAGES} selected. Supports {SUPPORTED_LISTING_IMAGE_LABEL}. Large
+              phone photos are compressed automatically. Each original image must be {MAX_LISTING_IMAGE_MB} MB or less.
+            </p>
+            <p className="mt-1 text-xs text-slate-500">The first selected image becomes the listing thumbnail.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded-full bg-teal-700 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+              disabled={selectedFiles.length >= MAX_LISTING_IMAGES}
+              onClick={() => galleryInputRef.current?.click()}
+            >
+              {selectedFiles.length ? "Add more photos" : "Select photos from gallery"}
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700 transition hover:border-teal-700 hover:text-teal-800 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+              disabled={selectedFiles.length >= MAX_LISTING_IMAGES}
+              onClick={() => browseInputRef.current?.click()}
+            >
+              Browse files
+            </button>
+            {selectedFiles.length ? (
+              <button
+                type="button"
+                className="rounded-full border border-rose-200 px-4 py-2 text-xs font-bold text-rose-700 transition hover:border-rose-400"
+                onClick={resetImageSelection}
+              >
+                Clear all
+              </button>
+            ) : null}
+          </div>
+        </div>
+        {fieldErrors.images ? <p className="mt-3 text-sm text-rose-600">{fieldErrors.images}</p> : null}
       </div>
       {previewUrls.length ? (
         <div className="rounded-2xl border border-slate-200 p-3">
-          <p className="text-sm font-medium text-slate-950">Choose upload thumbnail</p>
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-medium text-slate-950">Review selected photos</p>
+            <p className="text-xs font-semibold text-slate-500">Tap a photo to choose the listing thumbnail.</p>
+          </div>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
             {previewUrls.map((url, index) => (
-              <button
+              <div
                 key={url}
-                type="button"
                 className={`overflow-hidden rounded-2xl border text-left transition ${
                   uploadThumbnailIndex === index ? "border-teal-600 ring-2 ring-teal-100" : "border-slate-200"
                 }`}
-                onClick={() => setUploadThumbnailIndex(index)}
               >
-                <span
-                  aria-hidden="true"
-                  className="block h-28 w-full bg-cover bg-center"
-                  style={{ backgroundImage: `url("${url}")` }}
-                />
-                <span className="block px-3 py-2 text-xs font-medium text-slate-600">
-                  {uploadThumbnailIndex === index ? "Thumbnail selected" : "Use as thumbnail"}
-                </span>
-              </button>
+                <button type="button" className="block w-full text-left" onClick={() => setUploadThumbnailIndex(index)}>
+                  <span
+                    aria-hidden="true"
+                    className="block h-28 w-full bg-cover bg-center"
+                    style={{ backgroundImage: `url("${url}")` }}
+                  />
+                </button>
+                <div className="space-y-2 px-3 py-2">
+                  <div>
+                    <p className="truncate text-xs font-semibold text-slate-700">
+                      {selectedFiles[index]?.name ?? `Photo ${index + 1}`}
+                    </p>
+                    {selectedFiles[index] ? (
+                      <p className="text-[11px] font-medium text-slate-500">
+                        {getImageFormatLabel(selectedFiles[index])} - {formatImageSize(selectedFiles[index].size)}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      className={`rounded-full px-3 py-1 text-[11px] font-bold ${
+                        uploadThumbnailIndex === index
+                          ? "bg-teal-700 text-white"
+                          : "border border-slate-200 text-slate-600 hover:border-teal-600 hover:text-teal-800"
+                      }`}
+                      onClick={() => setUploadThumbnailIndex(index)}
+                    >
+                      {uploadThumbnailIndex === index ? "Thumbnail selected" : "Use as thumbnail"}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full border border-rose-200 px-3 py-1 text-[11px] font-bold text-rose-700 hover:border-rose-400"
+                      onClick={() => removeSelectedImage(index)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         </div>

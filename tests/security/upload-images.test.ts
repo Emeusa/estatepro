@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -11,10 +14,21 @@ import {
   MAX_LISTING_ORIGINAL_IMAGE_BYTES,
   normalizeListingImageType
 } from "../../src/lib/image-limits";
+import { getThumbnailIndexAfterImageRemoval, mergeListingImageSelection } from "../../src/lib/listing-image-selection";
 import { getListingOriginalPathBlockReason } from "../../src/lib/listing-image-originals";
 import { getListingImageUploadBlockReason } from "../../src/lib/upload-permissions";
 
 describe("listing image mobile file handling", () => {
+  it("uses a gallery-first picker plus strict file-browser fallback", () => {
+    const source = readFileSync(path.join(process.cwd(), "src/components/forms/listing-form.tsx"), "utf8");
+
+    expect(source).toContain('accept="image/*"');
+    expect(source).toContain("accept={SUPPORTED_LISTING_IMAGE_ACCEPT}");
+    expect(source).toContain("Select photos from gallery");
+    expect(source).toContain("Browse files");
+    expect(source).toContain("Add more photos");
+  });
+
   it("accepts Android-style JPG metadata", () => {
     expect(normalizeListingImageType({ name: "kitchen.jpg", type: "image/jpeg" })).toBe("image/jpeg");
     expect(isSupportedListingImageFile({ name: "kitchen.jpg", type: "image/jpeg" })).toBe(true);
@@ -58,6 +72,60 @@ describe("listing image mobile file handling", () => {
     expect(getListingImageCountLimitMessage(15)).toBe(
       `You can upload up to ${MAX_LISTING_IMAGES} images per listing. Remove 5 images and try again.`
     );
+  });
+
+  it("appends gallery selections without replacing existing photos", () => {
+    const existing = [{ name: "front.jpg", size: 100, lastModified: 1 }] as File[];
+    const incoming = [
+      { name: "room.jpg", size: 200, lastModified: 2 },
+      { name: "kitchen.jpg", size: 300, lastModified: 3 }
+    ] as File[];
+
+    const result = mergeListingImageSelection(existing, incoming);
+
+    expect(result.errorMessage).toBeNull();
+    expect(result.addedFiles).toEqual(incoming);
+    expect(result.files).toEqual([...existing, ...incoming]);
+  });
+
+  it("ignores duplicate gallery selections", () => {
+    const existing = [{ name: "listing-image-1.jpg", size: 100, lastModified: 1 }] as File[];
+    const incoming = [
+      { name: "front.jpg", size: 100, lastModified: 1 },
+      { name: "room.jpg", size: 200, lastModified: 2 }
+    ] as File[];
+
+    const result = mergeListingImageSelection(existing, incoming);
+
+    expect(result.ignoredDuplicateCount).toBe(1);
+    expect(result.files).toEqual([existing[0], incoming[1]]);
+  });
+
+  it("rejects only the excess add-more action when selection would exceed ten images", () => {
+    const existing = Array.from({ length: 8 }, (_, index) => ({
+      name: `existing-${index}.jpg`,
+      size: 100 + index,
+      lastModified: index + 1
+    })) as File[];
+    const incoming = Array.from({ length: 5 }, (_, index) => ({
+      name: `incoming-${index}.jpg`,
+      size: 300 + index,
+      lastModified: index + 20
+    })) as File[];
+
+    const result = mergeListingImageSelection(existing, incoming);
+
+    expect(result.files).toEqual(existing);
+    expect(result.addedFiles).toEqual([]);
+    expect(result.errorMessage).toBe(
+      `You can upload up to ${MAX_LISTING_IMAGES} images per listing. Remove 3 images and try again.`
+    );
+  });
+
+  it("keeps thumbnail selection stable when removing selected photos", () => {
+    expect(getThumbnailIndexAfterImageRemoval(2, 0, 2)).toBe(1);
+    expect(getThumbnailIndexAfterImageRemoval(1, 1, 2)).toBe(1);
+    expect(getThumbnailIndexAfterImageRemoval(0, 0, 0)).toBe(0);
   });
 });
 
