@@ -5,6 +5,7 @@ import { apiRequest } from "@/lib/api";
 import { processListingImage, type ListingImageWatermark } from "@/lib/image";
 import {
   getListingImageExtensionForType,
+  getListingImageFormatErrorMessageAsync,
   getListingImageFormatErrorMessage,
   getListingImageCountLimitMessage,
   isSupportedListingImageFile,
@@ -12,6 +13,7 @@ import {
   MAX_LISTING_FINAL_IMAGE_MB,
   MAX_LISTING_IMAGE_BYTES,
   MAX_LISTING_IMAGE_MB,
+  normalizeListingImageTypeAsync,
   normalizeListingImageType,
   SUPPORTED_LISTING_IMAGE_LABEL
 } from "@/lib/image-limits";
@@ -187,6 +189,26 @@ export function normalizeListingImageFile(file: File, index: number) {
   });
 }
 
+export async function normalizeListingImageFileAsync(file: File, index: number) {
+  const formatError = await getListingImageFormatErrorMessageAsync(file);
+  const normalizedType = await normalizeListingImageTypeAsync(file);
+
+  if (formatError || !normalizedType) {
+    throw new Error(formatError ?? `This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`);
+  }
+
+  const extension = getListingImageExtensionForType(normalizedType);
+  const normalizedName = `listing-image-${index + 1}.${extension}`;
+  if (file.type === normalizedType && file.name.toLowerCase().endsWith(`.${extension}`)) {
+    return file;
+  }
+
+  return new File([file], normalizedName, {
+    type: normalizedType,
+    lastModified: file.lastModified
+  });
+}
+
 function warnUploadStage(stage: UploadStage, files: File[], error: unknown, failedIndex?: number) {
   console.warn("Listing image upload stage failed.", {
     stage,
@@ -261,7 +283,10 @@ export async function uploadListingImages(files: File[], token: string): Promise
     throw new Error(countLimitMessage);
   }
 
-  const acceptedFiles = files.map(normalizeListingImageFile);
+  const acceptedFiles: File[] = [];
+  for (const [index, file] of files.entries()) {
+    acceptedFiles.push(await normalizeListingImageFileAsync(file, index));
+  }
   const unsupportedFile = acceptedFiles.find((file) => !isSupportedListingImageFile(file));
   const oversizedFile = acceptedFiles.find((file) => file.size > MAX_LISTING_IMAGE_BYTES);
 

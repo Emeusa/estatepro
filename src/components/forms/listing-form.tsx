@@ -1,12 +1,10 @@
 "use client";
 
-import { ChangeEvent, FormEvent, ReactNode, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 
 import { ApiRequestError, apiRequest } from "@/lib/api";
 import {
-  getListingImageFormatErrorMessage,
   getListingImageCountLimitMessage,
-  isSupportedListingImageFile,
   MAX_LISTING_IMAGES,
   MAX_LISTING_IMAGE_BYTES,
   MAX_LISTING_IMAGE_MB,
@@ -37,7 +35,7 @@ import {
 } from "@/lib/listing-quality";
 import { getLgasForState, NIGERIA_STATES } from "@/lib/nigeria-locations";
 import { ListingCategory, ListingImageVariant, ListingRecord } from "@/lib/types";
-import { normalizeListingImageFile, uploadListingImages } from "@/lib/uploads";
+import { normalizeListingImageFileAsync, uploadListingImages } from "@/lib/uploads";
 import { createListingImagePreview } from "@/lib/image";
 
 type Props = {
@@ -122,6 +120,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
   const [imageInputKey, setImageInputKey] = useState(0);
   const [uploadThumbnailIndex, setUploadThumbnailIndex] = useState(0);
   const [existingThumbnailIndex, setExistingThumbnailIndex] = useState(0);
+  const imageSelectionId = useRef(0);
 
   const lgas = getLgasForState(selectedState);
   const cityOptions = selectedLga && !lgas.includes(selectedLga) ? [selectedLga, ...lgas] : lgas;
@@ -218,11 +217,16 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     }));
   }
 
-  function onImageChange(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
+  async function onImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const inputElement = event.currentTarget;
+    const selectionId = imageSelectionId.current + 1;
+    imageSelectionId.current = selectionId;
+    const files = Array.from(inputElement.files ?? []);
+    setPreviewUrls([]);
 
     if (!files.length) {
       setSelectedFiles([]);
+      inputElement.value = "";
       return;
     }
 
@@ -230,42 +234,46 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     if (countLimitMessage) {
       setSelectedFiles([]);
       setImageInputKey((current) => current + 1);
+      inputElement.value = "";
       setImageError(countLimitMessage);
       return;
     }
 
-    const formatError = files.map(getListingImageFormatErrorMessage).find(Boolean);
-    const unsupportedFile = files.find((file) => !isSupportedListingImageFile(file));
     const oversizedFile = files.find((file) => file.size > MAX_LISTING_IMAGE_BYTES);
-
-    if (formatError || unsupportedFile) {
-      setSelectedFiles([]);
-      setImageInputKey((current) => current + 1);
-      setImageError(formatError ?? `This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`);
-      return;
-    }
 
     if (oversizedFile) {
       setSelectedFiles([]);
       setImageInputKey((current) => current + 1);
+      inputElement.value = "";
       setImageError(`Each image must be ${MAX_LISTING_IMAGE_MB} MB or less before compression.`);
       return;
     }
 
     let acceptedFiles: File[];
     try {
-      acceptedFiles = files.map((file, index) => normalizeListingImageFile(file, index));
+      acceptedFiles = [];
+      for (const [index, file] of files.entries()) {
+        acceptedFiles.push(await normalizeListingImageFileAsync(file, index));
+      }
     } catch (error) {
+      if (selectionId !== imageSelectionId.current) {
+        return;
+      }
       setSelectedFiles([]);
       setImageInputKey((current) => current + 1);
+      inputElement.value = "";
       setImageError(getUploadFailureMessage(error));
+      return;
+    }
+
+    if (selectionId !== imageSelectionId.current) {
       return;
     }
 
     clearImageError();
     setSelectedFiles(acceptedFiles);
     setUploadThumbnailIndex(0);
-    event.currentTarget.value = "";
+    inputElement.value = "";
   }
 
   function getUploadFailureMessage(error: unknown) {

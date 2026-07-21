@@ -36,6 +36,10 @@ function makeFile(name: string, size: number, type = "image/jpeg") {
   return new File([new Uint8Array(size)], name, { type, lastModified: 1 });
 }
 
+function makeSignatureFile(name: string, type: string, bytes: number[]) {
+  return new File([new Uint8Array(bytes)], name, { type, lastModified: 1 });
+}
+
 function processedImage(index = 0, type = "image/webp") {
   const extension = type === "image/jpeg" ? "jpg" : "webp";
   return {
@@ -90,6 +94,19 @@ describe("client listing image upload flow", () => {
       "/api/uploads/listing-images/convert",
       expect.objectContaining({ method: "POST" })
     );
+  });
+
+  it("normalizes valid JPEG content with unreliable mobile metadata before upload", async () => {
+    const { uploadListingImages } = await import("../../src/lib/uploads");
+    const files = [makeSignatureFile("content", "application/octet-stream", [0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10])];
+
+    const result = await uploadListingImages(files, "token");
+    const processedFile = mocks.processListingImage.mock.calls[0]?.[0] as File;
+
+    expect(result.imageVariants).toHaveLength(1);
+    expect(processedFile.name).toBe("listing-image-1.jpg");
+    expect(processedFile.type).toBe("image/jpeg");
+    expect(mocks.publicUpload).toHaveBeenCalledTimes(2);
   });
 
   it("uploads fifteen listing images without server conversion", async () => {

@@ -4,7 +4,9 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  detectListingImageTypeFromSignature,
   getListingImageCountLimitMessage,
+  getListingImageFormatErrorMessageAsync,
   getListingImageFormatErrorMessage,
   isPhoneHighEfficiencyListingImageFile,
   isRawListingImageFile,
@@ -14,6 +16,7 @@ import {
   MAX_LISTING_IMAGES,
   MAX_LISTING_ORIGINAL_IMAGE_BYTES,
   PHONE_HIGH_EFFICIENCY_IMAGE_MESSAGE,
+  normalizeListingImageTypeAsync,
   normalizeListingImageType
 } from "../../src/lib/image-limits";
 import { getListingImageUploadBlockReason } from "../../src/lib/upload-permissions";
@@ -51,9 +54,14 @@ describe("listing image mobile file handling", () => {
     expect(source).toContain("Choose upload thumbnail");
     expect(source).toContain("Thumbnail selected");
     expect(source).toContain("createListingImagePreview(file)");
+    expect(source).toContain("normalizeListingImageFileAsync");
+    expect(source).toContain("setPreviewUrls([])");
+    expect(source).toContain("const inputElement = event.currentTarget");
     expect(source).not.toContain("LISTING_PHONE_GALLERY_ACCEPT");
     expect(source).not.toContain("accept={LISTING_GALLERY_PICKER_ACCEPT}");
     expect(source).not.toContain('className="input"\n          name="images"');
+    expect(source).not.toContain("files.map(getListingImageFormatErrorMessage)");
+    expect(source).not.toContain("files.find((file) => !isSupportedListingImageFile(file))");
     expect(source).not.toContain("URL.createObjectURL(file)");
     expect(source).not.toContain("If some albums do not show");
     expect(source).not.toContain("Review selected photos");
@@ -107,6 +115,94 @@ describe("listing image mobile file handling", () => {
     expect(normalizeListingImageType({ name: "Living-Room.JPG", type: "" })).toBe("image/jpeg");
     expect(normalizeListingImageType({ name: "compound.PNG", type: "" })).toBe("image/png");
     expect(normalizeListingImageType({ name: "bedroom.WEBP", type: "" })).toBe("image/webp");
+  });
+
+  it("accepts valid JPEG content when Android returns blank or generic metadata", async () => {
+    const jpegBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+    const blankMimeFile = new File([jpegBytes], "content", { type: "" });
+    const genericMimeFile = new File([jpegBytes], "content", { type: "application/octet-stream" });
+
+    expect(detectListingImageTypeFromSignature(jpegBytes)).toBe("image/jpeg");
+    await expect(normalizeListingImageTypeAsync(blankMimeFile)).resolves.toBe("image/jpeg");
+    await expect(normalizeListingImageTypeAsync(genericMimeFile)).resolves.toBe("image/jpeg");
+    await expect(getListingImageFormatErrorMessageAsync(genericMimeFile)).resolves.toBeNull();
+  });
+
+  it("accepts valid PNG and WebP content when picker metadata is unreliable", async () => {
+    const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const webpBytes = new Uint8Array([
+      0x52,
+      0x49,
+      0x46,
+      0x46,
+      0x18,
+      0x00,
+      0x00,
+      0x00,
+      0x57,
+      0x45,
+      0x42,
+      0x50
+    ]);
+
+    await expect(normalizeListingImageTypeAsync(new File([pngBytes], "content", { type: "" }))).resolves.toBe("image/png");
+    await expect(normalizeListingImageTypeAsync(new File([webpBytes], "content", { type: "" }))).resolves.toBe("image/webp");
+  });
+
+  it("uses phone guidance for HEIC and AVIF content signatures", async () => {
+    const heicBytes = new Uint8Array([
+      0x00,
+      0x00,
+      0x00,
+      0x18,
+      0x66,
+      0x74,
+      0x79,
+      0x70,
+      0x68,
+      0x65,
+      0x69,
+      0x63,
+      0x00,
+      0x00,
+      0x00,
+      0x00
+    ]);
+    const avifBytes = new Uint8Array([
+      0x00,
+      0x00,
+      0x00,
+      0x18,
+      0x66,
+      0x74,
+      0x79,
+      0x70,
+      0x61,
+      0x76,
+      0x69,
+      0x66,
+      0x00,
+      0x00,
+      0x00,
+      0x00
+    ]);
+
+    expect(detectListingImageTypeFromSignature(heicBytes)).toBe("phone-high-efficiency");
+    await expect(getListingImageFormatErrorMessageAsync(new File([heicBytes], "content", { type: "" }))).resolves.toBe(
+      PHONE_HIGH_EFFICIENCY_IMAGE_MESSAGE
+    );
+    await expect(getListingImageFormatErrorMessageAsync(new File([avifBytes], "content", { type: "" }))).resolves.toBe(
+      PHONE_HIGH_EFFICIENCY_IMAGE_MESSAGE
+    );
+  });
+
+  it("rejects unknown content when metadata and filename are unreliable", async () => {
+    const file = new File([new Uint8Array([0x01, 0x02, 0x03, 0x04])], "content", { type: "" });
+
+    await expect(normalizeListingImageTypeAsync(file)).resolves.toBeNull();
+    await expect(getListingImageFormatErrorMessageAsync(file)).resolves.toBe(
+      "This file type is not supported. Upload JPG, PNG, and WebP images."
+    );
   });
 
   it("gives iPhone guidance for HEIC, HEIF, and AVIF instead of server conversion", () => {

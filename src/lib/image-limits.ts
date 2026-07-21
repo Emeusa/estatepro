@@ -34,6 +34,55 @@ const EXTENSION_BY_MIME: Record<(typeof SUPPORTED_LISTING_IMAGE_TYPES)[number], 
 
 const RAW_LISTING_IMAGE_EXTENSIONS = new Set(["dng", "raw", "arw", "cr2", "cr3", "nef", "nrw", "orf", "raf", "rw2"]);
 const PHONE_HIGH_EFFICIENCY_EXTENSIONS = new Set(["heic", "heif", "avif"]);
+const LISTING_IMAGE_SIGNATURE_BYTES = 32;
+
+type SupportedListingImageType = (typeof SUPPORTED_LISTING_IMAGE_TYPES)[number];
+
+function bytesToAscii(bytes: Uint8Array, start: number, end: number) {
+  return String.fromCharCode(...bytes.slice(start, end));
+}
+
+function isJpegSignature(bytes: Uint8Array) {
+  return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+}
+
+function isPngSignature(bytes: Uint8Array) {
+  return (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  );
+}
+
+function isWebpSignature(bytes: Uint8Array) {
+  return bytes.length >= 12 && bytesToAscii(bytes, 0, 4) === "RIFF" && bytesToAscii(bytes, 8, 12) === "WEBP";
+}
+
+function getIsoContainerBrands(bytes: Uint8Array) {
+  if (bytes.length < 12 || bytesToAscii(bytes, 4, 8) !== "ftyp") {
+    return [];
+  }
+
+  const brands = [bytesToAscii(bytes, 8, 12)];
+  for (let index = 16; index + 4 <= bytes.length; index += 4) {
+    brands.push(bytesToAscii(bytes, index, index + 4));
+  }
+
+  return brands;
+}
+
+function isPhoneHighEfficiencySignature(bytes: Uint8Array) {
+  const brands = getIsoContainerBrands(bytes).map((brand) => brand.toLowerCase());
+  return brands.some((brand) =>
+    ["avif", "avis", "heic", "heix", "hevc", "hevx", "heif", "mif1", "msf1"].includes(brand)
+  );
+}
 
 export function getListingImageExtension(name: string) {
   const extension = name.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? "";
@@ -83,6 +132,41 @@ export function normalizeListingImageType(file: Pick<File, "name" | "type">) {
   return extension ? MIME_BY_EXTENSION[extension] : null;
 }
 
+export function detectListingImageTypeFromSignature(bytes: Uint8Array): SupportedListingImageType | "phone-high-efficiency" | null {
+  if (isJpegSignature(bytes)) {
+    return "image/jpeg";
+  }
+
+  if (isPngSignature(bytes)) {
+    return "image/png";
+  }
+
+  if (isWebpSignature(bytes)) {
+    return "image/webp";
+  }
+
+  if (isPhoneHighEfficiencySignature(bytes)) {
+    return "phone-high-efficiency";
+  }
+
+  return null;
+}
+
+export async function sniffListingImageType(file: Pick<File, "slice">) {
+  const buffer = await file.slice(0, LISTING_IMAGE_SIGNATURE_BYTES).arrayBuffer();
+  return detectListingImageTypeFromSignature(new Uint8Array(buffer));
+}
+
+export async function normalizeListingImageTypeAsync(file: File): Promise<SupportedListingImageType | null> {
+  const metadataType = normalizeListingImageType(file);
+  if (metadataType) {
+    return metadataType;
+  }
+
+  const signatureType = await sniffListingImageType(file);
+  return signatureType === "phone-high-efficiency" ? null : signatureType;
+}
+
 export function getListingImageExtensionForType(type: (typeof SUPPORTED_LISTING_IMAGE_TYPES)[number]) {
   return EXTENSION_BY_MIME[type];
 }
@@ -105,6 +189,27 @@ export function getListingImageFormatErrorMessage(file: Pick<File, "name" | "typ
   }
 
   if (!normalizeListingImageType(file)) {
+    return `This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`;
+  }
+
+  return null;
+}
+
+export async function getListingImageFormatErrorMessageAsync(file: File) {
+  if (isRawListingImageFile(file)) {
+    return "RAW photos are too large for listing uploads. Export as JPG first.";
+  }
+
+  if (isPhoneHighEfficiencyListingImageFile(file)) {
+    return PHONE_HIGH_EFFICIENCY_IMAGE_MESSAGE;
+  }
+
+  const signatureType = await sniffListingImageType(file);
+  if (signatureType === "phone-high-efficiency") {
+    return PHONE_HIGH_EFFICIENCY_IMAGE_MESSAGE;
+  }
+
+  if (!normalizeListingImageType(file) && !signatureType) {
     return `This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`;
   }
 
