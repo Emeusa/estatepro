@@ -60,6 +60,17 @@ describe("listing image mobile file handling", () => {
     expect(source).not.toContain("formatImageSize");
   });
 
+  it("uses a posting label and spinner on the listing submit button", () => {
+    const source = readFileSync(path.join(process.cwd(), "src/components/forms/listing-form.tsx"), "utf8");
+
+    expect(source).toContain("Post Property");
+    expect(source).toContain("Posting property...");
+    expect(source).toContain("animate-spin");
+    expect(source).toContain("inline-flex items-center justify-center gap-2");
+    expect(source).not.toContain("Save listing");
+    expect(source).not.toContain("Saving...");
+  });
+
   it("keeps upload validation strict after gallery selection", () => {
     expect(LISTING_GALLERY_PICKER_ACCEPT).toBe("image/jpeg,image/png,image/webp,.jpg,.jpeg,.jpe,.jfif,.png,.webp");
     expect(isSupportedListingImageFile({ name: "ios-photo.heic", type: "image/heic" })).toBe(false);

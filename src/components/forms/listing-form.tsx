@@ -86,6 +86,15 @@ function OptionalSection({
   );
 }
 
+function ButtonSpinner() {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/45 border-t-white"
+    />
+  );
+}
+
 export function ListingForm({ token, listing, onSaved }: Props) {
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -776,8 +785,9 @@ export function ListingForm({ token, listing, onSaved }: Props) {
           </select>
         </div>
       </OptionalSection>
-      <button className="button-primary" disabled={isSubmitting}>
-        {isSubmitting ? "Saving..." : "Save listing"}
+      <button className="button-primary inline-flex items-center justify-center gap-2" disabled={isSubmitting}>
+        {isSubmitting ? <ButtonSpinner /> : null}
+        {isSubmitting ? "Posting property..." : "Post Property"}
       </button>
       {message ? <p className="text-sm text-slate-500">{message}</p> : null}
     </form>
