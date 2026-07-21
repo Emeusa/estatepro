@@ -8,6 +8,8 @@ import {
   MAX_LISTING_IMAGES,
   MAX_LISTING_ORIGINAL_IMAGE_BYTES,
   MAX_LISTING_ORIGINAL_IMAGE_MB,
+  MAX_SERVER_CONVERT_IMAGE_BYTES,
+  MAX_SERVER_CONVERT_IMAGE_MB,
   normalizeListingImageType,
   SUPPORTED_LISTING_IMAGE_LABEL
 } from "@/lib/image-limits";
@@ -42,6 +44,17 @@ function jsonError(message: string, status: number) {
   return NextResponse.json({ message }, { status });
 }
 
+type UploadedVariant = {
+  heroUrl: string;
+  cardUrl: string;
+  blurDataUrl: string;
+  width: number;
+  height: number;
+  cardWidth: number;
+  cardHeight: number;
+  order: number;
+};
+
 async function getServerWatermark(supabase: ReturnType<typeof createServerSupabaseClient>, agentId: string) {
   const [{ data: user }, { data: agent }, { data: subscription }] = await Promise.all([
     supabase.from("users").select("full_name").eq("id", agentId).single(),
@@ -60,6 +73,128 @@ async function getServerWatermark(supabase: ReturnType<typeof createServerSupaba
   return { type: "platform" as const };
 }
 
+async function assertAgentCanUploadImages(supabase: ReturnType<typeof createServerSupabaseClient>, agentId: string) {
+  const { data: agent, error: agentError } = await supabase
+    .from("agents")
+    .select("verification_status, is_blocked")
+    .eq("id", agentId)
+    .single();
+  const blockReason = getListingImageUploadBlockReason(agentError ? null : agent);
+
+  if (blockReason) {
+    return blockReason;
+  }
+
+  return null;
+}
+
+async function processAndUploadFinalImage({
+  bytes,
+  type,
+  order,
+  agentId,
+  watermark,
+  supabase,
+  uploadedFinalPaths
+}: {
+  bytes: Buffer;
+  type: NonNullable<ReturnType<typeof normalizeListingImageType>>;
+  order: number;
+  agentId: string;
+  watermark: Awaited<ReturnType<typeof getServerWatermark>>;
+  supabase: ReturnType<typeof createServerSupabaseClient>;
+  uploadedFinalPaths: string[];
+}) {
+  const processed = await processListingImageOnServer(bytes, type, watermark);
+  const imageId = randomUUID();
+  const heroPath = `${agentId}/${imageId}-${order}-hero.webp`;
+  const cardPath = `${agentId}/${imageId}-${order}-card.webp`;
+
+  const { error: heroUploadError } = await supabase.storage.from("listing-images").upload(heroPath, processed.hero.buffer, {
+    contentType: "image/webp",
+    upsert: false
+  });
+  if (heroUploadError) {
+    throw heroUploadError;
+  }
+  uploadedFinalPaths.push(heroPath);
+
+  const { error: cardUploadError } = await supabase.storage.from("listing-images").upload(cardPath, processed.card.buffer, {
+    contentType: "image/webp",
+    upsert: false
+  });
+  if (cardUploadError) {
+    throw cardUploadError;
+  }
+  uploadedFinalPaths.push(cardPath);
+
+  return {
+    heroUrl: supabase.storage.from("listing-images").getPublicUrl(heroPath).data.publicUrl,
+    cardUrl: supabase.storage.from("listing-images").getPublicUrl(cardPath).data.publicUrl,
+    blurDataUrl: processed.blurDataUrl,
+    width: processed.hero.width,
+    height: processed.hero.height,
+    cardWidth: processed.card.width,
+    cardHeight: processed.card.height,
+    order
+  } satisfies UploadedVariant;
+}
+
+async function handleMultipartConversion({
+  request,
+  supabase,
+  agentId,
+  uploadedFinalPaths
+}: {
+  request: NextRequest;
+  supabase: ReturnType<typeof createServerSupabaseClient>;
+  agentId: string;
+  uploadedFinalPaths: string[];
+}) {
+  const form = await request.formData();
+  const file = form.get("file");
+  const orderValue = Number(form.get("order") ?? 0);
+
+  if (!(file instanceof File)) {
+    return { response: jsonError("No image file was provided.", 400), variants: null };
+  }
+
+  if (!Number.isInteger(orderValue) || orderValue < 0 || orderValue >= MAX_LISTING_IMAGES) {
+    return { response: jsonError("Invalid image conversion request.", 400), variants: null };
+  }
+
+  if (file.size <= 0 || file.size > MAX_SERVER_CONVERT_IMAGE_BYTES) {
+    return {
+      response: jsonError(
+        `This phone photo format is too large to process. Export as JPG first. Upload code: IMAGE_FORMAT_TOO_LARGE (${MAX_SERVER_CONVERT_IMAGE_MB} MB limit).`,
+        400
+      ),
+      variants: null
+    };
+  }
+
+  const normalizedType = normalizeListingImageType(file);
+  if (!normalizedType) {
+    return {
+      response: jsonError(`This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`, 400),
+      variants: null
+    };
+  }
+
+  const watermark = await getServerWatermark(supabase, agentId);
+  const variant = await processAndUploadFinalImage({
+    bytes: Buffer.from(await file.arrayBuffer()),
+    type: normalizedType,
+    order: orderValue,
+    agentId,
+    watermark,
+    supabase,
+    uploadedFinalPaths
+  });
+
+  return { response: null, variants: [variant] };
+}
+
 export async function POST(request: NextRequest) {
   let userId: string | null = null;
   const uploadedFinalPaths: string[] = [];
@@ -74,88 +209,78 @@ export async function POST(request: NextRequest) {
       return limited.response;
     }
 
-    const body = convertSchema.parse(await request.json());
-    originalPaths = body.originals.map((original) => original.path);
-
-    for (const original of body.originals) {
-      const blockReason = getListingOriginalPathBlockReason(decoded.uid, original.path);
-      if (blockReason) {
-        return jsonError(blockReason, 400);
-      }
-    }
-
     const supabase = createServerSupabaseClient();
-    const { data: agent, error: agentError } = await supabase
-      .from("agents")
-      .select("verification_status, is_blocked")
-      .eq("id", decoded.uid)
-      .single();
-    const blockReason = getListingImageUploadBlockReason(agentError ? null : agent);
+    const blockReason = await assertAgentCanUploadImages(supabase, decoded.uid);
 
     if (blockReason) {
-      await supabase.storage.from(LISTING_IMAGE_ORIGINALS_BUCKET).remove(originalPaths);
       return jsonError(blockReason, 403);
     }
 
-    const watermark = await getServerWatermark(supabase, decoded.uid);
-    const variants = [];
+    let variants: UploadedVariant[] = [];
+    const contentType = request.headers.get("content-type") ?? "";
 
-    for (const original of body.originals.sort((first, second) => first.order - second.order)) {
-      const { data: blob, error: downloadError } = await supabase.storage
-        .from(LISTING_IMAGE_ORIGINALS_BUCKET)
-        .download(original.path);
-
-      if (downloadError || !blob) {
-        throw new Error(downloadError?.message ?? "Could not read temporary original image.");
-      }
-
-      if (blob.size <= 0 || blob.size > MAX_LISTING_ORIGINAL_IMAGE_BYTES) {
-        await supabase.storage.from(LISTING_IMAGE_ORIGINALS_BUCKET).remove(originalPaths);
-        return jsonError(`Each image must be ${MAX_LISTING_ORIGINAL_IMAGE_MB} MB or less before compression.`, 400);
-      }
-
-      const normalizedType = normalizeListingImageType({ name: original.path, type: blob.type });
-      if (!normalizedType) {
-        await supabase.storage.from(LISTING_IMAGE_ORIGINALS_BUCKET).remove(originalPaths);
-        return jsonError(`This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`, 400);
-      }
-
-      const processed = await processListingImageOnServer(Buffer.from(await blob.arrayBuffer()), normalizedType, watermark);
-      const imageId = randomUUID();
-      const heroPath = `${decoded.uid}/${imageId}-${original.order}-hero.webp`;
-      const cardPath = `${decoded.uid}/${imageId}-${original.order}-card.webp`;
-
-      const { error: heroUploadError } = await supabase.storage.from("listing-images").upload(heroPath, processed.hero.buffer, {
-        contentType: "image/webp",
-        upsert: false
+    if (contentType.includes("multipart/form-data")) {
+      const multipartResult = await handleMultipartConversion({
+        request,
+        supabase,
+        agentId: decoded.uid,
+        uploadedFinalPaths
       });
-      if (heroUploadError) {
-        throw heroUploadError;
-      }
-      uploadedFinalPaths.push(heroPath);
 
-      const { error: cardUploadError } = await supabase.storage.from("listing-images").upload(cardPath, processed.card.buffer, {
-        contentType: "image/webp",
-        upsert: false
-      });
-      if (cardUploadError) {
-        throw cardUploadError;
+      if (multipartResult.response) {
+        return multipartResult.response;
       }
-      uploadedFinalPaths.push(cardPath);
 
-      variants.push({
-        heroUrl: supabase.storage.from("listing-images").getPublicUrl(heroPath).data.publicUrl,
-        cardUrl: supabase.storage.from("listing-images").getPublicUrl(cardPath).data.publicUrl,
-        blurDataUrl: processed.blurDataUrl,
-        width: processed.hero.width,
-        height: processed.hero.height,
-        cardWidth: processed.card.width,
-        cardHeight: processed.card.height,
-        order: original.order
-      });
+      variants = multipartResult.variants ?? [];
+    } else {
+      const body = convertSchema.parse(await request.json());
+      originalPaths = body.originals.map((original) => original.path);
+
+      for (const original of body.originals) {
+        const pathBlockReason = getListingOriginalPathBlockReason(decoded.uid, original.path);
+        if (pathBlockReason) {
+          return jsonError(pathBlockReason, 400);
+        }
+      }
+
+      const watermark = await getServerWatermark(supabase, decoded.uid);
+
+      for (const original of body.originals.sort((first, second) => first.order - second.order)) {
+        const { data: blob, error: downloadError } = await supabase.storage
+          .from(LISTING_IMAGE_ORIGINALS_BUCKET)
+          .download(original.path);
+
+        if (downloadError || !blob) {
+          throw new Error(downloadError?.message ?? "Could not read temporary original image.");
+        }
+
+        if (blob.size <= 0 || blob.size > MAX_LISTING_ORIGINAL_IMAGE_BYTES) {
+          await supabase.storage.from(LISTING_IMAGE_ORIGINALS_BUCKET).remove(originalPaths);
+          return jsonError(`Each image must be ${MAX_LISTING_ORIGINAL_IMAGE_MB} MB or less before compression.`, 400);
+        }
+
+        const normalizedType = normalizeListingImageType({ name: original.path, type: blob.type });
+        if (!normalizedType) {
+          await supabase.storage.from(LISTING_IMAGE_ORIGINALS_BUCKET).remove(originalPaths);
+          return jsonError(`This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`, 400);
+        }
+
+        variants.push(
+          await processAndUploadFinalImage({
+            bytes: Buffer.from(await blob.arrayBuffer()),
+            type: normalizedType,
+            order: original.order,
+            agentId: decoded.uid,
+            watermark,
+            supabase,
+            uploadedFinalPaths
+          })
+        );
+      }
+
+      await supabase.storage.from(LISTING_IMAGE_ORIGINALS_BUCKET).remove(originalPaths);
     }
 
-    await supabase.storage.from(LISTING_IMAGE_ORIGINALS_BUCKET).remove(originalPaths);
     await logSecurityEvent({
       request,
       action: "listing_image_server_converted",
@@ -199,6 +324,9 @@ export async function POST(request: NextRequest) {
       return jsonError("Invalid image conversion request.", 400);
     }
 
-    return jsonError("We could not process this phone photo. Try exporting it as JPG and upload again.", 500);
+    return jsonError(
+      "We could not compress one of these phone photos. Try uploading fewer photos or export the photo as JPG. Upload code: IMAGE_COMPRESS_FAILED",
+      500
+    );
   }
 }

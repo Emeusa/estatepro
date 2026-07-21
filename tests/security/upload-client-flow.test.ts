@@ -107,6 +107,12 @@ describe("client listing image upload flow", () => {
     await uploadListingImages(files, "token");
 
     expect(mocks.processListingImage).toHaveBeenCalledTimes(6);
+    expect(fetch).toHaveBeenCalledTimes(12);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/uploads/listing-images/fallback",
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(mocks.publicUpload).not.toHaveBeenCalled();
     expect(mocks.originalUpload).not.toHaveBeenCalled();
   });
 
@@ -130,45 +136,57 @@ describe("client listing image upload flow", () => {
     expect(maxActive).toBe(1);
   });
 
-  it("retries transient direct storage upload failures before failing", async () => {
+  it("retries transient authenticated server upload failures before failing", async () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
     const files = [makeFile("small.jpg", 500_000)];
     let uploadAttempts = 0;
 
-    mocks.publicUpload.mockImplementation(async () => {
-      uploadAttempts += 1;
-      if (uploadAttempts === 1) {
-        return { error: { message: "Network timeout while uploading to storage" } };
-      }
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (!url.includes("/api/uploads/listing-images/fallback")) {
+          return Response.json({});
+        }
 
-      return { error: null };
-    });
+        uploadAttempts += 1;
+        if (uploadAttempts === 1) {
+          return Response.json({ message: "Server image upload failed." }, { status: 500 });
+        }
+
+        return Response.json({ url: `https://example.supabase.co/storage/v1/object/public/listing-images/agent-id/${uploadAttempts}.webp` });
+      })
+    );
 
     const result = await uploadListingImages(files, "token");
 
     expect(result.imageVariants).toHaveLength(1);
     expect(uploadAttempts).toBe(3);
+    expect(mocks.publicUpload).not.toHaveBeenCalled();
   });
 
-  it("returns a specific setup message when temporary original upload fails", async () => {
+  it("uploads hard phone formats through the server conversion endpoint", async () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
-    const files = [makeFile("large.jpg", Math.round(9 * 1024 * 1024))];
+    const files = [makeFile("ios-photo.heic", Math.round(3 * 1024 * 1024), "image/heic")];
 
-    mocks.originalUpload.mockResolvedValue({ error: { message: "Bucket not found" } });
+    const result = await uploadListingImages(files, "token");
 
-    await expect(uploadListingImages(files, "token")).rejects.toThrow(
-      "Temporary image storage is not configured. Run the latest Supabase storage setup."
+    expect(result.imageVariants).toHaveLength(1);
+    expect(mocks.processListingImage).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/uploads/listing-images/convert",
+      expect.objectContaining({ method: "POST" })
     );
+    expect(mocks.originalUpload).not.toHaveBeenCalled();
   });
 
-  it("does not blame connection when temporary original upload fails transiently", async () => {
+  it("rejects hard phone formats that are too large for the app API conversion path", async () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
-    const files = [makeFile("large.jpg", Math.round(9 * 1024 * 1024))];
+    const files = [makeFile("ios-photo.heic", Math.round(5 * 1024 * 1024), "image/heic")];
 
-    mocks.originalUpload.mockResolvedValue({ error: { message: "Network timeout while uploading to storage" } });
-
-    await expect(uploadListingImages(files, "token")).rejects.toThrow(
-      "We could not upload temporary copies of these photos for compression. Try smaller photos or fewer photos."
+    await expect(uploadListingImages(files, "token")).rejects.toThrow("Upload code: IMAGE_FORMAT_TOO_LARGE");
+    expect(fetch).not.toHaveBeenCalledWith(
+      "/api/uploads/listing-images/convert",
+      expect.objectContaining({ method: "POST" })
     );
   });
 
@@ -195,7 +213,6 @@ describe("client listing image upload flow", () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
     const files = [makeFile("small.jpg", 500_000)];
 
-    mocks.publicUpload.mockResolvedValue({ error: { message: "Network timeout while uploading to storage" } });
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({})));
 
     await expect(uploadListingImages(files, "token")).rejects.toThrow(
@@ -205,12 +222,12 @@ describe("client listing image upload flow", () => {
 
   it("returns a useful message when server conversion returns a generic failure", async () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
-    const files = [makeFile("large.jpg", Math.round(9 * 1024 * 1024))];
+    const files = [makeFile("ios-photo.heic", Math.round(3 * 1024 * 1024), "image/heic")];
 
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({}, { status: 500 })));
 
     await expect(uploadListingImages(files, "token")).rejects.toThrow(
-      "We could not compress one of these phone photos. Try uploading fewer photos or export the photo as JPG."
+      "Upload code: IMAGE_COMPRESS_FAILED"
     );
   });
 });

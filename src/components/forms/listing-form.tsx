@@ -270,6 +270,22 @@ export function ListingForm({ token, listing, onSaved }: Props) {
 
     const message = error.message.toLowerCase();
 
+    if (message.includes("image_format_too_large")) {
+      return "This phone photo format is too large to process. Export as JPG first. Upload code: IMAGE_FORMAT_TOO_LARGE";
+    }
+
+    if (message.includes("image_compress_failed")) {
+      return "Image could not be compressed on this phone. Try JPG or upload fewer photos. Upload code: IMAGE_COMPRESS_FAILED";
+    }
+
+    if (message.includes("server_image_upload_failed")) {
+      return "Server image upload failed. Please try again or choose fewer photos. Upload code: SERVER_IMAGE_UPLOAD_FAILED";
+    }
+
+    if (message.includes("server_upload_response_missing")) {
+      return "Server upload completed without an image URL. Try again with fewer photos. Upload code: SERVER_UPLOAD_RESPONSE_MISSING";
+    }
+
     if (message.includes("logged in") || message.includes("session") || message.includes("jwt")) {
       return "Your session expired. Log in again before uploading images.";
     }

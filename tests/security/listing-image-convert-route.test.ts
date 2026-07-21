@@ -53,6 +53,17 @@ function convertRequest(path = "agent-id/source-0-original.jpg") {
   });
 }
 
+function convertMultipartRequest(file = new File([Buffer.from("image")], "ios-photo.heic", { type: "image/heic" }), order = 0) {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("order", String(order));
+
+  return new NextRequest("http://localhost:3000/api/uploads/listing-images/convert", {
+    method: "POST",
+    body: form
+  });
+}
+
 function queryResult(data: unknown, error: unknown = null) {
   const query = {
     select: vi.fn(() => query),
@@ -174,5 +185,30 @@ describe("listing image conversion route", () => {
       "image/jpeg",
       expect.objectContaining({ type: "platform" })
     );
+  });
+
+  it("converts direct multipart phone images for pending unblocked agents", async () => {
+    const response = await POST(convertMultipartRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.imageUrls).toHaveLength(1);
+    expect(body.imageVariants).toHaveLength(1);
+    expect(mocks.processListingImageOnServer).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      "image/heic",
+      expect.objectContaining({ type: "platform" })
+    );
+  });
+
+  it("rejects direct multipart phone images above the app conversion limit", async () => {
+    const file = new File([new Uint8Array(5 * 1024 * 1024)], "ios-photo.heic", { type: "image/heic" });
+
+    const response = await POST(convertMultipartRequest(file));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.message).toContain("Upload code: IMAGE_FORMAT_TOO_LARGE");
+    expect(mocks.processListingImageOnServer).not.toHaveBeenCalled();
   });
 });

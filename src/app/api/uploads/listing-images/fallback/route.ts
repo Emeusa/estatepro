@@ -98,6 +98,9 @@ export async function POST(request: NextRequest) {
       return jsonError(error.message, error.status);
     }
 
-    return jsonError("We could not upload the selected photos. Check your connection and try again with fewer photos.", 500);
+    return jsonError(
+      "Server image upload failed. Please try again or choose fewer photos. Upload code: SERVER_IMAGE_UPLOAD_FAILED",
+      500
+    );
   }
 }
