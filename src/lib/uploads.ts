@@ -26,6 +26,12 @@ type ListingImageUploadResult = {
   imageVariants: ListingImageVariant[];
 };
 
+export type ListingImageUploadProgress = {
+  stage: "preparing" | "processing" | "uploading";
+  current: number;
+  total: number;
+};
+
 type UploadStage = "authorize" | "browser-compress" | "direct-final-upload" | "server-final-upload";
 
 type AgentWatermarkResponse = {
@@ -226,10 +232,12 @@ async function uploadBrowserProcessedImage(
   userId: string,
   watermark: ListingImageWatermark,
   order: number,
-  allFiles: File[]
+  allFiles: File[],
+  onProgress?: (progress: ListingImageUploadProgress) => void
 ): Promise<{ imageUrl: string; imageVariant: ListingImageVariant }> {
   let optimized: Awaited<ReturnType<typeof processListingImage>>;
   try {
+    onProgress?.({ stage: "processing", current: order + 1, total: allFiles.length });
     optimized = await processListingImage(file, watermark);
   } catch (error) {
     warnUploadStage("browser-compress", allFiles, error, order);
@@ -237,6 +245,7 @@ async function uploadBrowserProcessedImage(
   }
 
   try {
+    onProgress?.({ stage: "uploading", current: order + 1, total: allFiles.length });
     const heroType = normalizeListingImageType(optimized.hero);
     const cardType = normalizeListingImageType(optimized.card);
     const heroUrl = await uploadFinalImage(
@@ -275,7 +284,11 @@ async function uploadBrowserProcessedImage(
   }
 }
 
-export async function uploadListingImages(files: File[], token: string): Promise<ListingImageUploadResult> {
+export async function uploadListingImages(
+  files: File[],
+  token: string,
+  onProgress?: (progress: ListingImageUploadProgress) => void
+): Promise<ListingImageUploadResult> {
   const userId = await requireUserId();
   const countLimitMessage = getListingImageCountLimitMessage(files.length);
 
@@ -309,8 +322,10 @@ export async function uploadListingImages(files: File[], token: string): Promise
   const imageUrls: string[] = [];
   const imageVariants: ListingImageVariant[] = [];
 
+  onProgress?.({ stage: "preparing", current: 0, total: acceptedFiles.length });
+
   for (const [index, file] of acceptedFiles.entries()) {
-    const uploaded = await uploadBrowserProcessedImage(file, token, userId, watermark, index, acceptedFiles);
+    const uploaded = await uploadBrowserProcessedImage(file, token, userId, watermark, index, acceptedFiles, onProgress);
     imageUrls.push(uploaded.imageUrl);
     imageVariants.push(uploaded.imageVariant);
   }

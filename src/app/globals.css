@@ -3,14 +3,15 @@
 @tailwind utilities;
 
 .listing-gallery-frame {
-  width: min(100%, var(--listing-image-mobile-width));
+  width: 100%;
+  max-width: min(100%, 48rem);
   aspect-ratio: var(--listing-image-ratio);
   max-height: 70vh;
 }
 
 @media (min-width: 768px) {
   .listing-gallery-frame {
-    width: min(100%, var(--listing-image-desktop-width));
+    max-width: min(100%, 52rem);
     max-height: 75vh;
   }
 }
@@ -27,6 +28,7 @@
   html {
     font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
     background: #f7f7f2;
+    overflow-x: hidden;
   }
 
   h1,
@@ -42,6 +44,7 @@
   body {
     margin: 0;
     min-height: 100vh;
+    overflow-x: hidden;
     background:
       radial-gradient(circle at top, rgba(217, 180, 93, 0.14), transparent 34%),
       linear-gradient(180deg, #efeee7 0%, #e8e6dc 100%);

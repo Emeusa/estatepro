@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { CSSProperties, useEffect, useRef, useState } from "react";
+import { CSSProperties, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { ListingImageSource } from "@/lib/listing-images";
@@ -25,7 +25,6 @@ export function ListingImageGallery({ images, title, unavailableBadge }: Props) 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
   const [measuredRatios, setMeasuredRatios] = useState<Record<number, number>>({});
-  const thumbnailScrollerRef = useRef<HTMLDivElement | null>(null);
 
   const selectedImage = images[selectedIndex] ?? null;
   const selectedRatio = selectedImage
@@ -93,13 +92,6 @@ export function ListingImageGallery({ images, title, unavailableBadge }: Props) 
     setSelectedIndex((current) => (current - 1 + images.length) % images.length);
   }
 
-  function scrollThumbnails(direction: "left" | "right") {
-    thumbnailScrollerRef.current?.scrollBy({
-      left: direction === "left" ? -260 : 260,
-      behavior: "smooth"
-    });
-  }
-
   function rememberRatio(index: number, image: HTMLImageElement) {
     if (!image.naturalWidth || !image.naturalHeight) {
       return;
@@ -109,9 +101,7 @@ export function ListingImageGallery({ images, title, unavailableBadge }: Props) 
   }
 
   const galleryFrameStyle = {
-    "--listing-image-ratio": selectedRatio,
-    "--listing-image-mobile-width": `${70 * selectedRatio}vh`,
-    "--listing-image-desktop-width": `${75 * selectedRatio}vh`
+    "--listing-image-ratio": selectedRatio
   } as CSSProperties & Record<`--${string}`, string | number>;
 
   const previewModal =
@@ -185,8 +175,8 @@ export function ListingImageGallery({ images, title, unavailableBadge }: Props) 
   }
 
   return (
-    <div className="min-w-0 max-w-full space-y-3 overflow-hidden">
-      <div className="relative flex min-w-0 max-w-full justify-center overflow-hidden">
+    <div className="min-w-0 max-w-full space-y-3 overflow-x-hidden">
+      <div className="relative flex min-w-0 max-w-full justify-center overflow-x-hidden">
         <button
           type="button"
           onClick={() => setPreviewOpen(true)}
@@ -240,30 +230,16 @@ export function ListingImageGallery({ images, title, unavailableBadge }: Props) 
       </div>
 
       {hasMultipleImages ? (
-        <div className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden">
-          <button
-            type="button"
-            onClick={() => scrollThumbnails("left")}
-            className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/80 text-slate-950 shadow-sm ring-1 ring-slate-200 transition hover:bg-white sm:inline-flex"
-            aria-label="Scroll thumbnails left"
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-current">
-              <path d="m15.5 4.5-7 7.5 7 7.5 1.5-1.4-5.7-6.1L17 5.9l-1.5-1.4Z" />
-            </svg>
-          </button>
-          <div
-            ref={thumbnailScrollerRef}
-            className="flex min-w-0 flex-1 gap-3 overflow-x-auto scroll-smooth pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          >
+        <div className="min-w-0 max-w-full overflow-hidden">
+          <div className="grid min-w-0 max-w-full grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-5 xl:grid-cols-6">
             {images.map((image, index) => (
               <button
                 key={`${image.cardUrl}-${index}`}
                 type="button"
                 onClick={() => setSelectedIndex(index)}
-                className={`relative h-20 shrink-0 overflow-hidden rounded-2xl shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950 sm:h-24 ${
+                className={`relative aspect-[4/3] min-w-0 overflow-hidden rounded-2xl shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950 ${
                   index === selectedIndex ? "ring-2 ring-amber-400 ring-offset-2" : "ring-1 ring-white/50 hover:ring-slate-400"
                 }`}
-                style={{ aspectRatio: measuredRatios[index] ?? storedRatio(image, "card") ?? DEFAULT_IMAGE_RATIO }}
                 aria-label={`Show listing image ${index + 1}`}
                 aria-current={index === selectedIndex ? "true" : undefined}
               >
@@ -280,16 +256,6 @@ export function ListingImageGallery({ images, title, unavailableBadge }: Props) 
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => scrollThumbnails("right")}
-            className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/80 text-slate-950 shadow-sm ring-1 ring-slate-200 transition hover:bg-white sm:inline-flex"
-            aria-label="Scroll thumbnails right"
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-current">
-              <path d="m8.5 19.5 7-7.5-7-7.5L7 5.9l5.7 6.1L7 18.1l1.5 1.4Z" />
-            </svg>
-          </button>
         </div>
       ) : null}
       {previewModal}

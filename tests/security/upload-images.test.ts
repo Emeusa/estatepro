@@ -81,6 +81,22 @@ describe("listing image mobile file handling", () => {
     expect(source).not.toContain("Saving...");
   });
 
+  it("shows slow upload progress without changing the picker or upload flow", () => {
+    const source = readFileSync(path.join(process.cwd(), "src/components/forms/listing-form.tsx"), "utf8");
+    const uploadSource = readFileSync(path.join(process.cwd(), "src/lib/uploads.ts"), "utf8");
+
+    expect(source).toContain("uploadProgressMessage");
+    expect(source).toContain('aria-live="polite"');
+    expect(source).toContain("Large photos can take a few minutes on mobile. Do not close or refresh this page.");
+    expect(source).toContain("Saving listing details...");
+    expect(source).toContain("disabled={isSubmitting}");
+    expect(uploadSource).toContain("type ListingImageUploadProgress");
+    expect(uploadSource).toContain("onProgress?.({ stage: \"processing\"");
+    expect(uploadSource).toContain("onProgress?.({ stage: \"uploading\"");
+    expect(uploadSource).not.toContain("/api/uploads/listing-images/convert");
+    expect(uploadSource).not.toContain("listing-image-originals");
+  });
+
   it("uses memory-safe browser image processing for large mobile photos", () => {
     const source = readFileSync(path.join(process.cwd(), "src/lib/image.ts"), "utf8");
 

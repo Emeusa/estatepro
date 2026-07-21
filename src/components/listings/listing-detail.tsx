@@ -27,10 +27,10 @@ export function ListingDetail({ details, similarListings = [] }: Props) {
   const agentDisplayName = agent.displayName;
 
   return (
-    <section className="rounded-[2rem] bg-gradient-to-br from-stone-300 via-stone-200 to-slate-300 p-3 shadow-sm sm:p-5">
+    <section className="max-w-full overflow-x-hidden rounded-[2rem] bg-gradient-to-br from-stone-300 via-stone-200 to-slate-300 p-3 shadow-sm sm:p-5">
       <ListingDetailEventTracker listingId={listing.id} />
-      <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
-        <div className="space-y-4">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
+        <div className="min-w-0 space-y-4">
           <ListingImageGallery images={images} title={listing.title} unavailableBadge={unavailableBadge} />
           <div className="rounded-3xl bg-white/65 p-6 shadow-sm">
             <div className="flex items-start justify-between gap-4">
@@ -63,7 +63,7 @@ export function ListingDetail({ details, similarListings = [] }: Props) {
           </div>
           <ListingQualityChips listing={listing} />
         </div>
-        <aside className="self-start rounded-3xl bg-white/65 p-6 shadow-sm">
+        <aside className="min-w-0 self-start rounded-3xl bg-white/65 p-6 shadow-sm">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Contact agent</p>
           <Link
             href={`/agents/${listing.agentId}/listings`}

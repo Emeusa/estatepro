@@ -145,6 +145,24 @@ describe("client listing image upload flow", () => {
     expect(maxActive).toBe(1);
   });
 
+  it("reports processing and uploading progress for each image", async () => {
+    const { uploadListingImages } = await import("../../src/lib/uploads");
+    const files = [makeFile("small-1.jpg", 500_000), makeFile("small-2.jpg", 500_000)];
+    const progressEvents: Array<{ stage: string; current: number; total: number }> = [];
+
+    await uploadListingImages(files, "token", (progress) => progressEvents.push(progress));
+
+    expect(progressEvents).toEqual([
+      { stage: "preparing", current: 0, total: 2 },
+      { stage: "processing", current: 1, total: 2 },
+      { stage: "uploading", current: 1, total: 2 },
+      { stage: "processing", current: 2, total: 2 },
+      { stage: "uploading", current: 2, total: 2 }
+    ]);
+    expect(mocks.processListingImage).toHaveBeenCalledTimes(2);
+    expect(mocks.publicUpload).toHaveBeenCalledTimes(4);
+  });
+
   it("falls back to authenticated server upload only for compressed final images", async () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
     const files = [makeFile("small.jpg", 500_000)];

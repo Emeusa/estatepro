@@ -14,4 +14,12 @@ describe("agent dashboard share link", () => {
     expect(source).toContain("navigator.clipboard.writeText");
     expect(source).toContain("This page becomes public after approval and active listings.");
   });
+
+  it("keeps mobile logout in the header instead of below the listing form", () => {
+    const source = readFileSync(join(process.cwd(), "src/app/agents/dashboard/page.tsx"), "utf8");
+
+    expect(source).toContain("flex items-center justify-between gap-3");
+    expect(source).toContain("shrink-0 rounded-full bg-white/80 px-3 py-1.5 text-xs font-bold");
+    expect(source).not.toContain('<section className="px-3 pb-6 lg:hidden">');
+  });
 });

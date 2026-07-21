@@ -219,7 +219,7 @@ export default function AgentProfilePage() {
         <main className="min-w-0">
           <div className="border-b border-slate-400/70 bg-slate-200 px-3 py-3 sm:px-4 lg:px-6">
             <div className="space-y-3 lg:hidden">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-blue-600 text-sm font-bold text-white">
                     {initials(agentName)}
@@ -233,6 +233,13 @@ export default function AgentProfilePage() {
                     <p className="truncate text-xs text-slate-500">{data.user.email}</p>
                   </div>
                 </div>
+                <button
+                  className="shrink-0 rounded-full bg-white/80 px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm ring-1 ring-slate-300 transition hover:bg-white hover:text-slate-950"
+                  onClick={logout}
+                  type="button"
+                >
+                  Log out
+                </button>
               </div>
             </div>
             <div className="hidden items-center justify-end lg:flex">
@@ -346,14 +353,6 @@ export default function AgentProfilePage() {
 
             {message ? <p className="text-sm text-slate-600">{message}</p> : null}
 
-            <section className="pb-2 lg:hidden">
-              <button
-                className="w-full rounded-xl bg-slate-300 px-5 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-400/70 hover:text-slate-950"
-                onClick={logout}
-              >
-                Log out
-              </button>
-            </section>
           </div>
         </main>
       </div>

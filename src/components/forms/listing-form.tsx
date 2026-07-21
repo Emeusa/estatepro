@@ -35,7 +35,7 @@ import {
 } from "@/lib/listing-quality";
 import { getLgasForState, NIGERIA_STATES } from "@/lib/nigeria-locations";
 import { ListingCategory, ListingImageVariant, ListingRecord } from "@/lib/types";
-import { normalizeListingImageFileAsync, uploadListingImages } from "@/lib/uploads";
+import { normalizeListingImageFileAsync, uploadListingImages, type ListingImageUploadProgress } from "@/lib/uploads";
 import { createListingImagePreview } from "@/lib/image";
 
 type Props = {
@@ -105,6 +105,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadProgressMessage, setUploadProgressMessage] = useState<string | null>(null);
   const [selectedState, setSelectedState] = useState(listing?.location.state ?? "");
   const [selectedLga, setSelectedLga] = useState(listing?.location.city ?? "");
   const [propertyType, setPropertyType] = useState(listing?.propertyType ?? "apartment");
@@ -336,11 +337,28 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     return error.message;
   }
 
+  function getUploadProgressMessage(progress: ListingImageUploadProgress) {
+    if (progress.stage === "processing") {
+      return `Processing photo ${progress.current} of ${progress.total}... Keep this page open.`;
+    }
+
+    if (progress.stage === "uploading") {
+      return `Uploading photo ${progress.current} of ${progress.total}... Keep this page open.`;
+    }
+
+    return `Preparing ${progress.total} ${progress.total === 1 ? "photo" : "photos"}... Keep this page open.`;
+  }
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isSubmitting) {
+      return;
+    }
+
     const formElement = event.currentTarget;
     setMessage("");
     setFieldErrors({});
+    setUploadProgressMessage(null);
     setIsSubmitting(true);
     const form = new FormData(formElement);
     const imageFiles = selectedFiles.filter((file) => file.size > 0);
@@ -398,16 +416,24 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     try {
       if (imageFiles.length) {
         try {
-          const uploadedImages = await uploadListingImages(moveToFront(imageFiles, uploadThumbnailIndex), token);
+          const orderedImageFiles = moveToFront(imageFiles, uploadThumbnailIndex);
+          setUploadProgressMessage(
+            `Preparing ${orderedImageFiles.length} ${orderedImageFiles.length === 1 ? "photo" : "photos"}... Keep this page open.`
+          );
+          const uploadedImages = await uploadListingImages(orderedImageFiles, token, (progress) => {
+            setUploadProgressMessage(getUploadProgressMessage(progress));
+          });
           payload.imageUrls = uploadedImages.imageUrls;
           payload.imageVariants = uploadedImages.imageVariants;
         } catch (error) {
           const uploadMessage = getUploadFailureMessage(error);
+          setUploadProgressMessage(null);
           setFieldErrors({ images: uploadMessage });
           setMessage(uploadMessage);
           return;
         }
       }
+      setUploadProgressMessage("Saving listing details...");
       const response = await apiRequest<{ listing: ListingRecord }>(
         listing ? `/api/listings/${listing.id}` : "/api/listings",
         {
@@ -442,6 +468,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
         setWhatsappSameAsPhone(true);
       }
     } catch (error) {
+      setUploadProgressMessage(null);
       if (error instanceof ApiRequestError && error.fields) {
         setFieldErrors(error.fields);
         setMessage(error.message);
@@ -449,6 +476,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
       }
       setMessage(error instanceof Error ? error.message : "Listing request failed.");
     } finally {
+      setUploadProgressMessage(null);
       setIsSubmitting(false);
     }
   }
@@ -625,7 +653,9 @@ export function ListingForm({ token, listing, onSaved }: Props) {
       <div>
         <label
           htmlFor={`listing-gallery-${formKey}`}
-          className="flex cursor-pointer items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
+          className={`flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-bold text-white shadow-sm transition ${
+            isSubmitting ? "cursor-not-allowed bg-slate-400" : "cursor-pointer bg-slate-950 hover:bg-slate-800"
+          }`}
         >
           Select photos from gallery
         </label>
@@ -637,6 +667,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
           type="file"
           multiple
           accept="image/*"
+          disabled={isSubmitting}
           onChange={onImageChange}
         />
         <p className="mt-1 text-xs text-slate-500">
@@ -826,6 +857,29 @@ export function ListingForm({ token, listing, onSaved }: Props) {
           </select>
         </div>
       </OptionalSection>
+      {isSubmitting && uploadProgressMessage ? (
+        <div
+          className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+          aria-live="polite"
+          role="status"
+        >
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden="true"
+              className="mt-0.5 inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-amber-300 border-t-amber-800"
+            />
+            <div>
+              <p className="font-bold">{uploadProgressMessage}</p>
+              <p className="mt-1 text-xs leading-5 text-amber-800">
+                Large photos can take a few minutes on mobile. Do not close or refresh this page.
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-amber-100">
+            <span className="block h-full w-1/2 animate-pulse rounded-full bg-amber-500" />
+          </div>
+        </div>
+      ) : null}
       <button className="button-primary inline-flex items-center justify-center gap-2" disabled={isSubmitting}>
         {isSubmitting ? <ButtonSpinner /> : null}
         {isSubmitting ? "Posting property..." : "Post Property"}
