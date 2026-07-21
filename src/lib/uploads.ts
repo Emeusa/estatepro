@@ -5,9 +5,9 @@ import { getAgentDisplayName } from "@/lib/agent-display";
 import { apiRequest } from "@/lib/api";
 import {
   getListingImageExtensionForType,
+  getListingImageCountLimitMessage,
   isSupportedListingImageFile,
   isUnsupportedHeicImage,
-  MAX_LISTING_IMAGES,
   MAX_LISTING_IMAGE_BYTES,
   MAX_LISTING_IMAGE_MB,
   normalizeListingImageType,
@@ -237,7 +237,13 @@ function isOptimizedUploadFallbackCandidate(error: unknown) {
 
 export async function uploadListingImages(files: File[], token: string): Promise<ListingImageUploadResult> {
   const userId = await requireUserId();
-  const acceptedFiles = files.slice(0, MAX_LISTING_IMAGES).map(normalizeListingImageFile);
+  const countLimitMessage = getListingImageCountLimitMessage(files.length);
+
+  if (countLimitMessage) {
+    throw new Error(countLimitMessage);
+  }
+
+  const acceptedFiles = files.map(normalizeListingImageFile);
   const unsupportedFile = acceptedFiles.find((file) => !isSupportedListingImageFile(file));
   const oversizedFile = acceptedFiles.find((file) => file.size > MAX_LISTING_IMAGE_BYTES);
 

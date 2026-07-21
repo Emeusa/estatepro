@@ -4,6 +4,7 @@ import { ChangeEvent, FormEvent, ReactNode, useEffect, useState } from "react";
 
 import { ApiRequestError, apiRequest } from "@/lib/api";
 import {
+  getListingImageCountLimitMessage,
   isSupportedListingImageFile,
   isUnsupportedHeicImage,
   MAX_LISTING_IMAGES,
@@ -102,6 +103,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
   );
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [imageInputKey, setImageInputKey] = useState(0);
   const [uploadThumbnailIndex, setUploadThumbnailIndex] = useState(0);
   const [existingThumbnailIndex, setExistingThumbnailIndex] = useState(0);
 
@@ -114,6 +116,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
   useEffect(() => {
     setSelectedFiles([]);
     setPreviewUrls([]);
+    setImageInputKey((current) => current + 1);
     setUploadThumbnailIndex(0);
     setExistingThumbnailIndex(0);
     setSelectedState(listing?.location.state ?? "");
@@ -159,17 +162,33 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     return mergeListingFeatureValues(selectedValues, customText);
   }
 
+  function resetImageSelection() {
+    setSelectedFiles([]);
+    setPreviewUrls([]);
+    setUploadThumbnailIndex(0);
+    setImageInputKey((current) => current + 1);
+  }
+
   function onImageChange(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
+    const countLimitMessage = getListingImageCountLimitMessage(files.length);
     const heicFile = files.find(isUnsupportedHeicImage);
     const unsupportedFile = files.find((file) => !isSupportedListingImageFile(file));
     const oversizedFile = files.find((file) => file.size > MAX_LISTING_IMAGE_BYTES);
 
+    if (countLimitMessage) {
+      event.target.value = "";
+      resetImageSelection();
+      setFieldErrors((current) => ({
+        ...current,
+        images: countLimitMessage
+      }));
+      return;
+    }
+
     if (heicFile) {
       event.target.value = "";
-      setSelectedFiles([]);
-      setPreviewUrls([]);
-      setUploadThumbnailIndex(0);
+      resetImageSelection();
       setFieldErrors((current) => ({
         ...current,
         images: "HEIC images are not supported yet. Please choose JPG, PNG, or WebP."
@@ -179,9 +198,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
 
     if (unsupportedFile) {
       event.target.value = "";
-      setSelectedFiles([]);
-      setPreviewUrls([]);
-      setUploadThumbnailIndex(0);
+      resetImageSelection();
       setFieldErrors((current) => ({
         ...current,
         images: `Only ${SUPPORTED_LISTING_IMAGE_LABEL} images are supported.`
@@ -191,9 +208,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
 
     if (oversizedFile) {
       event.target.value = "";
-      setSelectedFiles([]);
-      setPreviewUrls([]);
-      setUploadThumbnailIndex(0);
+      resetImageSelection();
       setFieldErrors((current) => ({
         ...current,
         images: `Each property image must be ${MAX_LISTING_IMAGE_MB} MB or less.`
@@ -203,12 +218,10 @@ export function ListingForm({ token, listing, onSaved }: Props) {
 
     let acceptedFiles: File[];
     try {
-      acceptedFiles = files.slice(0, MAX_LISTING_IMAGES).map(normalizeListingImageFile);
+      acceptedFiles = files.map(normalizeListingImageFile);
     } catch (error) {
       event.target.value = "";
-      setSelectedFiles([]);
-      setPreviewUrls([]);
-      setUploadThumbnailIndex(0);
+      resetImageSelection();
       setFieldErrors((current) => ({
         ...current,
         images: getUploadFailureMessage(error)
@@ -219,11 +232,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     setUploadThumbnailIndex(0);
     setFieldErrors((current) => {
       const next = { ...current };
-      if (files.length > MAX_LISTING_IMAGES) {
-        next.images = `Only the first ${MAX_LISTING_IMAGES} images will be uploaded.`;
-      } else {
-        delete next.images;
-      }
+      delete next.images;
       return next;
     });
     setSelectedFiles(acceptedFiles);
@@ -362,6 +371,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
         formElement.reset();
         setSelectedFiles([]);
         setPreviewUrls([]);
+        setImageInputKey((current) => current + 1);
         setUploadThumbnailIndex(0);
         setExistingThumbnailIndex(0);
         setSelectedState("");
@@ -558,6 +568,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
         <input
           className="input"
           name="images"
+          key={imageInputKey}
           type="file"
           multiple
           accept={SUPPORTED_LISTING_IMAGE_ACCEPT}

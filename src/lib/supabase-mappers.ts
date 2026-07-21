@@ -5,6 +5,7 @@ import {
   ListingImageVariant,
   ListingRecord,
   LocationValue,
+  SubscriptionAdminGrantRecord,
   SubscriptionRecord,
   UserRecord
 } from "@/lib/types";
@@ -45,6 +46,20 @@ type DatabaseSubscription = {
   trial_starts_at: string;
   trial_ends_at: string;
   is_active: boolean;
+};
+
+type DatabaseSubscriptionAdminGrant = {
+  id: string;
+  agent_id: string;
+  admin_id?: string | null;
+  plan_slug: string;
+  period_start: string;
+  period_end?: string | null;
+  reason: string;
+  previous_plan_slug?: string | null;
+  previous_status?: string | null;
+  previous_period_end?: string | null;
+  created_at: string;
 };
 
 type DatabaseListing = {
@@ -186,6 +201,24 @@ export function toSubscriptionRecord(row: DatabaseSubscription): SubscriptionRec
     currentPeriodStart: row.current_period_start ?? null,
     currentPeriodEnd: row.current_period_end ?? null,
     cancelAtPeriodEnd: row.cancel_at_period_end ?? false
+  };
+}
+
+export function toSubscriptionAdminGrantRecord(
+  row: DatabaseSubscriptionAdminGrant
+): SubscriptionAdminGrantRecord {
+  return {
+    id: row.id,
+    agentId: row.agent_id,
+    adminId: row.admin_id ?? null,
+    planSlug: row.plan_slug,
+    periodStart: row.period_start,
+    periodEnd: row.period_end ?? null,
+    reason: row.reason,
+    previousPlanSlug: row.previous_plan_slug ?? null,
+    previousStatus: row.previous_status ?? null,
+    previousPeriodEnd: row.previous_period_end ?? null,
+    createdAt: row.created_at
   };
 }
 

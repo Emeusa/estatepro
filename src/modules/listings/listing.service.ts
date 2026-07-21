@@ -60,7 +60,7 @@ export async function getPublicAgentListings(agentId: string) {
     listPublicListingsByAgent(agentId)
   ]);
 
-  if (!agent || !listings.length) {
+  if (!agent) {
     return null;
   }
 

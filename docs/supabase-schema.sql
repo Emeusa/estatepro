@@ -72,6 +72,21 @@ create table if not exists public.subscriptions (
   is_active boolean not null default true
 );
 
+create table if not exists public.subscription_admin_grants (
+  id uuid primary key default gen_random_uuid(),
+  agent_id uuid not null references public.users (id) on delete cascade,
+  admin_id uuid references public.users (id) on delete set null,
+  plan_slug text not null references public.plans (slug),
+  period_start timestamptz not null,
+  period_end timestamptz,
+  reason text not null check (char_length(reason) between 3 and 240),
+  previous_plan_slug text,
+  previous_status text,
+  previous_period_end timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (period_end is null or period_end > period_start)
+);
+
 create table if not exists public.billing_transactions (
   id uuid primary key default gen_random_uuid(),
   agent_id uuid not null references public.users (id) on delete cascade,
@@ -367,6 +382,12 @@ set payment_provider = coalesce(payment_provider, 'paystack'),
 update public.billing_transactions
 set payment_provider = coalesce(payment_provider, 'paystack'),
     billing_mode = coalesce(billing_mode, 'recurring');
+
+alter table public.subscriptions
+  drop constraint if exists subscriptions_payment_provider_check;
+
+alter table public.billing_transactions
+  drop constraint if exists billing_transactions_payment_provider_check;
 
 alter table public.listings
   drop constraint if exists listings_status_check,
@@ -779,7 +800,7 @@ begin
   ) then
     alter table public.subscriptions
       add constraint subscriptions_payment_provider_check
-      check (payment_provider in ('paystack', 'opay'));
+      check (payment_provider in ('paystack', 'opay', 'manual'));
   end if;
 
   if not exists (
@@ -795,7 +816,7 @@ begin
   ) then
     alter table public.billing_transactions
       add constraint billing_transactions_payment_provider_check
-      check (payment_provider in ('paystack', 'opay'));
+      check (payment_provider in ('paystack', 'opay', 'manual'));
   end if;
 
   if not exists (
@@ -935,6 +956,16 @@ create index if not exists subscriptions_paystack_subscription_idx
 create index if not exists subscriptions_opay_order_idx
   on public.subscriptions (opay_order_no)
   where opay_order_no is not null;
+
+create index if not exists subscription_admin_grants_agent_idx
+  on public.subscription_admin_grants (agent_id, created_at desc);
+
+create index if not exists subscription_admin_grants_admin_idx
+  on public.subscription_admin_grants (admin_id, created_at desc)
+  where admin_id is not null;
+
+create index if not exists subscription_admin_grants_plan_idx
+  on public.subscription_admin_grants (plan_slug, created_at desc);
 
 create index if not exists billing_transactions_agent_idx
   on public.billing_transactions (agent_id, created_at desc);
@@ -1293,6 +1324,7 @@ alter table public.users enable row level security;
 alter table public.agents enable row level security;
 alter table public.plans enable row level security;
 alter table public.subscriptions enable row level security;
+alter table public.subscription_admin_grants enable row level security;
 alter table public.billing_transactions enable row level security;
 alter table public.listings enable row level security;
 alter table public.promotion_credits enable row level security;
@@ -1316,6 +1348,8 @@ drop policy if exists "public can read active plans" on public.plans;
 drop policy if exists "agents can read own subscription" on public.subscriptions;
 drop policy if exists "admins can read subscriptions" on public.subscriptions;
 drop policy if exists "admins can manage subscriptions" on public.subscriptions;
+drop policy if exists "admins can read subscription admin grants" on public.subscription_admin_grants;
+drop policy if exists "admins can insert subscription admin grants" on public.subscription_admin_grants;
 drop policy if exists "agents can read own billing transactions" on public.billing_transactions;
 drop policy if exists "admins can read billing transactions" on public.billing_transactions;
 drop policy if exists "public can read active listings" on public.listings;
@@ -1383,6 +1417,26 @@ create policy "admins can manage subscriptions"
         and users.role = 'admin'
     )
   )
+  with check (
+    exists (
+      select 1 from public.users
+      where users.id = auth.uid()
+        and users.role = 'admin'
+    )
+  );
+
+create policy "admins can read subscription admin grants"
+  on public.subscription_admin_grants for select
+  using (
+    exists (
+      select 1 from public.users
+      where users.id = auth.uid()
+        and users.role = 'admin'
+    )
+  );
+
+create policy "admins can insert subscription admin grants"
+  on public.subscription_admin_grants for insert
   with check (
     exists (
       select 1 from public.users

@@ -2,80 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 
 import { AuthError, requireAgent } from "@/lib/auth";
-import { MAX_LISTING_IMAGES } from "@/lib/image-limits";
 import { captureServerError, logSecurityEvent } from "@/lib/security/logger";
 import { RATE_LIMITS, rateLimit, rateLimitByIp, withRateLimitHeaders } from "@/lib/security/rate-limit";
+import { mapListingErrors } from "@/modules/listings/listing-error-mapper";
 import {
   ensureAgentOwnsListing,
   getPublicListingDetails,
   removeAgentListing,
   updateAgentListing
 } from "@/modules/listings/listing.service";
-
-function mapListingErrors(error: ZodError) {
-  const fields: Record<string, string> = {};
-
-  for (const issue of error.issues) {
-    const path = issue.path.join(".");
-    if (path === "title") {
-      fields.title = "Title must be at least 8 characters.";
-    } else if (path === "description") {
-      fields.description = "Description must be at least 20 characters.";
-    } else if (path.startsWith("imageUrls") || path.startsWith("imageVariants")) {
-      fields.images =
-        issue.code === "too_small"
-          ? "Upload at least one property image."
-          : issue.code === "too_big"
-            ? `Upload no more than ${MAX_LISTING_IMAGES} property images.`
-          : "Images must be uploaded through this platform.";
-    } else if (path === "price") {
-      fields.price = "Enter a valid property price.";
-    } else if (path === "contactPhone") {
-      fields.contactPhone = "Enter a valid contact phone number.";
-    } else if (path === "contactWhatsapp") {
-      fields.contactWhatsapp = "Enter a valid WhatsApp number.";
-    } else if (path === "location.state") {
-      fields.state = "Enter a valid state.";
-    } else if (path === "location.city") {
-      fields.city = "Enter a valid city.";
-    } else if (path === "location.area") {
-      fields.area = "Enter a valid area.";
-    } else if (
-      [
-        "bedrooms",
-        "bathrooms",
-        "toilets",
-        "parkingSpaces",
-        "propertySize",
-        "yearBuilt",
-        "floorLevel",
-        "totalFloors",
-        "landSize"
-      ].includes(path)
-    ) {
-      fields.quality = "Enter valid optional property details.";
-    } else if (
-      [
-        "propertySizeUnit",
-        "landSizeUnit",
-        "furnishingStatus",
-        "servicingStatus",
-        "propertyCondition",
-        "titleDocumentType",
-        "zoningType",
-        "roadAccess"
-      ].includes(path)
-    ) {
-      fields.quality = "Select valid optional property detail options.";
-    } else if (
-      ["amenities", "utilities", "safetyFeatures", "nearbyLandmarks", "extraFeatures"].includes(path)
-    ) {
-      fields.quality = "Enter no more than 30 short items per feature list.";
-    }
-  }
-
-  return fields;
-}
 
 type Props = {
   params: Promise<{ listingId: string }>;

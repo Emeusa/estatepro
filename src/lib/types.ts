@@ -21,7 +21,7 @@ export type TitleDocumentType =
   | "other";
 export type ZoningType = "residential" | "commercial" | "mixed_use" | "industrial" | "agricultural";
 export type RoadAccess = "tarred" | "untarred" | "estate_road" | "major_road" | "none";
-export type BillingProvider = "paystack" | "opay";
+export type BillingProvider = "paystack" | "opay" | "manual";
 export type BillingMode = "recurring" | "prepaid";
 export type PaystackCheckoutChannel = "bank_transfer" | "ussd" | "bank";
 export type PromotionCreditType = "boost" | "featured" | "sponsored";
@@ -194,6 +194,20 @@ export type SubscriptionRecord = {
   cancelAtPeriodEnd: boolean;
 };
 
+export type SubscriptionAdminGrantRecord = {
+  id: string;
+  agentId: string;
+  adminId: string | null;
+  planSlug: string;
+  periodStart: string;
+  periodEnd: string | null;
+  reason: string;
+  previousPlanSlug: string | null;
+  previousStatus: string | null;
+  previousPeriodEnd: string | null;
+  createdAt: string;
+};
+
 export type PromotionCreditSummary = {
   creditType: PromotionCreditType;
   quantity: number;
@@ -341,6 +355,7 @@ export type AdminAgentSummary = {
 export type AdminAgentDetails = AdminAgentSummary & {
   listings: ListingRecord[];
   subscription: SubscriptionRecord | null;
+  subscriptionGrants: SubscriptionAdminGrantRecord[];
 };
 
 export type PublicAgentSummary = {

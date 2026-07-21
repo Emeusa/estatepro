@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getListingImageCountLimitMessage,
   isSupportedListingImageFile,
   isUnsupportedHeicImage,
+  MAX_LISTING_IMAGES,
   MAX_LISTING_IMAGE_BYTES,
   normalizeListingImageType
 } from "../../src/lib/image-limits";
@@ -32,6 +34,12 @@ describe("listing image mobile file handling", () => {
 
   it("keeps the five megabyte size limit as the upload boundary", () => {
     expect(MAX_LISTING_IMAGE_BYTES).toBe(5 * 1024 * 1024);
+  });
+
+  it("returns a clear limit message when too many images are selected", () => {
+    expect(getListingImageCountLimitMessage(15)).toBe(
+      `You can upload up to ${MAX_LISTING_IMAGES} images per listing. Remove 5 images and try again.`
+    );
   });
 });
 

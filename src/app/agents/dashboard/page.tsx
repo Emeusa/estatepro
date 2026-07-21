@@ -111,6 +111,7 @@ export default function AgentDashboardPage() {
   const [createRequestKey, setCreateRequestKey] = useState(0);
   const [entitlementsLoading, setEntitlementsLoading] = useState(false);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [shareMessage, setShareMessage] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -238,9 +239,34 @@ export default function AgentDashboardPage() {
   const hasActivePaidPlan = currentPlan.priceMonthly !== null && currentPlan.priceMonthly > 0 && subscriptionActive;
   const billingLiveEnabled = data.billing?.liveEnabled ?? false;
   const currentPeriodEndLabel = readableDate(currentSubscription?.currentPeriodEnd);
+  const publicListingsPath = data.user?.id ? `/agents/${data.user.id}/listings` : "";
 
   function postProperty() {
     setCreateRequestKey((current) => current + 1);
+  }
+
+  async function shareAgentListings() {
+    if (!publicListingsPath) {
+      setShareMessage("Could not prepare your listings link.");
+      return;
+    }
+
+    const url = new URL(publicListingsPath, window.location.origin).toString();
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: `${agentName} properties on C59 Estatehub`,
+          url
+        });
+        setShareMessage("Listings link ready to share.");
+        return;
+      }
+
+      await navigator.clipboard.writeText(url);
+      setShareMessage("Listings link copied.");
+    } catch {
+      setShareMessage("Could not share automatically. Open your public listings page and copy the link.");
+    }
   }
 
   function updateDashboardListings(listings: ListingRecord[]) {
@@ -326,12 +352,27 @@ export default function AgentDashboardPage() {
               <div>
                 <h1 className="text-xl font-bold leading-tight text-slate-950 sm:text-3xl">Good day, {agentName}</h1>
                 <p className="mt-1 text-sm text-slate-500 sm:mt-2">Here is what is happening with your properties today.</p>
-                <button
-                  className="mt-3 w-full rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 sm:mt-4 sm:w-auto"
-                  onClick={postProperty}
-                >
-                  + Post a Property
-                </button>
+                <div className="mt-3 flex flex-col gap-2 sm:mt-4 sm:flex-row sm:flex-wrap">
+                  <button
+                    className="w-full rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 sm:w-auto"
+                    onClick={postProperty}
+                  >
+                    + Post a Property
+                  </button>
+                  <button
+                    className="w-full rounded-xl bg-slate-950 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800 sm:w-auto"
+                    onClick={shareAgentListings}
+                    type="button"
+                  >
+                    Share my listings
+                  </button>
+                </div>
+                {shareMessage ? <p className="mt-2 text-xs font-semibold text-slate-600">{shareMessage}</p> : null}
+                {!isVerified || stats.active === 0 ? (
+                  <p className="mt-2 max-w-xl text-xs font-semibold leading-5 text-slate-500">
+                    This page becomes public after approval and active listings.
+                  </p>
+                ) : null}
               </div>
               <div className="hidden items-center gap-3 rounded-2xl bg-slate-200 p-3 shadow-sm lg:flex">
                 <span className="grid h-11 w-11 place-items-center rounded-full bg-blue-600 text-sm font-bold text-white">

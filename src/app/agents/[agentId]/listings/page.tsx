@@ -37,6 +37,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       absolute: title
     },
     description,
+    robots: data.listings.length
+      ? undefined
+      : {
+          index: false,
+          follow: true
+        },
     alternates: {
       canonical: `/agents/${agentId}/listings`
     },
@@ -71,7 +77,9 @@ export default async function AgentListingsPage({ params }: Props) {
           <VerifiedAgentName fullName={data.agent.displayName} isVerified={data.agent.isVerified} />
         </h1>
         <p className="mt-2 text-sm text-slate-500">
-          These are active listings from an approved agent.
+          {data.listings.length
+            ? "These are active listings from an approved agent."
+            : "This approved agent does not have active public listings right now."}
         </p>
       </section>
       <ListingGrid listings={data.listings} />

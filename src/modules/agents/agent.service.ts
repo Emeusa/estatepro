@@ -17,6 +17,7 @@ import {
 import { AdminAgentDetails, AdminAgentReview, AdminAgentSummary, PaidPlanStats } from "@/lib/types";
 import { getListingCountsByAgentIds, getListingsByAgentIds } from "@/modules/listings/listing.service";
 import { sendAgentRegistrationReceivedEmail, sendAgentVerificationEmail } from "@/modules/email/email.service";
+import { getSubscriptionAdminGrantHistory } from "@/modules/subscriptions/admin-grant.service";
 
 export async function createAgentAccount(input: unknown) {
   const result = await registerAgent(agentRegistrationSchema.parse(input));
@@ -105,10 +106,11 @@ export async function getPaidPlanStatsForAdmin(): Promise<PaidPlanStats> {
 }
 
 export async function getAgentReviewForAdmin(agentId: string): Promise<AdminAgentDetails | null> {
-  const [{ agent, subscription }, user, listings] = await Promise.all([
+  const [{ agent, subscription }, user, listings, subscriptionGrants] = await Promise.all([
     getAgentProfile(agentId),
     getUserProfile(agentId),
-    getListingsByAgentIds([agentId])
+    getListingsByAgentIds([agentId]),
+    getSubscriptionAdminGrantHistory(agentId).catch(() => [])
   ]);
 
   if (!agent || !user || user.role !== "agent") {
@@ -120,6 +122,7 @@ export async function getAgentReviewForAdmin(agentId: string): Promise<AdminAgen
     agent,
     listingCount: listings.length,
     subscription: subscription ?? null,
+    subscriptionGrants,
     listings
   };
 }

@@ -55,3 +55,15 @@ export function isSupportedListingImageType(type: string) {
 export function isSupportedListingImageFile(file: Pick<File, "name" | "type">) {
   return !isUnsupportedHeicImage(file) && normalizeListingImageType(file) !== null;
 }
+
+export function getListingImageCountLimitMessage(count: number) {
+  const excessCount = Math.max(count - MAX_LISTING_IMAGES, 0);
+
+  if (excessCount <= 0) {
+    return null;
+  }
+
+  return `You can upload up to ${MAX_LISTING_IMAGES} images per listing. Remove ${excessCount} ${
+    excessCount === 1 ? "image" : "images"
+  } and try again.`;
+}
