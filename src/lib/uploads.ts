@@ -44,6 +44,18 @@ type AgentWatermarkResponse = {
   };
 };
 
+const SELECTED_PHOTO_UPLOAD_FAILED_MESSAGE =
+  "We could not upload the selected photos. Check your connection and try again with fewer photos.";
+const TEMP_IMAGE_STORAGE_SETUP_MESSAGE = "Temporary image storage is not configured. Run the latest Supabase storage setup.";
+const TEMP_IMAGE_STORAGE_POLICY_MESSAGE = "Temporary image storage is blocked by Supabase policy. Run the latest storage policies.";
+const PHONE_PHOTO_PROCESSING_FAILED_MESSAGE =
+  "We could not compress one of these phone photos. Try uploading fewer photos or export the photo as JPG.";
+const SERVER_UPLOAD_RESPONSE_FAILED_MESSAGE = "Server upload completed without an image URL. Try again with fewer photos.";
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function requireUserId() {
   const {
     data: { session }
@@ -56,14 +68,40 @@ async function requireUserId() {
   return session.user.id;
 }
 
-async function upload(bucket: string, path: string, file: File) {
-  const { error } = await supabase.storage.from(bucket).upload(path, file, {
-    contentType: file.type,
-    upsert: false
-  });
+function isTransientStorageFailure(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
 
-  if (error) {
-    throw new Error(error.message);
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("failed to fetch") ||
+    message.includes("network") ||
+    message.includes("timeout") ||
+    message.includes("abort") ||
+    message.includes("temporarily") ||
+    message.includes("storage") ||
+    message.includes("body")
+  );
+}
+
+async function upload(bucket: string, path: string, file: File, retries = 1) {
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const { error } = await supabase.storage.from(bucket).upload(path, file, {
+      contentType: file.type,
+      upsert: false
+    });
+
+    if (!error) {
+      return;
+    }
+
+    const uploadError = new Error(error.message);
+    if (!isTransientStorageFailure(uploadError) || attempt === retries) {
+      throw uploadError;
+    }
+
+    await sleep(350 * (attempt + 1));
   }
 }
 
@@ -71,38 +109,48 @@ async function uploadViaServerFallback(file: Blob, token: string, filename: stri
   const form = new FormData();
   form.append("file", file, filename);
 
-  const response = await fetch("/api/uploads/listing-images/fallback", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-    body: form
-  });
+  let response: Response;
+  try {
+    response = await fetch("/api/uploads/listing-images/fallback", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form
+    });
+  } catch {
+    throw new Error(SELECTED_PHOTO_UPLOAD_FAILED_MESSAGE);
+  }
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.message ?? "Image upload failed. Please try again.");
+    throw new Error(body.message ?? SELECTED_PHOTO_UPLOAD_FAILED_MESSAGE);
   }
 
   const body = (await response.json()) as { url?: string };
   if (!body.url) {
-    throw new Error("Image upload failed. Please try again.");
+    throw new Error(SERVER_UPLOAD_RESPONSE_FAILED_MESSAGE);
   }
 
   return body.url;
 }
 
 async function convertViaServer(originals: Array<{ path: string; order: number }>, token: string) {
-  const response = await fetch("/api/uploads/listing-images/convert", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ originals })
-  });
+  let response: Response;
+  try {
+    response = await fetch("/api/uploads/listing-images/convert", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ originals })
+    });
+  } catch {
+    throw new Error(PHONE_PHOTO_PROCESSING_FAILED_MESSAGE);
+  }
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.message ?? "We could not process this phone photo. Try exporting it as JPG and upload again.");
+    throw new Error(body.message ?? PHONE_PHOTO_PROCESSING_FAILED_MESSAGE);
   }
 
   return (await response.json()) as ListingImageUploadResult;
@@ -171,29 +219,62 @@ export function normalizeListingImageFile(file: File, index: number) {
   });
 }
 
-function warnUploadFallback(stage: UploadStage, files: File[], error: unknown) {
+function warnUploadFallback(stage: UploadStage, files: File[], error: unknown, failedIndex?: number) {
   console.warn("Listing image upload fallback triggered.", {
     stage,
     count: files.length,
     types: files.map((file) => file.type),
+    sizes: files.map((file) => file.size),
+    failedIndex,
     reason: error instanceof Error ? error.message : "unknown"
   });
 }
 
+function getTemporaryOriginalUploadErrorMessage(error: unknown) {
+  if (!(error instanceof Error)) {
+    return SELECTED_PHOTO_UPLOAD_FAILED_MESSAGE;
+  }
+
+  const message = error.message.toLowerCase();
+
+  if (message.includes("bucket") || message.includes("not found")) {
+    return TEMP_IMAGE_STORAGE_SETUP_MESSAGE;
+  }
+
+  if (
+    message.includes("row-level security") ||
+    message.includes("rls") ||
+    message.includes("policy") ||
+    message.includes("permission") ||
+    message.includes("unauthorized")
+  ) {
+    return TEMP_IMAGE_STORAGE_POLICY_MESSAGE;
+  }
+
+  if (message.includes("size") || message.includes("too large")) {
+    return `Each image must be ${MAX_LISTING_IMAGE_MB} MB or less before compression.`;
+  }
+
+  if (isTransientStorageFailure(error)) {
+    return SELECTED_PHOTO_UPLOAD_FAILED_MESSAGE;
+  }
+
+  return "We could not prepare these phone photos for compression. Try uploading fewer photos.";
+}
+
 async function uploadOriginalsForServerConversion(files: File[], token: string, userId: string) {
   const originals: Array<{ path: string; order: number }> = [];
+  let failedIndex: number | undefined;
 
   try {
     for (const [index, file] of files.entries()) {
       const path = createListingOriginalPath(userId, index, file);
       originals.push({ path, order: index });
-      const { error } = await supabase.storage.from(LISTING_IMAGE_ORIGINALS_BUCKET).upload(path, file, {
-        contentType: file.type,
-        upsert: false
-      });
-
-      if (error) {
-        throw error;
+      try {
+        await upload(LISTING_IMAGE_ORIGINALS_BUCKET, path, file);
+      } catch (error) {
+        failedIndex = index;
+        throw new Error(getTemporaryOriginalUploadErrorMessage(error));
       }
     }
 
@@ -206,7 +287,7 @@ async function uploadOriginalsForServerConversion(files: File[], token: string, 
         .catch(() => undefined);
     }
 
-    warnUploadFallback("server-convert", files, error);
+    warnUploadFallback("server-convert", files, error, failedIndex);
     throw error;
   }
 }
@@ -308,87 +389,98 @@ export async function uploadListingImages(files: File[], token: string): Promise
   }
 
   const watermark = await getListingImageWatermark(token);
-  let processedImages: Awaited<ReturnType<typeof processListingImage>>[];
+  const processedImages: Awaited<ReturnType<typeof processListingImage>>[] = [];
+  let processFailedIndex: number | undefined;
 
   try {
-    processedImages = await Promise.all(acceptedFiles.map((file) => processListingImage(file, watermark)));
+    for (const [index, file] of acceptedFiles.entries()) {
+      processFailedIndex = index;
+      processedImages.push(await processListingImage(file, watermark));
+    }
+    processFailedIndex = undefined;
   } catch (error) {
     if (!isImageProcessingFailure(error)) {
       throw error;
     }
 
-    warnUploadFallback("process", acceptedFiles, error);
+    warnUploadFallback("process", acceptedFiles, error, processFailedIndex);
     try {
       return await uploadOriginalsForServerConversion(acceptedFiles, token, userId);
     } catch (conversionError) {
-      warnUploadFallback("server-convert", acceptedFiles, conversionError);
+      warnUploadFallback("server-convert", acceptedFiles, conversionError, processFailedIndex);
       throw conversionError;
     }
   }
 
-  let imageVariants: ListingImageVariant[];
+  const directUploadedPaths: string[] = [];
+  let directUploadFailedIndex: number | undefined;
 
   try {
-    imageVariants = await Promise.all(
-      processedImages.map(async (optimized, index): Promise<ListingImageVariant> => {
-        const imageId = crypto.randomUUID();
-        const heroPath = `${userId}/${imageId}-${index}-hero.webp`;
-        const cardPath = `${userId}/${imageId}-${index}-card.webp`;
+    const imageVariants: ListingImageVariant[] = [];
 
-        await upload("listing-images", heroPath, optimized.hero);
-        await upload("listing-images", cardPath, optimized.card);
+    for (const [index, optimized] of processedImages.entries()) {
+      directUploadFailedIndex = index;
+      const imageId = crypto.randomUUID();
+      const heroPath = `${userId}/${imageId}-${index}-hero.webp`;
+      const cardPath = `${userId}/${imageId}-${index}-card.webp`;
 
-        return {
-          heroUrl: supabase.storage.from("listing-images").getPublicUrl(heroPath).data.publicUrl,
-          cardUrl: supabase.storage.from("listing-images").getPublicUrl(cardPath).data.publicUrl,
+      await upload("listing-images", heroPath, optimized.hero);
+      directUploadedPaths.push(heroPath);
+      await upload("listing-images", cardPath, optimized.card);
+      directUploadedPaths.push(cardPath);
+
+      imageVariants.push({
+        heroUrl: supabase.storage.from("listing-images").getPublicUrl(heroPath).data.publicUrl,
+        cardUrl: supabase.storage.from("listing-images").getPublicUrl(cardPath).data.publicUrl,
+        blurDataUrl: optimized.blurDataUrl,
+        width: optimized.width,
+        height: optimized.height,
+        cardWidth: optimized.cardWidth,
+        cardHeight: optimized.cardHeight,
+        order: index
+      });
+    }
+
+    return {
+      imageUrls: imageVariants.map((image) => image.heroUrl),
+      imageVariants
+    };
+  } catch (error) {
+    if (!isOptimizedUploadFallbackCandidate(error)) {
+      throw error;
+    }
+
+    if (directUploadedPaths.length) {
+      await supabase.storage.from("listing-images").remove(directUploadedPaths).catch(() => undefined);
+    }
+
+    warnUploadFallback("optimized-upload", acceptedFiles, error, directUploadFailedIndex);
+    try {
+      const fallbackVariants: ListingImageVariant[] = [];
+
+      for (const [index, optimized] of processedImages.entries()) {
+        const heroUrl = await uploadViaServerFallback(optimized.hero, token, `listing-image-${index + 1}-hero.webp`);
+        const cardUrl = await uploadViaServerFallback(optimized.card, token, `listing-image-${index + 1}-card.webp`);
+
+        fallbackVariants.push({
+          heroUrl,
+          cardUrl,
           blurDataUrl: optimized.blurDataUrl,
           width: optimized.width,
           height: optimized.height,
           cardWidth: optimized.cardWidth,
           cardHeight: optimized.cardHeight,
           order: index
-        };
-      })
-    );
-  } catch (error) {
-    if (!isOptimizedUploadFallbackCandidate(error)) {
-      throw error;
-    }
-
-    warnUploadFallback("optimized-upload", acceptedFiles, error);
-    try {
-      const fallbackVariants = await Promise.all(
-        processedImages.map(async (optimized, index): Promise<ListingImageVariant> => {
-          const [heroUrl, cardUrl] = await Promise.all([
-            uploadViaServerFallback(optimized.hero, token, `listing-image-${index + 1}-hero.webp`),
-            uploadViaServerFallback(optimized.card, token, `listing-image-${index + 1}-card.webp`)
-          ]);
-
-          return {
-            heroUrl,
-            cardUrl,
-            blurDataUrl: optimized.blurDataUrl,
-            width: optimized.width,
-            height: optimized.height,
-            cardWidth: optimized.cardWidth,
-            cardHeight: optimized.cardHeight,
-            order: index
-          };
-        })
-      );
+        });
+      }
 
       return {
         imageUrls: fallbackVariants.map((image) => image.heroUrl),
         imageVariants: fallbackVariants
       };
     } catch (serverUploadError) {
-      warnUploadFallback("processed-server-upload", acceptedFiles, serverUploadError);
+      warnUploadFallback("processed-server-upload", acceptedFiles, serverUploadError, directUploadFailedIndex);
       throw serverUploadError;
     }
   }
-
-  return {
-    imageUrls: imageVariants.map((image) => image.heroUrl),
-    imageVariants
-  };
 }

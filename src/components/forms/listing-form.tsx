@@ -265,7 +265,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
 
   function getUploadFailureMessage(error: unknown) {
     if (!(error instanceof Error)) {
-      return "Image upload failed. Please try again.";
+      return "We could not upload the selected photos. Check your connection and try again with fewer photos.";
     }
 
     const message = error.message.toLowerCase();
@@ -280,6 +280,22 @@ export function ListingForm({ token, listing, onSaved }: Props) {
 
     if (message.includes("phone photo")) {
       return "We could not process this phone photo. Try exporting it as JPG and upload again.";
+    }
+
+    if (message.includes("compress one of these phone photos")) {
+      return "We could not compress one of these phone photos. Try uploading fewer photos or export the photo as JPG.";
+    }
+
+    if (message.includes("temporary image storage is not configured")) {
+      return "Temporary image storage is not configured. Run the latest Supabase storage setup.";
+    }
+
+    if (message.includes("temporary image storage is blocked")) {
+      return "Temporary image storage is blocked by Supabase policy. Run the latest storage policies.";
+    }
+
+    if (message.includes("selected photos") || message.includes("without an image url")) {
+      return "We could not upload the selected photos. Check your connection and try again with fewer photos.";
     }
 
     if (message.includes("bucket") || message.includes("not found")) {

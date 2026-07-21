@@ -9,6 +9,7 @@ import {
   isRawListingImageFile,
   isServerConvertedListingImageFile,
   isSupportedListingImageFile,
+  LARGE_BROWSER_LISTING_IMAGE_SERVER_CONVERSION_BYTES,
   MAX_LISTING_IMAGES,
   MAX_LISTING_IMAGE_BYTES,
   MAX_LISTING_ORIGINAL_IMAGE_BYTES,
@@ -66,6 +67,17 @@ describe("listing image mobile file handling", () => {
     expect(isSupportedListingImageFile({ name: "ios-photo.heif", type: "image/heif" })).toBe(true);
     expect(isSupportedListingImageFile({ name: "android-photo.avif", type: "image/avif" })).toBe(true);
     expect(isServerConvertedListingImageFile({ name: "ios-photo.heic", type: "image/heic", size: 3000000 })).toBe(true);
+  });
+
+  it("routes large browser-supported phone photos to server conversion", () => {
+    expect(LARGE_BROWSER_LISTING_IMAGE_SERVER_CONVERSION_BYTES).toBe(4 * 1024 * 1024);
+    expect(
+      isServerConvertedListingImageFile({
+        name: "android-gallery-photo.jpg",
+        type: "image/jpeg",
+        size: Math.round(4.7 * 1024 * 1024)
+      })
+    ).toBe(true);
   });
 
   it("rejects RAW, DNG, and unsupported formats", () => {
