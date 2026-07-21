@@ -16,6 +16,7 @@ import {
   normalizeListingImageType,
   SUPPORTED_LISTING_IMAGE_LABEL
 } from "@/lib/image-limits";
+import { createListingOriginalPath, LISTING_IMAGE_ORIGINALS_BUCKET } from "@/lib/listing-image-originals";
 import { supabase } from "@/lib/supabase/client";
 import { getEffectivePlanSlug } from "@/lib/subscriptions";
 import type { ListingImageVariant, SubscriptionRecord } from "@/lib/types";
@@ -51,10 +52,10 @@ const SERVER_IMAGE_UPLOAD_FAILED_MESSAGE =
   "Server image upload failed. Please try again or choose fewer photos. Upload code: SERVER_IMAGE_UPLOAD_FAILED";
 const IMAGE_COMPRESS_FAILED_MESSAGE =
   "Image could not be compressed on this phone. Try JPG or upload fewer photos. Upload code: IMAGE_COMPRESS_FAILED";
-const IMAGE_FORMAT_TOO_LARGE_MESSAGE =
-  "This phone photo format is too large to process. Export as JPG first. Upload code: IMAGE_FORMAT_TOO_LARGE";
 const SERVER_UPLOAD_RESPONSE_FAILED_MESSAGE =
   "Server upload completed without an image URL. Try again with fewer photos. Upload code: SERVER_UPLOAD_RESPONSE_MISSING";
+const TEMP_ORIGINAL_UPLOAD_FAILED_MESSAGE =
+  "We could not prepare this large phone photo for compression. Try again or choose fewer photos. Upload code: TEMP_ORIGINAL_UPLOAD_FAILED";
 
 async function requireUserId() {
   const {
@@ -132,7 +133,7 @@ async function uploadFinalImage(file: File, token: string, userId: string, filen
 
 async function convertViaServer(file: File, token: string, order: number): Promise<ServerConvertResponse> {
   if (file.size > MAX_SERVER_CONVERT_IMAGE_BYTES) {
-    throw new Error(IMAGE_FORMAT_TOO_LARGE_MESSAGE);
+    throw new Error(IMAGE_COMPRESS_FAILED_MESSAGE);
   }
 
   const form = new FormData();
@@ -161,6 +162,73 @@ async function convertViaServer(file: File, token: string, order: number): Promi
   }
 
   return body;
+}
+
+async function convertOriginalsViaServer(
+  originals: Array<{ path: string; order: number }>,
+  token: string
+): Promise<ServerConvertResponse> {
+  let response: Response;
+  try {
+    response = await fetch("/api/uploads/listing-images/convert", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ originals })
+    });
+  } catch {
+    throw new Error(IMAGE_COMPRESS_FAILED_MESSAGE);
+  }
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.message ?? IMAGE_COMPRESS_FAILED_MESSAGE);
+  }
+
+  const body = (await response.json()) as ServerConvertResponse;
+  if (!body.imageUrls?.length) {
+    throw new Error(SERVER_UPLOAD_RESPONSE_FAILED_MESSAGE);
+  }
+
+  return body;
+}
+
+async function uploadTempOriginal(file: File, userId: string, order: number) {
+  const path = createListingOriginalPath(userId, order, file);
+  const { error } = await supabase.storage.from(LISTING_IMAGE_ORIGINALS_BUCKET).upload(path, file, {
+    contentType: file.type,
+    upsert: false
+  });
+
+  if (error) {
+    throw new Error(`${TEMP_ORIGINAL_UPLOAD_FAILED_MESSAGE} ${error.message}`);
+  }
+
+  return path;
+}
+
+async function removeTempOriginals(paths: string[]) {
+  if (!paths.length) {
+    return;
+  }
+
+  try {
+    await supabase.storage.from(LISTING_IMAGE_ORIGINALS_BUCKET).remove(paths);
+  } catch {
+    // The conversion route also cleans up paths it receives. Browser cleanup is best-effort.
+  }
+}
+
+async function convertViaPrivateOriginal(file: File, token: string, userId: string, order: number): Promise<ServerConvertResponse> {
+  const path = await uploadTempOriginal(file, userId, order);
+  try {
+    return await convertOriginalsViaServer([{ path, order }], token);
+  } catch (error) {
+    await removeTempOriginals([path]);
+    throw error;
+  }
 }
 
 async function authorizeListingImageUpload(files: File[], token: string) {
@@ -270,6 +338,10 @@ function canUploadOriginalThroughServer(file: File) {
   return file.size <= MAX_LISTING_FINAL_IMAGE_BYTES && !isServerConvertedListingImageFile(file);
 }
 
+function shouldUsePrivateOriginalConversion(file: File) {
+  return file.size > MAX_SERVER_CONVERT_IMAGE_BYTES || isServerConvertedListingImageFile(file);
+}
+
 async function uploadBrowserProcessedImage(
   file: File,
   token: string,
@@ -317,11 +389,24 @@ async function uploadBrowserProcessedImage(
     }
 
     warnUploadStage("browser-compress", allFiles, error, order);
-    if (!canUploadOriginalThroughServer(file)) {
-      throw new Error(IMAGE_COMPRESS_FAILED_MESSAGE);
+    if (file.size > MAX_SERVER_CONVERT_IMAGE_BYTES) {
+      const converted = await convertViaPrivateOriginal(file, token, userId, order);
+      return {
+        imageUrl: converted.imageUrls[0],
+        imageVariant: converted.imageVariants[0] ?? null
+      };
     }
 
-    const imageUrl = await uploadViaServer(file, token, safeImageName(order, normalizeListingImageType(file)));
+    let imageUrl: string;
+    if (canUploadOriginalThroughServer(file)) {
+      imageUrl = await uploadViaServer(file, token, safeImageName(order, normalizeListingImageType(file)));
+    } else {
+      const converted = await convertViaPrivateOriginal(file, token, userId, order);
+      return {
+        imageUrl: converted.imageUrls[0],
+        imageVariant: converted.imageVariants[0] ?? null
+      };
+    }
     return { imageUrl, imageVariant: null };
   }
 }
@@ -359,9 +444,12 @@ export async function uploadListingImages(files: File[], token: string): Promise
   let hasRawFallback = false;
 
   for (const [index, file] of acceptedFiles.entries()) {
-    if (isServerConvertedListingImageFile(file)) {
+    if (shouldUsePrivateOriginalConversion(file)) {
       try {
-        const converted = await convertViaServer(file, token, index);
+        const converted =
+          file.size <= MAX_SERVER_CONVERT_IMAGE_BYTES && isServerConvertedListingImageFile(file)
+            ? await convertViaServer(file, token, index)
+            : await convertViaPrivateOriginal(file, token, userId, index);
         imageUrls.push(converted.imageUrls[0]);
         if (converted.imageVariants[0]) {
           imageVariants.push(converted.imageVariants[0]);

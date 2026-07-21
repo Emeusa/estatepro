@@ -102,7 +102,7 @@ describe("client listing image upload flow", () => {
 
   it("keeps six common Android-sized JPEGs on the sequential browser processing path", async () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
-    const files = Array.from({ length: 6 }, (_, index) => makeFile(`android-${index}.jpg`, Math.round(4.7 * 1024 * 1024)));
+    const files = Array.from({ length: 6 }, (_, index) => makeFile(`android-${index}.jpg`, Math.round(3.7 * 1024 * 1024)));
 
     await uploadListingImages(files, "token");
 
@@ -113,6 +113,25 @@ describe("client listing image upload flow", () => {
       expect.objectContaining({ method: "POST" })
     );
     expect(mocks.originalUpload).not.toHaveBeenCalled();
+  });
+
+  it("routes large phone JPEGs through private original conversion instead of multipart conversion", async () => {
+    const { uploadListingImages } = await import("../../src/lib/uploads");
+    const files = [makeFile("android-large.jpg", Math.round(4.5 * 1024 * 1024))];
+
+    const result = await uploadListingImages(files, "token");
+
+    expect(result.imageVariants).toHaveLength(1);
+    expect(mocks.processListingImage).not.toHaveBeenCalled();
+    expect(mocks.publicUpload).not.toHaveBeenCalled();
+    expect(mocks.originalUpload).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/uploads/listing-images/convert",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining("-original.jpg")
+      })
+    );
   });
 
   it("uploads ten listing images without relying on upload route rate limits", async () => {
@@ -181,7 +200,7 @@ describe("client listing image upload flow", () => {
     expect(mocks.publicUpload).toHaveBeenCalledTimes(2);
   });
 
-  it("uploads hard phone formats through the server conversion endpoint", async () => {
+  it("uploads small hard phone formats through the multipart server conversion endpoint", async () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
     const files = [makeFile("ios-photo.heic", Math.round(3 * 1024 * 1024), "image/heic")];
 
@@ -196,20 +215,26 @@ describe("client listing image upload flow", () => {
     expect(mocks.originalUpload).not.toHaveBeenCalled();
   });
 
-  it("rejects hard phone formats that are too large for the app API conversion path", async () => {
+  it("routes large hard phone formats through private original conversion", async () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
-    const files = [makeFile("ios-photo.heic", Math.round(5 * 1024 * 1024), "image/heic")];
+    const files = [makeFile("ios-photo.heic", Math.round(8 * 1024 * 1024), "image/heic")];
 
-    await expect(uploadListingImages(files, "token")).rejects.toThrow("Upload code: IMAGE_FORMAT_TOO_LARGE");
-    expect(fetch).not.toHaveBeenCalledWith(
+    const result = await uploadListingImages(files, "token");
+
+    expect(result.imageVariants).toHaveLength(1);
+    expect(mocks.originalUpload).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith(
       "/api/uploads/listing-images/convert",
-      expect.objectContaining({ method: "POST" })
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining("-original.heic")
+      })
     );
   });
 
   it("uses authenticated server fallback for browser-processable photos if mobile compression fails", async () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
-    const files = [makeFile("android.jpg", Math.round(4.7 * 1024 * 1024))];
+    const files = [makeFile("android.jpg", Math.round(3 * 1024 * 1024))];
 
     mocks.processListingImage.mockRejectedValue(new Error("Canvas image decode failed"));
 
@@ -224,6 +249,36 @@ describe("client listing image upload flow", () => {
         method: "POST"
       })
     );
+  });
+
+  it("uses private original conversion when compression fails for a large browser-processable photo", async () => {
+    const { uploadListingImages } = await import("../../src/lib/uploads");
+    const files = [makeFile("large-android.jpg", Math.round(8 * 1024 * 1024))];
+
+    mocks.processListingImage.mockRejectedValue(new Error("Canvas image decode failed"));
+
+    const result = await uploadListingImages(files, "token");
+
+    expect(result.imageVariants).toHaveLength(1);
+    expect(mocks.originalUpload).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/uploads/listing-images/convert",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining("-original.jpg")
+      })
+    );
+  });
+
+  it("removes temporary originals when private original conversion fails", async () => {
+    const { uploadListingImages } = await import("../../src/lib/uploads");
+    const files = [makeFile("ios-photo.heic", Math.round(8 * 1024 * 1024), "image/heic")];
+
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ message: "conversion failed" }, { status: 500 })));
+
+    await expect(uploadListingImages(files, "token")).rejects.toThrow("conversion failed");
+    expect(mocks.originalUpload).toHaveBeenCalledTimes(1);
+    expect(mocks.originalRemove).toHaveBeenCalledTimes(1);
   });
 
   it("returns a useful message when server fallback succeeds without an image URL", async () => {
