@@ -62,9 +62,9 @@ function Assert-SecurityHeaders {
   Write-Host "[ok] $Label security headers present"
 }
 
-$home = Invoke-Head -Url $BaseUrl
-Assert-Status -Label "Apex homepage" -Response $home -Expected @(200)
-Assert-SecurityHeaders -Label "Apex homepage" -Response $home
+$homeResponse = Invoke-Head -Url $BaseUrl
+Assert-Status -Label "Apex homepage" -Response $homeResponse -Expected @(200)
+Assert-SecurityHeaders -Label "Apex homepage" -Response $homeResponse
 
 $www = Invoke-Head -Url $WwwUrl -MaximumRedirection 0
 Assert-Status -Label "WWW redirect" -Response $www -Expected @(301, 302, 307, 308)

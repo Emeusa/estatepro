@@ -3,8 +3,7 @@ import { ZodError } from "zod";
 
 import { requireAgent } from "@/lib/auth";
 import { captureServerError } from "@/lib/security/logger";
-import { getAgentDailyListingLimit } from "@/lib/security/quotas";
-import { RATE_LIMITS, rateLimitByIp, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
+import { RATE_LIMITS, rateLimitByIp, withRateLimitHeaders } from "@/lib/security/rate-limit";
 import { mapListingErrors } from "@/modules/listings/listing-error-mapper";
 import { createAgentListing, getPublicListings } from "@/modules/listings/listing.service";
 
@@ -44,21 +43,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const decoded = await requireAgent(request);
-    const dailyLimit = await getAgentDailyListingLimit(decoded.uid);
-    const limited = await rateLimit(
-      request,
-      { ...RATE_LIMITS.listingCreate, limit: dailyLimit },
-      decoded.uid,
-      decoded.uid
-    );
-    if (!limited.allowed) {
-      return limited.response;
-    }
-
     const body = await request.json();
     const listing = await createAgentListing(decoded.uid, body);
 
-    return withRateLimitHeaders(NextResponse.json({ listing }, { status: 201 }), limited.headers);
+    return NextResponse.json({ listing }, { status: 201 });
   } catch (error) {
     if (error instanceof ZodError) {
       return NextResponse.json(

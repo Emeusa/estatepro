@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -23,6 +26,16 @@ function listing(id: string, createdAt: string, lastRefreshedAt?: string | null)
 }
 
 describe("listing active slot limits", () => {
+  it("does not rate-limit authenticated listing creation", () => {
+    const routeSource = readFileSync(path.join(process.cwd(), "src/app/api/listings/route.ts"), "utf8");
+    const rateLimitSource = readFileSync(path.join(process.cwd(), "src/lib/security/rate-limit.ts"), "utf8");
+
+    expect(routeSource).not.toContain("getAgentDailyListingLimit");
+    expect(routeSource).not.toContain("RATE_LIMITS.listingCreate");
+    expect(routeSource).not.toContain("rateLimit(request");
+    expect(rateLimitSource).not.toContain("listingCreate");
+  });
+
   it("counts only active available listings as plan-visible inventory", () => {
     expect(isActiveAvailableListingState("active", "available")).toBe(true);
     expect(isActiveAvailableListingState("active", "sold")).toBe(false);

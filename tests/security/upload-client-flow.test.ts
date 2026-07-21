@@ -116,6 +116,20 @@ describe("client listing image upload flow", () => {
     expect(mocks.originalUpload).not.toHaveBeenCalled();
   });
 
+  it("uploads ten listing images without relying on upload route rate limits", async () => {
+    const { uploadListingImages } = await import("../../src/lib/uploads");
+    const files = Array.from({ length: 10 }, (_, index) => makeFile(`listing-${index}.jpg`, 500_000));
+
+    const result = await uploadListingImages(files, "token");
+
+    expect(result.imageUrls).toHaveLength(10);
+    expect(result.imageVariants).toHaveLength(10);
+    expect(mocks.processListingImage).toHaveBeenCalledTimes(10);
+    expect(fetch).toHaveBeenCalledTimes(20);
+    expect(mocks.publicUpload).not.toHaveBeenCalled();
+    expect(mocks.originalUpload).not.toHaveBeenCalled();
+  });
+
   it("processes browser-optimized images sequentially", async () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
     const files = [makeFile("small-1.jpg", 500_000), makeFile("small-2.jpg", 500_000), makeFile("small-3.jpg", 500_000)];

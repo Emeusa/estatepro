@@ -8,7 +8,6 @@ import {
   SUPPORTED_LISTING_IMAGE_TYPES
 } from "@/lib/image-limits";
 import { captureServerError, logSecurityEvent } from "@/lib/security/logger";
-import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
 
 const allowedExtensions = [".jpg", ".jpeg", ".jpe", ".jfif", ".png", ".webp", ".heic", ".heif", ".avif"];
 
@@ -31,10 +30,6 @@ export async function POST(request: NextRequest) {
   try {
     const decoded = await requireAgent(request);
     userId = decoded.uid;
-    const limited = await rateLimit(request, RATE_LIMITS.imageUpload, decoded.uid, decoded.uid);
-    if (!limited.allowed) {
-      return limited.response;
-    }
 
     const body = authorizeSchema.parse(await request.json());
     await logSecurityEvent({
@@ -44,7 +39,7 @@ export async function POST(request: NextRequest) {
       userId: decoded.uid,
       metadata: { count: body.files.length }
     });
-    return withRateLimitHeaders(NextResponse.json({ ok: true }), limited.headers);
+    return NextResponse.json({ ok: true });
   } catch (error) {
     captureServerError(error, { route: "/api/uploads/listing-images/authorize", userId });
     await logSecurityEvent({

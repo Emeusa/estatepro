@@ -12,7 +12,6 @@ import {
   SUPPORTED_LISTING_IMAGE_LABEL
 } from "@/lib/image-limits";
 import { captureServerError, logSecurityEvent } from "@/lib/security/logger";
-import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getListingImageUploadBlockReason } from "@/lib/upload-permissions";
 
@@ -26,11 +25,6 @@ export async function POST(request: NextRequest) {
   try {
     const decoded = await requireAgent(request);
     userId = decoded.uid;
-
-    const limited = await rateLimit(request, RATE_LIMITS.imageUpload, decoded.uid, decoded.uid);
-    if (!limited.allowed) {
-      return limited.response;
-    }
 
     const supabase = createServerSupabaseClient();
     const { data: agent, error: agentError } = await supabase
@@ -83,7 +77,7 @@ export async function POST(request: NextRequest) {
       metadata: { size: file.size, type: normalizedType }
     });
 
-    return withRateLimitHeaders(NextResponse.json({ url }), limited.headers);
+    return NextResponse.json({ url });
   } catch (error) {
     captureServerError(error, { route: "/api/uploads/listing-images/fallback", userId });
     await logSecurityEvent({

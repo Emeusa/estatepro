@@ -16,8 +16,6 @@ export const RATE_LIMITS = {
   auth: { name: "auth", limit: 5, windowSeconds: 60 },
   agentRegister: { name: "agent-register", limit: 3, windowSeconds: 60 * 60 },
   passwordReset: { name: "password-reset", limit: 3, windowSeconds: 60 * 60 },
-  listingCreate: { name: "listing-create", limit: 20, windowSeconds: 24 * 60 * 60 },
-  imageUpload: { name: "image-upload", limit: 30, windowSeconds: 60 * 60 },
   listingReportHourly: { name: "listing-report-hourly", limit: 5, windowSeconds: 60 * 60 },
   listingReportDaily: { name: "listing-report-daily", limit: 20, windowSeconds: 24 * 60 * 60 },
   admin: { name: "admin", limit: 60, windowSeconds: 60 },

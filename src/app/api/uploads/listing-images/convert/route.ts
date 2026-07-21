@@ -15,7 +15,6 @@ import {
 } from "@/lib/image-limits";
 import { getListingOriginalPathBlockReason, LISTING_IMAGE_ORIGINALS_BUCKET } from "@/lib/listing-image-originals";
 import { captureServerError, logSecurityEvent } from "@/lib/security/logger";
-import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
 import { processListingImageOnServer } from "@/lib/server/listing-image-processor";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getEffectivePlanSlug } from "@/lib/subscriptions";
@@ -204,11 +203,6 @@ export async function POST(request: NextRequest) {
     const decoded = await requireAgent(request);
     userId = decoded.uid;
 
-    const limited = await rateLimit(request, RATE_LIMITS.imageUpload, decoded.uid, decoded.uid);
-    if (!limited.allowed) {
-      return limited.response;
-    }
-
     const supabase = createServerSupabaseClient();
     const blockReason = await assertAgentCanUploadImages(supabase, decoded.uid);
 
@@ -289,13 +283,10 @@ export async function POST(request: NextRequest) {
       metadata: { count: variants.length }
     });
 
-    return withRateLimitHeaders(
-      NextResponse.json({
-        imageUrls: variants.map((variant) => variant.heroUrl),
-        imageVariants: variants
-      }),
-      limited.headers
-    );
+    return NextResponse.json({
+      imageUrls: variants.map((variant) => variant.heroUrl),
+      imageVariants: variants
+    });
   } catch (error) {
     const supabase = createServerSupabaseClient();
 

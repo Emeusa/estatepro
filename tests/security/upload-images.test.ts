@@ -21,6 +21,24 @@ import { getListingOriginalPathBlockReason } from "../../src/lib/listing-image-o
 import { getListingImageUploadBlockReason } from "../../src/lib/upload-permissions";
 
 describe("listing image mobile file handling", () => {
+  it("does not rate-limit listing image upload endpoints", () => {
+    const routes = [
+      "src/app/api/uploads/listing-images/authorize/route.ts",
+      "src/app/api/uploads/listing-images/fallback/route.ts",
+      "src/app/api/uploads/listing-images/convert/route.ts"
+    ];
+
+    for (const routePath of routes) {
+      const source = readFileSync(path.join(process.cwd(), routePath), "utf8");
+      expect(source).not.toContain("RATE_LIMITS.imageUpload");
+      expect(source).not.toContain("rateLimit(request");
+      expect(source).not.toContain("withRateLimitHeaders");
+    }
+
+    const rateLimitSource = readFileSync(path.join(process.cwd(), "src/lib/security/rate-limit.ts"), "utf8");
+    expect(rateLimitSource).not.toContain("imageUpload");
+  });
+
   it("uses the visible native picker with strict supported formats", () => {
     const source = readFileSync(path.join(process.cwd(), "src/components/forms/listing-form.tsx"), "utf8");
 

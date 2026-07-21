@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -6,9 +6,7 @@ const mocks = vi.hoisted(() => ({
   createServerSupabaseClient: vi.fn(),
   logSecurityEvent: vi.fn(),
   processListingImageOnServer: vi.fn(),
-  rateLimit: vi.fn(),
-  requireAgent: vi.fn(),
-  withRateLimitHeaders: vi.fn()
+  requireAgent: vi.fn()
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -23,14 +21,6 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/security/logger", () => ({
   captureServerError: mocks.captureServerError,
   logSecurityEvent: mocks.logSecurityEvent
-}));
-
-vi.mock("@/lib/security/rate-limit", () => ({
-  RATE_LIMITS: {
-    imageUpload: { name: "imageUpload", limit: 20, windowSeconds: 60 }
-  },
-  rateLimit: mocks.rateLimit,
-  withRateLimitHeaders: mocks.withRateLimitHeaders
 }));
 
 vi.mock("@/lib/server/listing-image-processor", () => ({
@@ -122,8 +112,6 @@ describe("listing image conversion route", () => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
 
     mocks.requireAgent.mockResolvedValue({ uid: "agent-id", role: "agent" });
-    mocks.rateLimit.mockResolvedValue({ allowed: true, headers: {} });
-    mocks.withRateLimitHeaders.mockImplementation((response: NextResponse) => response);
     mocks.processListingImageOnServer.mockResolvedValue({
       hero: { buffer: Buffer.from("hero"), width: 1200, height: 800 },
       card: { buffer: Buffer.from("card"), width: 600, height: 400 },
