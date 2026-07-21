@@ -50,9 +50,11 @@ describe("listing image mobile file handling", () => {
     expect(source).toContain("photos selected");
     expect(source).toContain("Choose upload thumbnail");
     expect(source).toContain("Thumbnail selected");
+    expect(source).toContain("createListingImagePreview(file)");
     expect(source).not.toContain("LISTING_PHONE_GALLERY_ACCEPT");
     expect(source).not.toContain("accept={LISTING_GALLERY_PICKER_ACCEPT}");
     expect(source).not.toContain('className="input"\n          name="images"');
+    expect(source).not.toContain("URL.createObjectURL(file)");
     expect(source).not.toContain("If some albums do not show");
     expect(source).not.toContain("Review selected photos");
     expect(source).not.toContain("Clear all");
@@ -69,6 +71,19 @@ describe("listing image mobile file handling", () => {
     expect(source).toContain("inline-flex items-center justify-center gap-2");
     expect(source).not.toContain("Save listing");
     expect(source).not.toContain("Saving...");
+  });
+
+  it("uses memory-safe browser image processing for large mobile photos", () => {
+    const source = readFileSync(path.join(process.cwd(), "src/lib/image.ts"), "utf8");
+
+    expect(source).toContain("createImageBitmap(blob");
+    expect(source).toContain("resizeWidth: size.width");
+    expect(source).toContain("resizeHeight: size.height");
+    expect(source).toContain("renderImageWithRetry");
+    expect(source).toContain("SAFE_HERO_MAX_WIDTH");
+    expect(source).toContain("SAFE_CARD_MAX_WIDTH");
+    expect(source).toContain("renderImageFromBlob(hero.blob");
+    expect(source).toContain("createListingImagePreview");
   });
 
   it("keeps upload validation strict after gallery selection", () => {

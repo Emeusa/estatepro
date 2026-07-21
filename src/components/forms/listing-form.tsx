@@ -38,6 +38,7 @@ import {
 import { getLgasForState, NIGERIA_STATES } from "@/lib/nigeria-locations";
 import { ListingCategory, ListingImageVariant, ListingRecord } from "@/lib/types";
 import { normalizeListingImageFile, uploadListingImages } from "@/lib/uploads";
+import { createListingImagePreview } from "@/lib/image";
 
 type Props = {
   token: string;
@@ -95,6 +96,13 @@ function ButtonSpinner() {
   );
 }
 
+function createPreviewPlaceholder(index: number) {
+  const label = `Photo ${index + 1}`;
+  return `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 180"><rect width="220" height="180" rx="24" fill="#f1f5f9"/><text x="110" y="92" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#475569">${label}</text></svg>`
+  )}`;
+}
+
 export function ListingForm({ token, listing, onSaved }: Props) {
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -138,11 +146,36 @@ export function ListingForm({ token, listing, onSaved }: Props) {
   }, [listing]);
 
   useEffect(() => {
-    const urls = selectedFiles.map((file) => URL.createObjectURL(file));
-    setPreviewUrls(urls);
+    let cancelled = false;
+
+    async function loadPreviews() {
+      if (!selectedFiles.length) {
+        setPreviewUrls([]);
+        return;
+      }
+
+      const previews: string[] = [];
+      for (const [index, file] of selectedFiles.entries()) {
+        if (cancelled) {
+          return;
+        }
+
+        try {
+          previews.push(await createListingImagePreview(file));
+        } catch {
+          previews.push(createPreviewPlaceholder(index));
+        }
+      }
+
+      if (!cancelled) {
+        setPreviewUrls(previews);
+      }
+    }
+
+    void loadPreviews();
 
     return () => {
-      urls.forEach((url) => URL.revokeObjectURL(url));
+      cancelled = true;
     };
   }, [selectedFiles]);
 
