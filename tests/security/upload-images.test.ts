@@ -12,6 +12,7 @@ import {
   MAX_LISTING_IMAGES,
   MAX_LISTING_IMAGE_BYTES,
   MAX_LISTING_ORIGINAL_IMAGE_BYTES,
+  LISTING_GALLERY_PICKER_ACCEPT,
   normalizeListingImageType
 } from "../../src/lib/image-limits";
 import { getThumbnailIndexAfterImageRemoval, mergeListingImageSelection } from "../../src/lib/listing-image-selection";
@@ -25,12 +26,19 @@ describe("listing image mobile file handling", () => {
     expect(source).toContain('name="images"');
     expect(source).toContain('type="file"');
     expect(source).toContain("multiple");
-    expect(source).toContain("accept={SUPPORTED_LISTING_IMAGE_ACCEPT}");
+    expect(source).toContain("accept={LISTING_GALLERY_PICKER_ACCEPT}");
+    expect(source).not.toContain("accept={SUPPORTED_LISTING_IMAGE_ACCEPT}");
     expect(source).toContain('className="input"');
-    expect(source).toContain("Choose files from your gallery or file manager.");
+    expect(source).toContain("Choose photos from your gallery.");
     expect(source).not.toContain('accept="image/*"');
     expect(source).not.toContain("Select photos from gallery");
     expect(source).not.toContain("Browse files");
+  });
+
+  it("keeps the picker accept simple while validation still supports phone formats", () => {
+    expect(LISTING_GALLERY_PICKER_ACCEPT).toBe("image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp");
+    expect(isSupportedListingImageFile({ name: "ios-photo.heic", type: "image/heic" })).toBe(true);
+    expect(isSupportedListingImageFile({ name: "android-photo.avif", type: "image/avif" })).toBe(true);
   });
 
   it("accepts Android-style JPG metadata", () => {

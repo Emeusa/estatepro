@@ -468,7 +468,7 @@ export function AgentRegisterForm() {
       return;
     } catch (error) {
       if (error instanceof ApiRequestError) {
-        setMessage(error.message);
+        setMessage(getFriendlyAuthMessage(error, "We could not create the agent account. Please try again."));
         setIsSubmitting(false);
         setTurnstileKey((current) => current + 1);
         return;
@@ -498,8 +498,8 @@ export function AgentRegisterForm() {
         <p className="text-sm font-semibold text-slate-800">Verification details</p>
         <p className="mt-1 text-xs text-slate-500">Provide either your personal NIN or your business CAC registration number.</p>
         <div className="mt-3 grid gap-3">
-          <input className="input" name="ninNumber" inputMode="numeric" maxLength={11} placeholder="NIN number (optional)" />
-          <input className="input" name="cacNumber" autoCapitalize="characters" placeholder="CAC registration number (optional)" />
+          <input className="input" name="ninNumber" inputMode="numeric" maxLength={11} placeholder="NIN number" />
+          <input className="input" name="cacNumber" autoCapitalize="characters" placeholder="CAC registration number" />
         </div>
       </div>
       <PasswordField name="password" placeholder="Password" value={password} onChange={setPassword} />

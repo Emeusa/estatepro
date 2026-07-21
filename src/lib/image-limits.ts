@@ -7,6 +7,9 @@ export const MAX_LISTING_IMAGE_BYTES = MAX_LISTING_ORIGINAL_IMAGE_BYTES;
 export const MAX_LISTING_IMAGE_MB = MAX_LISTING_ORIGINAL_IMAGE_MB;
 export const BROWSER_PROCESSABLE_LISTING_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 export const SERVER_CONVERTED_LISTING_IMAGE_TYPES = ["image/heic", "image/heif", "image/avif"] as const;
+export const LISTING_GALLERY_PICKER_ACCEPT = `${BROWSER_PROCESSABLE_LISTING_IMAGE_TYPES.join(
+  ","
+)},.jpg,.jpeg,.png,.webp`;
 export const SUPPORTED_LISTING_IMAGE_TYPES = [
   ...BROWSER_PROCESSABLE_LISTING_IMAGE_TYPES,
   ...SERVER_CONVERTED_LISTING_IMAGE_TYPES

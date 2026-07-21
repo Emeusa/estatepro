@@ -16,11 +16,6 @@ type TurnstileApi = {
   remove?: (widgetId: string) => void;
 };
 
-type TurnstileStatus = {
-  publicSiteKeyConfigured: boolean;
-  serverSecretConfigured: boolean;
-};
-
 declare global {
   interface Window {
     turnstile?: TurnstileApi;
@@ -38,7 +33,6 @@ export function TurnstileFields() {
   const [widgetError, setWidgetError] = useState("");
   const [renderAttempt, setRenderAttempt] = useState(0);
   const [renderDelay, setRenderDelay] = useState(0);
-  const [status, setStatus] = useState<TurnstileStatus | null>(null);
 
   function removeWidget() {
     try {
@@ -66,37 +60,13 @@ export function TurnstileFields() {
         setScriptReady(true);
       }
     } catch {
-      setWidgetError(turnstileLoadMessage("retry-failed"));
+      setWidgetError(turnstileLoadMessage());
     }
   }
 
-  function turnstileLoadMessage(code: string) {
-    return `Security verification could not load. Code: ${code}. Retry the security check or refresh the page.`;
+  function turnstileLoadMessage() {
+    return "Security check could not load. Check your connection, then tap retry.";
   }
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadStatus() {
-      try {
-        const response = await fetch("/api/security/turnstile-status", { cache: "no-store" });
-        if (!response.ok) {
-          return;
-        }
-        const nextStatus = (await response.json()) as TurnstileStatus;
-        if (!cancelled) {
-          setStatus(nextStatus);
-        }
-      } catch {
-        // Diagnostics are non-critical and must not block the form.
-      }
-    }
-
-    loadStatus();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (!siteKey || !scriptReady || !containerRef.current || widgetIdRef.current) {
@@ -122,7 +92,7 @@ export function TurnstileFields() {
         }
 
         setToken("");
-        setWidgetError(turnstileLoadMessage("api-not-ready"));
+        setWidgetError(turnstileLoadMessage());
         return;
       }
 
@@ -135,16 +105,16 @@ export function TurnstileFields() {
           },
           "expired-callback": () => {
             setToken("");
-            setWidgetError("Security verification expired. Please complete it again.");
+            setWidgetError("Security check expired. Tap retry, then submit the form again.");
           },
-          "error-callback": (code) => {
+          "error-callback": () => {
             setToken("");
-            setWidgetError(turnstileLoadMessage(code || "unknown"));
+            setWidgetError(turnstileLoadMessage());
           }
         });
       } catch {
         setToken("");
-        setWidgetError(turnstileLoadMessage("render-failed"));
+        setWidgetError(turnstileLoadMessage());
       }
     }
 
@@ -175,25 +145,19 @@ export function TurnstileFields() {
             strategy="afterInteractive"
             onLoad={() => setScriptReady(true)}
             onReady={() => setScriptReady(true)}
-            onError={() => setWidgetError(turnstileLoadMessage("script-load-failed"))}
+            onError={() => setWidgetError(turnstileLoadMessage())}
           />
           <div ref={containerRef} />
         </>
       ) : null}
       {showMissingSiteKeyWarning ? (
         <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
-          Security verification is not configured for this deployment. Please refresh after the site is redeployed.
+          Security check is temporarily unavailable. Please try again later.
         </p>
       ) : null}
       {widgetError ? (
         <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
           <p>{widgetError}</p>
-          {status ? (
-            <p>
-              Config check: browser key {status.publicSiteKeyConfigured ? "present" : "missing"}, server secret{" "}
-              {status.serverSecretConfigured ? "present" : "missing"}.
-            </p>
-          ) : null}
           <button
             className="rounded-full border border-amber-300 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-amber-950 transition hover:bg-amber-100"
             type="button"

@@ -26,6 +26,33 @@ describe("getFriendlyAuthMessage", () => {
     );
   });
 
+  it("shows a clear security-check loading message", () => {
+    expect(
+      getFriendlyAuthMessage(
+        new Error("Security check is still loading. Wait a few seconds, then try again."),
+        "fallback"
+      )
+    ).toBe("Security check is still loading. Wait a few seconds, then try again.");
+  });
+
+  it("maps expired or failed security-check errors to a refresh instruction", () => {
+    expect(getFriendlyAuthMessage(new Error("Security verification failed. Please refresh and try again."), "fallback")).toBe(
+      "Security check needs a refresh. Tap retry on the security check, then try again."
+    );
+    expect(getFriendlyAuthMessage(new Error("Turnstile token expired"), "fallback")).toBe(
+      "Security check needs a refresh. Tap retry on the security check, then try again."
+    );
+  });
+
+  it("shows a connection-focused message when the security check script cannot load", () => {
+    expect(
+      getFriendlyAuthMessage(
+        new Error("Security check could not load. Check your connection, then tap retry."),
+        "fallback"
+      )
+    ).toBe("Security check could not load. Check your connection, tap retry, and try again.");
+  });
+
   it("shows a support message for incomplete profiles", () => {
     expect(getFriendlyAuthMessage(new Error("Account profile was not found."), "fallback")).toBe(
       "Your account exists, but the profile is incomplete. Please contact support."

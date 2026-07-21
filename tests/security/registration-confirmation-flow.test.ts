@@ -161,4 +161,33 @@ describe("registration confirmation flow", () => {
     expect(source).toContain("key={`client-register-${turnstileKey}`}");
     expect(source).toContain("key={`agent-register-${turnstileKey}`}");
   });
+
+  it("maps agent registration API errors through the friendly auth message helper", () => {
+    const source = readFileSync(path.join(process.cwd(), "src/components/forms/auth-forms.tsx"), "utf8");
+
+    expect(source).not.toContain("setMessage(error.message);");
+    expect(source).toContain(
+      'setMessage(getFriendlyAuthMessage(error, "We could not create the agent account. Please try again."));'
+    );
+  });
+
+  it("keeps Turnstile messages user-friendly and hides diagnostics from auth forms", () => {
+    const source = readFileSync(path.join(process.cwd(), "src/components/security/turnstile-fields.tsx"), "utf8");
+
+    expect(source).toContain("Security check could not load. Check your connection, then tap retry.");
+    expect(source).toContain("Security check expired. Tap retry, then submit the form again.");
+    expect(source).toContain("Retry security check");
+    expect(source).not.toContain("Code:");
+    expect(source).not.toContain("Config check:");
+    expect(source).not.toContain("/api/security/turnstile-status");
+  });
+
+  it("does not label NIN or CAC verification placeholders as optional", () => {
+    const source = readFileSync(path.join(process.cwd(), "src/components/forms/auth-forms.tsx"), "utf8");
+
+    expect(source).toContain('placeholder="NIN number"');
+    expect(source).toContain('placeholder="CAC registration number"');
+    expect(source).not.toContain("NIN number (optional)");
+    expect(source).not.toContain("CAC registration number (optional)");
+  });
 });

@@ -6,11 +6,11 @@ import { ApiRequestError, apiRequest } from "@/lib/api";
 import {
   getListingImageFormatErrorMessage,
   isSupportedListingImageFile,
+  LISTING_GALLERY_PICKER_ACCEPT,
   MAX_LISTING_IMAGES,
   MAX_LISTING_IMAGE_BYTES,
   MAX_LISTING_IMAGE_MB,
   normalizeListingImageType,
-  SUPPORTED_LISTING_IMAGE_ACCEPT,
   SUPPORTED_LISTING_IMAGE_LABEL
 } from "@/lib/image-limits";
 import { getThumbnailIndexAfterImageRemoval, mergeListingImageSelection } from "@/lib/listing-image-selection";
@@ -600,13 +600,13 @@ export function ListingForm({ token, listing, onSaved }: Props) {
           key={imageInputKey}
           type="file"
           multiple
-          accept={SUPPORTED_LISTING_IMAGE_ACCEPT}
+          accept={LISTING_GALLERY_PICKER_ACCEPT}
           onChange={onImageChange}
         />
         <p className="mt-1 text-xs text-slate-500">
-          Choose files from your gallery or file manager. {selectedFiles.length}/{MAX_LISTING_IMAGES} selected. Supports{" "}
-          {SUPPORTED_LISTING_IMAGE_LABEL}. Large phone photos are compressed automatically. Each original image must be{" "}
-          {MAX_LISTING_IMAGE_MB} MB or less.
+          Choose photos from your gallery. You can select up to {MAX_LISTING_IMAGES} images. {selectedFiles.length}/
+          {MAX_LISTING_IMAGES} selected. If your phone provides HEIC/HEIF or AVIF files, they will be compressed
+          automatically. Each original image must be {MAX_LISTING_IMAGE_MB} MB or less.
         </p>
         <p className="mt-1 text-xs text-slate-500">The first selected image becomes the listing thumbnail.</p>
         {fieldErrors.images ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.images}</p> : null}

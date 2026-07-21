@@ -13,7 +13,7 @@ export async function verifyTurnstile(request: NextRequest, token?: string | nul
   }
 
   if (!token) {
-    return { success: false, message: "Security verification failed. Please refresh and try again." };
+    return { success: false, message: "Security check is still loading. Wait a few seconds, then try again." };
   }
 
   const body = new URLSearchParams();
@@ -28,7 +28,10 @@ export async function verifyTurnstile(request: NextRequest, token?: string | nul
   const data = (await response.json().catch(() => ({}))) as { success?: boolean };
 
   if (!data.success) {
-    return { success: false, message: "Security verification failed. Please refresh and try again." };
+    return {
+      success: false,
+      message: "Security check could not be confirmed. Tap retry, complete the check, and try again."
+    };
   }
 
   return { success: true, skipped: false };

@@ -14,6 +14,24 @@ export function getFriendlyAuthMessage(error: unknown, fallback: string) {
     return originalMessage.replace(/^Account creation failed:\s*/i, "");
   }
 
+  if (message.includes("security check is still loading")) {
+    return "Security check is still loading. Wait a few seconds, then try again.";
+  }
+
+  if (message.includes("security check could not load")) {
+    return "Security check could not load. Check your connection, tap retry, and try again.";
+  }
+
+  if (
+    message.includes("security check could not be confirmed") ||
+    message.includes("security verification failed") ||
+    message.includes("security verification expired") ||
+    message.includes("security check expired") ||
+    message.includes("turnstile")
+  ) {
+    return "Security check needs a refresh. Tap retry on the security check, then try again.";
+  }
+
   if (
     message.includes("auth/invalid-credential") ||
     message.includes("auth/invalid-login-credentials") ||
