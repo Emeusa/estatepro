@@ -10,7 +10,6 @@ import {
   isRawListingImageFile,
   isSupportedListingImageFile,
   LISTING_GALLERY_PICKER_ACCEPT,
-  LISTING_PHONE_GALLERY_ACCEPT,
   MAX_LISTING_IMAGE_BYTES,
   MAX_LISTING_IMAGES,
   MAX_LISTING_ORIGINAL_IMAGE_BYTES,
@@ -37,21 +36,23 @@ describe("listing image mobile file handling", () => {
     expect(rateLimitSource).not.toContain("imageUpload");
   });
 
-  it("uses a phone gallery picker with a native file fallback and simple thumbnail selector", () => {
+  it("uses one visible native file picker with a simple thumbnail selector", () => {
     const source = readFileSync(path.join(process.cwd(), "src/components/forms/listing-form.tsx"), "utf8");
 
+    expect(source.match(/name="images"/g) ?? []).toHaveLength(1);
     expect(source).toContain('name="images"');
     expect(source).toContain('type="file"');
     expect(source).toContain("multiple");
-    expect(source).toContain("accept={LISTING_PHONE_GALLERY_ACCEPT}");
     expect(source).toContain("accept={LISTING_GALLERY_PICKER_ACCEPT}");
     expect(source).toContain('className="input"');
-    expect(source).toContain("Select photos from gallery");
-    expect(source).toContain("If some albums do not show");
     expect(source).toContain("Choose photos from your gallery.");
     expect(source).toContain("photos selected");
     expect(source).toContain("Choose upload thumbnail");
     expect(source).toContain("Thumbnail selected");
+    expect(source).not.toContain("LISTING_PHONE_GALLERY_ACCEPT");
+    expect(source).not.toContain('accept="image/*"');
+    expect(source).not.toContain("Select photos from gallery");
+    expect(source).not.toContain("If some albums do not show");
     expect(source).not.toContain("Review selected photos");
     expect(source).not.toContain("Clear all");
     expect(source).not.toContain("Remove");
@@ -59,7 +60,6 @@ describe("listing image mobile file handling", () => {
   });
 
   it("keeps the picker accept simple for reliable gallery behavior", () => {
-    expect(LISTING_PHONE_GALLERY_ACCEPT).toBe("image/*");
     expect(LISTING_GALLERY_PICKER_ACCEPT).toBe("image/jpeg,image/png,image/webp,.jpg,.jpeg,.jpe,.jfif,.png,.webp");
     expect(isSupportedListingImageFile({ name: "ios-photo.heic", type: "image/heic" })).toBe(false);
     expect(isSupportedListingImageFile({ name: "android-photo.avif", type: "image/avif" })).toBe(false);

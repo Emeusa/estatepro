@@ -8,7 +8,6 @@ import {
   getListingImageCountLimitMessage,
   isSupportedListingImageFile,
   LISTING_GALLERY_PICKER_ACCEPT,
-  LISTING_PHONE_GALLERY_ACCEPT,
   MAX_LISTING_IMAGES,
   MAX_LISTING_IMAGE_BYTES,
   MAX_LISTING_IMAGE_MB,
@@ -575,35 +574,15 @@ export function ListingForm({ token, listing, onSaved }: Props) {
         </div>
       </div>
       <div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-3">
-          <label
-            htmlFor={`listing-gallery-${formKey}`}
-            className="flex cursor-pointer items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
-          >
-            Select photos from gallery
-          </label>
-          <input
-            id={`listing-gallery-${formKey}`}
-            className="sr-only"
-            name="images"
-            key={`gallery-${imageInputKey}`}
-            type="file"
-            multiple
-            accept={LISTING_PHONE_GALLERY_ACCEPT}
-            onChange={onImageChange}
-          />
-          <div className="mt-3">
-            <p className="text-xs font-semibold text-slate-600">If some albums do not show, use this fallback:</p>
-            <input
-              className="input mt-2"
-              key={`files-${imageInputKey}`}
-              type="file"
-              multiple
-              accept={LISTING_GALLERY_PICKER_ACCEPT}
-              onChange={onImageChange}
-            />
-          </div>
-        </div>
+        <input
+          className="input"
+          name="images"
+          key={imageInputKey}
+          type="file"
+          multiple
+          accept={LISTING_GALLERY_PICKER_ACCEPT}
+          onChange={onImageChange}
+        />
         <p className="mt-1 text-xs text-slate-500">
           Choose photos from your gallery. You can select up to {MAX_LISTING_IMAGES} images. {selectedFiles.length}/
           {MAX_LISTING_IMAGES} photos selected. Each original image must be {MAX_LISTING_IMAGE_MB} MB or less.
