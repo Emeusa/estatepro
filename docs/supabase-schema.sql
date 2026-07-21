@@ -1814,23 +1814,8 @@ on conflict (id) do update set
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
-insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values (
-  'listing-image-originals',
-  'listing-image-originals',
-  false,
-  15728640,
-  array['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/avif']
-)
-on conflict (id) do update set
-  public = excluded.public,
-  file_size_limit = excluded.file_size_limit,
-  allowed_mime_types = excluded.allowed_mime_types;
-
 drop policy if exists "authenticated users can upload listing images" on storage.objects;
 drop policy if exists "public can view listing images" on storage.objects;
-drop policy if exists "authenticated users can upload listing image originals" on storage.objects;
-drop policy if exists "authenticated users can delete own listing image originals" on storage.objects;
 drop policy if exists "authenticated users can upload verification docs" on storage.objects;
 drop policy if exists "authenticated users can read own verification docs" on storage.objects;
 
@@ -1846,23 +1831,6 @@ create policy "authenticated users can upload listing images"
 create policy "public can view listing images"
   on storage.objects for select
   using (bucket_id = 'listing-images');
-
-create policy "authenticated users can upload listing image originals"
-  on storage.objects for insert
-  to authenticated
-  with check (
-    bucket_id = 'listing-image-originals'
-    and auth.uid()::text = (storage.foldername(name))[1]
-    and lower(storage.extension(name)) in ('jpg', 'jpeg', 'jpe', 'jfif', 'png', 'webp', 'heic', 'heif', 'avif')
-  );
-
-create policy "authenticated users can delete own listing image originals"
-  on storage.objects for delete
-  to authenticated
-  using (
-    bucket_id = 'listing-image-originals'
-    and auth.uid()::text = (storage.foldername(name))[1]
-  );
 
 -- One-time repair for pending listings created before approved-agent auto-activation:
 -- update public.listings

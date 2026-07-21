@@ -1,6 +1,7 @@
 "use client";
 
 const WEBP_TYPE = "image/webp";
+const JPEG_TYPE = "image/jpeg";
 const HERO_MAX_WIDTH = 1200;
 const HERO_MAX_HEIGHT = 900;
 const HERO_QUALITY = 0.82;
@@ -14,6 +15,7 @@ type RenderedImage = {
   blob: Blob;
   width: number;
   height: number;
+  type: typeof WEBP_TYPE | typeof JPEG_TYPE;
 };
 
 export type ListingImageWatermark =
@@ -156,15 +158,28 @@ async function renderImage(
     throw new Error("Image compression is not supported in this browser.");
   }
 
-  context.drawImage(image, 0, 0, size.width, size.height);
-  await applyWatermark(context, size.width, size.height, watermark);
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, WEBP_TYPE, quality));
+  let blob: Blob | null = null;
+  let type: typeof WEBP_TYPE | typeof JPEG_TYPE = WEBP_TYPE;
 
-  if (!blob) {
-    throw new Error("Failed to convert image to WebP.");
+  try {
+    context.drawImage(image, 0, 0, size.width, size.height);
+    await applyWatermark(context, size.width, size.height, watermark);
+    blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, WEBP_TYPE, quality));
+
+    if (!blob) {
+      type = JPEG_TYPE;
+      blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, JPEG_TYPE, quality));
+    }
+  } finally {
+    canvas.width = 1;
+    canvas.height = 1;
   }
 
-  return { blob, ...size };
+  if (!blob) {
+    throw new Error("Failed to compress image.");
+  }
+
+  return { blob, type, ...size };
 }
 
 async function blobToDataUrl(blob: Blob) {
@@ -185,15 +200,13 @@ export async function processListingImage(
   }
 
   const image = await loadImage(file);
-  const [hero, card, blur] = await Promise.all([
-    renderImage(image, HERO_MAX_WIDTH, HERO_MAX_HEIGHT, HERO_QUALITY, watermark),
-    renderImage(image, CARD_MAX_WIDTH, CARD_MAX_HEIGHT, CARD_QUALITY, watermark),
-    renderImage(image, BLUR_WIDTH, HERO_MAX_HEIGHT, BLUR_QUALITY)
-  ]);
+  const hero = await renderImage(image, HERO_MAX_WIDTH, HERO_MAX_HEIGHT, HERO_QUALITY, watermark);
+  const card = await renderImage(image, CARD_MAX_WIDTH, CARD_MAX_HEIGHT, CARD_QUALITY, watermark);
+  const blur = await renderImage(image, BLUR_WIDTH, HERO_MAX_HEIGHT, BLUR_QUALITY);
 
   return {
-    hero: new File([hero.blob], "hero.webp", { type: WEBP_TYPE }),
-    card: new File([card.blob], "card.webp", { type: WEBP_TYPE }),
+    hero: new File([hero.blob], hero.type === WEBP_TYPE ? "hero.webp" : "hero.jpg", { type: hero.type }),
+    card: new File([card.blob], card.type === WEBP_TYPE ? "card.webp" : "card.jpg", { type: card.type }),
     blurDataUrl: await blobToDataUrl(blur.blob),
     width: hero.width,
     height: hero.height,

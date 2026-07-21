@@ -9,7 +9,7 @@ import {
 } from "@/lib/image-limits";
 import { captureServerError, logSecurityEvent } from "@/lib/security/logger";
 
-const allowedExtensions = [".jpg", ".jpeg", ".jpe", ".jfif", ".png", ".webp", ".heic", ".heif", ".avif"];
+const allowedExtensions = [".jpg", ".jpeg", ".jpe", ".jfif", ".png", ".webp"];
 
 const imageMetadataSchema = z.object({
   name: z.string().min(1).max(180),
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       metadata: { reason: error instanceof Error ? error.message : "unknown" }
     });
     return NextResponse.json(
-      { message: "These images could not be accepted. Use JPG, PNG, WebP, HEIC/HEIF, or AVIF files under 15 MB." },
+      { message: "These images could not be accepted. Use JPG, PNG, or WebP files under 20 MB." },
       { status: 400 }
     );
   }

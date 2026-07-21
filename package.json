@@ -12,7 +12,6 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit --project tsconfig.typecheck.json",
     "test:security": "vitest run tests/security",
-    "test:e2e:mobile-upload": "playwright test tests/e2e/mobile-upload.spec.ts",
     "smoke:production": "powershell -ExecutionPolicy Bypass -File scripts/smoke-production.ps1"
   },
   "dependencies": {
@@ -20,12 +19,10 @@
     "@supabase/supabase-js": "^2.49.8",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0",
-    "heic-convert": "^2.1.0",
     "next": "^15.5.18",
     "nodemailer": "^9.0.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "sharp": "^0.34.5",
     "zod": "^3.24.3"
   },
   "overrides": {

@@ -33,7 +33,7 @@ describe("listingInputSchema", () => {
     const result = listingInputSchema.safeParse({
       ...validListing,
       imageUrls: Array.from(
-        { length: 15 },
+        { length: 16 },
         (_, index) => `https://example.supabase.co/storage/v1/object/public/listing-images/user/photo-${index}.jpg`
       )
     });

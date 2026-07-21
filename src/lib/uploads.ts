@@ -1,22 +1,20 @@
 "use client";
 
-import { processListingImage, type ListingImageWatermark } from "@/lib/image";
 import { getAgentDisplayName } from "@/lib/agent-display";
 import { apiRequest } from "@/lib/api";
+import { processListingImage, type ListingImageWatermark } from "@/lib/image";
 import {
   getListingImageExtensionForType,
   getListingImageFormatErrorMessage,
   getListingImageCountLimitMessage,
-  isServerConvertedListingImageFile,
   isSupportedListingImageFile,
   MAX_LISTING_FINAL_IMAGE_BYTES,
+  MAX_LISTING_FINAL_IMAGE_MB,
   MAX_LISTING_IMAGE_BYTES,
   MAX_LISTING_IMAGE_MB,
-  MAX_SERVER_CONVERT_IMAGE_BYTES,
   normalizeListingImageType,
   SUPPORTED_LISTING_IMAGE_LABEL
 } from "@/lib/image-limits";
-import { createListingOriginalPath, LISTING_IMAGE_ORIGINALS_BUCKET } from "@/lib/listing-image-originals";
 import { supabase } from "@/lib/supabase/client";
 import { getEffectivePlanSlug } from "@/lib/subscriptions";
 import type { ListingImageVariant, SubscriptionRecord } from "@/lib/types";
@@ -26,15 +24,7 @@ type ListingImageUploadResult = {
   imageVariants: ListingImageVariant[];
 };
 
-type ServerConvertResponse = ListingImageUploadResult;
-
-type UploadStage =
-  | "authorize"
-  | "browser-compress"
-  | "direct-final-upload"
-  | "server-final-upload"
-  | "server-raw-upload"
-  | "server-convert";
+type UploadStage = "authorize" | "browser-compress" | "direct-final-upload" | "server-final-upload";
 
 type AgentWatermarkResponse = {
   user: {
@@ -54,8 +44,6 @@ const IMAGE_COMPRESS_FAILED_MESSAGE =
   "Image could not be compressed on this phone. Try JPG or upload fewer photos. Upload code: IMAGE_COMPRESS_FAILED";
 const SERVER_UPLOAD_RESPONSE_FAILED_MESSAGE =
   "Server upload completed without an image URL. Try again with fewer photos. Upload code: SERVER_UPLOAD_RESPONSE_MISSING";
-const TEMP_ORIGINAL_UPLOAD_FAILED_MESSAGE =
-  "We could not prepare this large phone photo for compression. Try again or choose fewer photos. Upload code: TEMP_ORIGINAL_UPLOAD_FAILED";
 
 async function requireUserId() {
   const {
@@ -123,111 +111,15 @@ async function uploadDirectFinalImage(file: File, userId: string, filename: stri
 }
 
 async function uploadFinalImage(file: File, token: string, userId: string, filename: string, allFiles: File[], order: number) {
+  if (file.size <= 0 || file.size > MAX_LISTING_FINAL_IMAGE_BYTES) {
+    throw new Error(`Each processed image must be ${MAX_LISTING_FINAL_IMAGE_MB} MB or less.`);
+  }
+
   try {
     return await uploadDirectFinalImage(file, userId, filename);
   } catch (error) {
     warnUploadStage("direct-final-upload", allFiles, error, order);
     return await uploadViaServer(file, token, filename);
-  }
-}
-
-async function convertViaServer(file: File, token: string, order: number): Promise<ServerConvertResponse> {
-  if (file.size > MAX_SERVER_CONVERT_IMAGE_BYTES) {
-    throw new Error(IMAGE_COMPRESS_FAILED_MESSAGE);
-  }
-
-  const form = new FormData();
-  form.append("file", file, safeImageName(order, normalizeListingImageType(file)));
-  form.append("order", String(order));
-
-  let response: Response;
-  try {
-    response = await fetch("/api/uploads/listing-images/convert", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: form
-    });
-  } catch {
-    throw new Error(IMAGE_COMPRESS_FAILED_MESSAGE);
-  }
-
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.message ?? IMAGE_COMPRESS_FAILED_MESSAGE);
-  }
-
-  const body = (await response.json()) as ServerConvertResponse;
-  if (!body.imageUrls?.length) {
-    throw new Error(SERVER_UPLOAD_RESPONSE_FAILED_MESSAGE);
-  }
-
-  return body;
-}
-
-async function convertOriginalsViaServer(
-  originals: Array<{ path: string; order: number }>,
-  token: string
-): Promise<ServerConvertResponse> {
-  let response: Response;
-  try {
-    response = await fetch("/api/uploads/listing-images/convert", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ originals })
-    });
-  } catch {
-    throw new Error(IMAGE_COMPRESS_FAILED_MESSAGE);
-  }
-
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.message ?? IMAGE_COMPRESS_FAILED_MESSAGE);
-  }
-
-  const body = (await response.json()) as ServerConvertResponse;
-  if (!body.imageUrls?.length) {
-    throw new Error(SERVER_UPLOAD_RESPONSE_FAILED_MESSAGE);
-  }
-
-  return body;
-}
-
-async function uploadTempOriginal(file: File, userId: string, order: number) {
-  const path = createListingOriginalPath(userId, order, file);
-  const { error } = await supabase.storage.from(LISTING_IMAGE_ORIGINALS_BUCKET).upload(path, file, {
-    contentType: file.type,
-    upsert: false
-  });
-
-  if (error) {
-    throw new Error(`${TEMP_ORIGINAL_UPLOAD_FAILED_MESSAGE} ${error.message}`);
-  }
-
-  return path;
-}
-
-async function removeTempOriginals(paths: string[]) {
-  if (!paths.length) {
-    return;
-  }
-
-  try {
-    await supabase.storage.from(LISTING_IMAGE_ORIGINALS_BUCKET).remove(paths);
-  } catch {
-    // The conversion route also cleans up paths it receives. Browser cleanup is best-effort.
-  }
-}
-
-async function convertViaPrivateOriginal(file: File, token: string, userId: string, order: number): Promise<ServerConvertResponse> {
-  const path = await uploadTempOriginal(file, userId, order);
-  try {
-    return await convertOriginalsViaServer([{ path, order }], token);
-  } catch (error) {
-    await removeTempOriginals([path]);
-    throw error;
   }
 }
 
@@ -267,12 +159,12 @@ async function getListingImageWatermark(token: string): Promise<ListingImageWate
   return { type: "platform" };
 }
 
-function safeImageName(index: number, type: ReturnType<typeof normalizeListingImageType>) {
+function safeImageName(index: number, type: ReturnType<typeof normalizeListingImageType>, suffix: "hero" | "card") {
   if (!type) {
     throw new Error(`This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`);
   }
 
-  return `listing-image-${index + 1}.${getListingImageExtensionForType(type)}`;
+  return `listing-image-${index + 1}-${suffix}.${getListingImageExtensionForType(type)}`;
 }
 
 export function normalizeListingImageFile(file: File, index: number) {
@@ -283,8 +175,9 @@ export function normalizeListingImageFile(file: File, index: number) {
     throw new Error(formatError ?? `This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`);
   }
 
-  const normalizedName = safeImageName(index, normalizedType);
-  if (file.type === normalizedType && file.name.toLowerCase().endsWith(`.${getListingImageExtensionForType(normalizedType)}`)) {
+  const extension = getListingImageExtensionForType(normalizedType);
+  const normalizedName = `listing-image-${index + 1}.${extension}`;
+  if (file.type === normalizedType && file.name.toLowerCase().endsWith(`.${extension}`)) {
     return file;
   }
 
@@ -305,43 +198,6 @@ function warnUploadStage(stage: UploadStage, files: File[], error: unknown, fail
   });
 }
 
-function isImageProcessingFailure(error: unknown) {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-
-  const message = error.message.toLowerCase();
-  if (
-    message.includes("server_image_upload_failed") ||
-    message.includes("server_upload_response_missing") ||
-    message.includes("storage") ||
-    message.includes("bucket") ||
-    message.includes("policy")
-  ) {
-    return false;
-  }
-
-  return (
-    message.includes("compression") ||
-    message.includes("convert") ||
-    message.includes("decode") ||
-    message.includes("dimension") ||
-    message.includes("load") ||
-    message.includes("canvas") ||
-    message.includes("webp") ||
-    message.includes("todataurl") ||
-    message.includes("toblob")
-  );
-}
-
-function canUploadOriginalThroughServer(file: File) {
-  return file.size <= MAX_LISTING_FINAL_IMAGE_BYTES && !isServerConvertedListingImageFile(file);
-}
-
-function shouldUsePrivateOriginalConversion(file: File) {
-  return file.size > MAX_SERVER_CONVERT_IMAGE_BYTES || isServerConvertedListingImageFile(file);
-}
-
 async function uploadBrowserProcessedImage(
   file: File,
   token: string,
@@ -349,14 +205,23 @@ async function uploadBrowserProcessedImage(
   watermark: ListingImageWatermark,
   order: number,
   allFiles: File[]
-): Promise<{ imageUrl: string; imageVariant: ListingImageVariant | null }> {
+): Promise<{ imageUrl: string; imageVariant: ListingImageVariant }> {
+  let optimized: Awaited<ReturnType<typeof processListingImage>>;
   try {
-    const optimized = await processListingImage(file, watermark);
+    optimized = await processListingImage(file, watermark);
+  } catch (error) {
+    warnUploadStage("browser-compress", allFiles, error, order);
+    throw new Error(IMAGE_COMPRESS_FAILED_MESSAGE);
+  }
+
+  try {
+    const heroType = normalizeListingImageType(optimized.hero);
+    const cardType = normalizeListingImageType(optimized.card);
     const heroUrl = await uploadFinalImage(
       optimized.hero,
       token,
       userId,
-      `listing-image-${order + 1}-hero.webp`,
+      safeImageName(order, heroType, "hero"),
       allFiles,
       order
     );
@@ -364,7 +229,7 @@ async function uploadBrowserProcessedImage(
       optimized.card,
       token,
       userId,
-      `listing-image-${order + 1}-card.webp`,
+      safeImageName(order, cardType, "card"),
       allFiles,
       order
     );
@@ -383,31 +248,8 @@ async function uploadBrowserProcessedImage(
       }
     };
   } catch (error) {
-    if (!isImageProcessingFailure(error)) {
-      warnUploadStage("server-final-upload", allFiles, error, order);
-      throw error;
-    }
-
-    warnUploadStage("browser-compress", allFiles, error, order);
-    if (file.size > MAX_SERVER_CONVERT_IMAGE_BYTES) {
-      const converted = await convertViaPrivateOriginal(file, token, userId, order);
-      return {
-        imageUrl: converted.imageUrls[0],
-        imageVariant: converted.imageVariants[0] ?? null
-      };
-    }
-
-    let imageUrl: string;
-    if (canUploadOriginalThroughServer(file)) {
-      imageUrl = await uploadViaServer(file, token, safeImageName(order, normalizeListingImageType(file)));
-    } else {
-      const converted = await convertViaPrivateOriginal(file, token, userId, order);
-      return {
-        imageUrl: converted.imageUrls[0],
-        imageVariant: converted.imageVariants[0] ?? null
-      };
-    }
-    return { imageUrl, imageVariant: null };
+    warnUploadStage("server-final-upload", allFiles, error, order);
+    throw error;
   }
 }
 
@@ -441,44 +283,15 @@ export async function uploadListingImages(files: File[], token: string): Promise
   const watermark = await getListingImageWatermark(token);
   const imageUrls: string[] = [];
   const imageVariants: ListingImageVariant[] = [];
-  let hasRawFallback = false;
 
   for (const [index, file] of acceptedFiles.entries()) {
-    if (shouldUsePrivateOriginalConversion(file)) {
-      try {
-        const converted =
-          file.size <= MAX_SERVER_CONVERT_IMAGE_BYTES && isServerConvertedListingImageFile(file)
-            ? await convertViaServer(file, token, index)
-            : await convertViaPrivateOriginal(file, token, userId, index);
-        imageUrls.push(converted.imageUrls[0]);
-        if (converted.imageVariants[0]) {
-          imageVariants.push(converted.imageVariants[0]);
-        } else {
-          hasRawFallback = true;
-        }
-        continue;
-      } catch (error) {
-        warnUploadStage("server-convert", acceptedFiles, error, index);
-        throw error;
-      }
-    }
-
-    try {
-      const uploaded = await uploadBrowserProcessedImage(file, token, userId, watermark, index, acceptedFiles);
-      imageUrls.push(uploaded.imageUrl);
-      if (uploaded.imageVariant) {
-        imageVariants.push(uploaded.imageVariant);
-      } else {
-        hasRawFallback = true;
-      }
-    } catch (error) {
-      warnUploadStage("server-raw-upload", acceptedFiles, error, index);
-      throw error;
-    }
+    const uploaded = await uploadBrowserProcessedImage(file, token, userId, watermark, index, acceptedFiles);
+    imageUrls.push(uploaded.imageUrl);
+    imageVariants.push(uploaded.imageVariant);
   }
 
   return {
     imageUrls,
-    imageVariants: hasRawFallback || imageVariants.length !== imageUrls.length ? [] : imageVariants
+    imageVariants
   };
 }

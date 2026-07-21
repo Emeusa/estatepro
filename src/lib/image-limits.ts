@@ -1,25 +1,21 @@
-export const MAX_LISTING_IMAGES = 10;
+export const MAX_LISTING_IMAGES = 15;
 export const MAX_LISTING_FINAL_IMAGE_BYTES = 5 * 1024 * 1024;
 export const MAX_LISTING_FINAL_IMAGE_MB = MAX_LISTING_FINAL_IMAGE_BYTES / (1024 * 1024);
-export const MAX_LISTING_ORIGINAL_IMAGE_BYTES = 15 * 1024 * 1024;
+export const MAX_LISTING_ORIGINAL_IMAGE_BYTES = 20 * 1024 * 1024;
 export const MAX_LISTING_ORIGINAL_IMAGE_MB = MAX_LISTING_ORIGINAL_IMAGE_BYTES / (1024 * 1024);
 export const MAX_LISTING_IMAGE_BYTES = MAX_LISTING_ORIGINAL_IMAGE_BYTES;
 export const MAX_LISTING_IMAGE_MB = MAX_LISTING_ORIGINAL_IMAGE_MB;
-export const MAX_SERVER_CONVERT_IMAGE_BYTES = 4 * 1024 * 1024;
-export const MAX_SERVER_CONVERT_IMAGE_MB = MAX_SERVER_CONVERT_IMAGE_BYTES / (1024 * 1024);
 export const BROWSER_PROCESSABLE_LISTING_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
-export const SERVER_CONVERTED_LISTING_IMAGE_TYPES = ["image/heic", "image/heif", "image/avif"] as const;
 export const LISTING_GALLERY_PICKER_ACCEPT = `${BROWSER_PROCESSABLE_LISTING_IMAGE_TYPES.join(
   ","
-)},.jpg,.jpeg,.png,.webp`;
-export const SUPPORTED_LISTING_IMAGE_TYPES = [
-  ...BROWSER_PROCESSABLE_LISTING_IMAGE_TYPES,
-  ...SERVER_CONVERTED_LISTING_IMAGE_TYPES
-] as const;
+)},.jpg,.jpeg,.jpe,.jfif,.png,.webp`;
+export const SUPPORTED_LISTING_IMAGE_TYPES = [...BROWSER_PROCESSABLE_LISTING_IMAGE_TYPES] as const;
 export const SUPPORTED_LISTING_IMAGE_ACCEPT = `${SUPPORTED_LISTING_IMAGE_TYPES.join(
   ","
-)},.jpg,.jpeg,.jpe,.jfif,.png,.webp,.heic,.heif,.avif`;
-export const SUPPORTED_LISTING_IMAGE_LABEL = "JPG, PNG, WebP, HEIC/HEIF, and AVIF";
+)},.jpg,.jpeg,.jpe,.jfif,.png,.webp`;
+export const SUPPORTED_LISTING_IMAGE_LABEL = "JPG, PNG, and WebP";
+export const PHONE_HIGH_EFFICIENCY_IMAGE_MESSAGE =
+  "This phone photo format is not ready for direct upload. On iPhone, choose Options and send as JPG/Most Compatible, then upload again.";
 
 const MIME_BY_EXTENSION: Record<string, (typeof SUPPORTED_LISTING_IMAGE_TYPES)[number]> = {
   jpg: "image/jpeg",
@@ -27,22 +23,17 @@ const MIME_BY_EXTENSION: Record<string, (typeof SUPPORTED_LISTING_IMAGE_TYPES)[n
   jpe: "image/jpeg",
   jfif: "image/jpeg",
   png: "image/png",
-  webp: "image/webp",
-  heic: "image/heic",
-  heif: "image/heif",
-  avif: "image/avif"
+  webp: "image/webp"
 };
 
 const EXTENSION_BY_MIME: Record<(typeof SUPPORTED_LISTING_IMAGE_TYPES)[number], string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
-  "image/webp": "webp",
-  "image/heic": "heic",
-  "image/heif": "heif",
-  "image/avif": "avif"
+  "image/webp": "webp"
 };
 
 const RAW_LISTING_IMAGE_EXTENSIONS = new Set(["dng", "raw", "arw", "cr2", "cr3", "nef", "nrw", "orf", "raf", "rw2"]);
+const PHONE_HIGH_EFFICIENCY_EXTENSIONS = new Set(["heic", "heif", "avif"]);
 
 export function getListingImageExtension(name: string) {
   const extension = name.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? "";
@@ -60,6 +51,19 @@ export function isRawListingImageFile(file: Pick<File, "name" | "type">) {
   return type.includes("raw") || type === "image/x-adobe-dng" || Boolean(extension && RAW_LISTING_IMAGE_EXTENSIONS.has(extension));
 }
 
+export function isPhoneHighEfficiencyListingImageFile(file: Pick<File, "name" | "type">) {
+  const type = file.type.toLowerCase();
+  const extension = getListingImageFileExtension(file.name);
+  return (
+    type === "image/heic" ||
+    type === "image/heif" ||
+    type === "image/heic-sequence" ||
+    type === "image/heif-sequence" ||
+    type === "image/avif" ||
+    Boolean(extension && PHONE_HIGH_EFFICIENCY_EXTENSIONS.has(extension))
+  );
+}
+
 export function normalizeListingImageType(file: Pick<File, "name" | "type">) {
   const type = file.type.toLowerCase();
 
@@ -69,14 +73,6 @@ export function normalizeListingImageType(file: Pick<File, "name" | "type">) {
 
   if (type === "image/x-png") {
     return "image/png";
-  }
-
-  if (type === "image/heic-sequence") {
-    return "image/heic";
-  }
-
-  if (type === "image/heif-sequence") {
-    return "image/heif";
   }
 
   if (SUPPORTED_LISTING_IMAGE_TYPES.includes(type as (typeof SUPPORTED_LISTING_IMAGE_TYPES)[number])) {
@@ -96,21 +92,16 @@ export function isSupportedListingImageType(type: string) {
 }
 
 export function isSupportedListingImageFile(file: Pick<File, "name" | "type">) {
-  return !isRawListingImageFile(file) && normalizeListingImageType(file) !== null;
-}
-
-export function isServerConvertedListingImageFile(file: Pick<File, "name" | "type" | "size">) {
-  const normalizedType = normalizeListingImageType(file);
-  return (
-    normalizedType === "image/heic" ||
-    normalizedType === "image/heif" ||
-    normalizedType === "image/avif"
-  );
+  return !isRawListingImageFile(file) && !isPhoneHighEfficiencyListingImageFile(file) && normalizeListingImageType(file) !== null;
 }
 
 export function getListingImageFormatErrorMessage(file: Pick<File, "name" | "type">) {
   if (isRawListingImageFile(file)) {
     return "RAW photos are too large for listing uploads. Export as JPG first.";
+  }
+
+  if (isPhoneHighEfficiencyListingImageFile(file)) {
+    return PHONE_HIGH_EFFICIENCY_IMAGE_MESSAGE;
   }
 
   if (!normalizeListingImageType(file)) {

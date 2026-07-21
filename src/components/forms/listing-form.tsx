@@ -5,15 +5,14 @@ import { ChangeEvent, FormEvent, ReactNode, useEffect, useState } from "react";
 import { ApiRequestError, apiRequest } from "@/lib/api";
 import {
   getListingImageFormatErrorMessage,
+  getListingImageCountLimitMessage,
   isSupportedListingImageFile,
   LISTING_GALLERY_PICKER_ACCEPT,
   MAX_LISTING_IMAGES,
   MAX_LISTING_IMAGE_BYTES,
   MAX_LISTING_IMAGE_MB,
-  normalizeListingImageType,
   SUPPORTED_LISTING_IMAGE_LABEL
 } from "@/lib/image-limits";
-import { getThumbnailIndexAfterImageRemoval, mergeListingImageSelection } from "@/lib/listing-image-selection";
 import { getListingImages, reorderListingImageVariants } from "@/lib/listing-images";
 import { AVAILABILITY_LABELS, CATEGORY_AVAILABILITY, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
 import {
@@ -103,9 +102,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     listing ? listing.contactPhone === listing.contactWhatsapp : true
   );
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [imageInputKey, setImageInputKey] = useState(0);
-  const [uploadThumbnailIndex, setUploadThumbnailIndex] = useState(0);
   const [existingThumbnailIndex, setExistingThumbnailIndex] = useState(0);
 
   const lgas = getLgasForState(selectedState);
@@ -116,9 +113,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
 
   useEffect(() => {
     setSelectedFiles([]);
-    setPreviewUrls([]);
     setImageInputKey((current) => current + 1);
-    setUploadThumbnailIndex(0);
     setExistingThumbnailIndex(0);
     setSelectedState(listing?.location.state ?? "");
     setSelectedLga(listing?.location.city ?? "");
@@ -129,15 +124,6 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     setContactWhatsapp(listing?.contactWhatsapp ?? "");
     setWhatsappSameAsPhone(listing ? listing.contactPhone === listing.contactWhatsapp : true);
   }, [listing]);
-
-  useEffect(() => {
-    const urls = selectedFiles.map((file) => URL.createObjectURL(file));
-    setPreviewUrls(urls);
-
-    return () => {
-      urls.forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, [selectedFiles]);
 
   function moveToFront<T>(items: T[], index: number) {
     if (index <= 0 || index >= items.length) {
@@ -163,13 +149,6 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     return mergeListingFeatureValues(selectedValues, customText);
   }
 
-  function resetImageSelection() {
-    setSelectedFiles([]);
-    setPreviewUrls([]);
-    setUploadThumbnailIndex(0);
-    setImageInputKey((current) => current + 1);
-  }
-
   function clearImageError() {
     setFieldErrors((current) => {
       const next = { ...current };
@@ -187,80 +166,50 @@ export function ListingForm({ token, listing, onSaved }: Props) {
 
   function onImageChange(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
-    event.target.value = "";
 
     if (!files.length) {
+      setSelectedFiles([]);
       return;
     }
 
-    const mergedSelection = mergeListingImageSelection(selectedFiles, files);
-    if (mergedSelection.errorMessage) {
-      setImageError(mergedSelection.errorMessage);
+    const countLimitMessage = getListingImageCountLimitMessage(files.length);
+    if (countLimitMessage) {
+      setSelectedFiles([]);
+      setImageInputKey((current) => current + 1);
+      setImageError(countLimitMessage);
       return;
     }
 
-    const filesToAdd = mergedSelection.addedFiles;
-    if (!filesToAdd.length) {
-      clearImageError();
-      return;
-    }
-
-    const formatError = filesToAdd.map(getListingImageFormatErrorMessage).find(Boolean);
-    const unsupportedFile = filesToAdd.find((file) => !isSupportedListingImageFile(file));
-    const oversizedFile = filesToAdd.find((file) => file.size > MAX_LISTING_IMAGE_BYTES);
+    const formatError = files.map(getListingImageFormatErrorMessage).find(Boolean);
+    const unsupportedFile = files.find((file) => !isSupportedListingImageFile(file));
+    const oversizedFile = files.find((file) => file.size > MAX_LISTING_IMAGE_BYTES);
 
     if (formatError || unsupportedFile) {
+      setSelectedFiles([]);
+      setImageInputKey((current) => current + 1);
       setImageError(formatError ?? `This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`);
       return;
     }
 
     if (oversizedFile) {
+      setSelectedFiles([]);
+      setImageInputKey((current) => current + 1);
       setImageError(`Each image must be ${MAX_LISTING_IMAGE_MB} MB or less before compression.`);
       return;
     }
 
     let acceptedFiles: File[];
     try {
-      acceptedFiles = filesToAdd.map((file, index) => normalizeListingImageFile(file, selectedFiles.length + index));
+      acceptedFiles = files.map((file, index) => normalizeListingImageFile(file, index));
     } catch (error) {
+      setSelectedFiles([]);
+      setImageInputKey((current) => current + 1);
       setImageError(getUploadFailureMessage(error));
       return;
     }
 
     clearImageError();
-    setSelectedFiles((current) => [...current, ...acceptedFiles]);
-    if (!selectedFiles.length) {
-      setUploadThumbnailIndex(0);
-    }
-  }
-
-  function removeSelectedImage(index: number) {
-    setSelectedFiles((current) => {
-      const nextFiles = current.filter((_, currentIndex) => currentIndex !== index);
-      setUploadThumbnailIndex((currentIndex) => getThumbnailIndexAfterImageRemoval(currentIndex, index, nextFiles.length));
-      return nextFiles;
-    });
-    clearImageError();
-  }
-
-  function formatImageSize(bytes: number) {
-    const megabytes = bytes / (1024 * 1024);
-    return `${megabytes >= 1 ? megabytes.toFixed(1) : Math.max(1, Math.round(bytes / 1024))} ${
-      megabytes >= 1 ? "MB" : "KB"
-    }`;
-  }
-
-  function getImageFormatLabel(file: File) {
-    const normalizedType = normalizeListingImageType(file);
-    if (!normalizedType) {
-      return "Image";
-    }
-
-    if (normalizedType === "image/heic" || normalizedType === "image/heif") {
-      return "HEIC/HEIF";
-    }
-
-    return normalizedType.replace("image/", "").toUpperCase();
+    setSelectedFiles(acceptedFiles);
   }
 
   function getUploadFailureMessage(error: unknown) {
@@ -269,10 +218,6 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     }
 
     const message = error.message.toLowerCase();
-
-    if (message.includes("image_format_too_large")) {
-      return "This phone photo format is too large to process. Export as JPG first. Upload code: IMAGE_FORMAT_TOO_LARGE";
-    }
 
     if (message.includes("image_compress_failed")) {
       return "Image could not be compressed on this phone. Try JPG or upload fewer photos. Upload code: IMAGE_COMPRESS_FAILED";
@@ -295,23 +240,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     }
 
     if (message.includes("phone photo")) {
-      return "We could not process this phone photo. Try exporting it as JPG and upload again.";
-    }
-
-    if (message.includes("compress one of these phone photos")) {
-      return "We could not compress one of these phone photos. Try uploading fewer photos or export the photo as JPG.";
-    }
-
-    if (message.includes("temporary image storage is not configured")) {
-      return "Temporary image storage is not configured. Run the latest Supabase storage setup.";
-    }
-
-    if (message.includes("temporary image storage is blocked")) {
-      return "Temporary image storage is blocked by Supabase policy. Run the latest storage policies.";
-    }
-
-    if (message.includes("temporary copies")) {
-      return "We could not upload temporary copies of these photos for compression. Try smaller photos or fewer photos.";
+      return error.message;
     }
 
     if (message.includes("selected photos") || message.includes("without an image url")) {
@@ -405,7 +334,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     try {
       if (imageFiles.length) {
         try {
-          const uploadedImages = await uploadListingImages(moveToFront(imageFiles, uploadThumbnailIndex), token);
+          const uploadedImages = await uploadListingImages(imageFiles, token);
           payload.imageUrls = uploadedImages.imageUrls;
           payload.imageVariants = uploadedImages.imageVariants;
         } catch (error) {
@@ -435,9 +364,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
       if (!listing) {
         formElement.reset();
         setSelectedFiles([]);
-        setPreviewUrls([]);
         setImageInputKey((current) => current + 1);
-        setUploadThumbnailIndex(0);
         setExistingThumbnailIndex(0);
         setSelectedState("");
         setSelectedLga("");
@@ -641,79 +568,13 @@ export function ListingForm({ token, listing, onSaved }: Props) {
         />
         <p className="mt-1 text-xs text-slate-500">
           Choose photos from your gallery. You can select up to {MAX_LISTING_IMAGES} images. {selectedFiles.length}/
-          {MAX_LISTING_IMAGES} selected. If your phone provides HEIC/HEIF or AVIF files, they will be compressed
-          automatically. Each original image must be {MAX_LISTING_IMAGE_MB} MB or less.
+          {MAX_LISTING_IMAGES} photos selected. Each original image must be {MAX_LISTING_IMAGE_MB} MB or less.
         </p>
+        <p className="mt-1 text-xs text-slate-500">For iPhone HEIC photos, choose Options and send as JPG/Most Compatible.</p>
         <p className="mt-1 text-xs text-slate-500">The first selected image becomes the listing thumbnail.</p>
         {fieldErrors.images ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.images}</p> : null}
       </div>
-      {previewUrls.length ? (
-        <div className="rounded-2xl border border-slate-200 p-3">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-medium text-slate-950">Review selected photos</p>
-              <p className="text-xs font-semibold text-slate-500">Tap a photo to choose the listing thumbnail.</p>
-            </div>
-            <button
-              type="button"
-              className="w-fit rounded-full border border-rose-200 px-4 py-2 text-xs font-bold text-rose-700 transition hover:border-rose-400"
-              onClick={resetImageSelection}
-            >
-              Clear all
-            </button>
-          </div>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            {previewUrls.map((url, index) => (
-              <div
-                key={url}
-                className={`overflow-hidden rounded-2xl border text-left transition ${
-                  uploadThumbnailIndex === index ? "border-teal-600 ring-2 ring-teal-100" : "border-slate-200"
-                }`}
-              >
-                <button type="button" className="block w-full text-left" onClick={() => setUploadThumbnailIndex(index)}>
-                  <span
-                    aria-hidden="true"
-                    className="block h-28 w-full bg-cover bg-center"
-                    style={{ backgroundImage: `url("${url}")` }}
-                  />
-                </button>
-                <div className="space-y-2 px-3 py-2">
-                  <div>
-                    <p className="truncate text-xs font-semibold text-slate-700">
-                      {selectedFiles[index]?.name ?? `Photo ${index + 1}`}
-                    </p>
-                    {selectedFiles[index] ? (
-                      <p className="text-[11px] font-medium text-slate-500">
-                        {getImageFormatLabel(selectedFiles[index])} - {formatImageSize(selectedFiles[index].size)}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      className={`rounded-full px-3 py-1 text-[11px] font-bold ${
-                        uploadThumbnailIndex === index
-                          ? "bg-teal-700 text-white"
-                          : "border border-slate-200 text-slate-600 hover:border-teal-600 hover:text-teal-800"
-                      }`}
-                      onClick={() => setUploadThumbnailIndex(index)}
-                    >
-                      {uploadThumbnailIndex === index ? "Thumbnail selected" : "Use as thumbnail"}
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-full border border-rose-200 px-3 py-1 text-[11px] font-bold text-rose-700 hover:border-rose-400"
-                      onClick={() => removeSelectedImage(index)}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : existingImages.length ? (
+      {existingImages.length ? (
         <div className="rounded-2xl border border-slate-200 p-3">
           <p className="text-sm font-medium text-slate-950">Current listing thumbnail</p>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">

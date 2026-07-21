@@ -4,8 +4,6 @@ const mocks = vi.hoisted(() => ({
   apiRequest: vi.fn(),
   getSession: vi.fn(),
   getPublicUrl: vi.fn(),
-  originalRemove: vi.fn(),
-  originalUpload: vi.fn(),
   processListingImage: vi.fn(),
   publicRemove: vi.fn(),
   publicUpload: vi.fn()
@@ -25,20 +23,11 @@ vi.mock("@/lib/supabase/client", () => ({
       getSession: mocks.getSession
     },
     storage: {
-      from: (bucket: string) => {
-        if (bucket === "listing-image-originals") {
-          return {
-            remove: mocks.originalRemove,
-            upload: mocks.originalUpload
-          };
-        }
-
-        return {
-          getPublicUrl: mocks.getPublicUrl,
-          remove: mocks.publicRemove,
-          upload: mocks.publicUpload
-        };
-      }
+      from: () => ({
+        getPublicUrl: mocks.getPublicUrl,
+        remove: mocks.publicRemove,
+        upload: mocks.publicUpload
+      })
     }
   }
 }));
@@ -47,10 +36,11 @@ function makeFile(name: string, size: number, type = "image/jpeg") {
   return new File([new Uint8Array(size)], name, { type, lastModified: 1 });
 }
 
-function processedImage(index = 0) {
+function processedImage(index = 0, type = "image/webp") {
+  const extension = type === "image/jpeg" ? "jpg" : "webp";
   return {
-    hero: new File([new Uint8Array(256)], `hero-${index}.webp`, { type: "image/webp" }),
-    card: new File([new Uint8Array(128)], `card-${index}.webp`, { type: "image/webp" }),
+    hero: new File([new Uint8Array(256)], `hero-${index}.${extension}`, { type }),
+    card: new File([new Uint8Array(128)], `card-${index}.${extension}`, { type }),
     blurDataUrl: "data:image/webp;base64,abc",
     width: 1200,
     height: 800,
@@ -65,90 +55,57 @@ describe("client listing image upload flow", () => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
 
     mocks.getSession.mockResolvedValue({ data: { session: { user: { id: "agent-id" } } } });
-    mocks.apiRequest.mockResolvedValue({ ok: true, user: { fullName: "Test Agent" }, profile: { subscription: null } });
+    mocks.apiRequest.mockImplementation(async (url: string) => {
+      if (url === "/api/agents/me") {
+        return { user: { fullName: "Test Agent" }, profile: { agent: { businessName: null }, subscription: null } };
+      }
+
+      return { ok: true };
+    });
     mocks.getPublicUrl.mockImplementation((path: string) => ({
       data: { publicUrl: `https://example.supabase.co/storage/v1/object/public/listing-images/${path}` }
     }));
-    mocks.originalRemove.mockResolvedValue({ error: null });
-    mocks.originalUpload.mockResolvedValue({ error: null });
     mocks.publicRemove.mockResolvedValue({ error: null });
     mocks.publicUpload.mockResolvedValue({ error: null });
     mocks.processListingImage.mockImplementation(async () => processedImage());
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (url: string) => {
-        if (url.includes("/api/uploads/listing-images/convert")) {
-          return Response.json({
-            imageUrls: ["https://example.supabase.co/storage/v1/object/public/listing-images/agent-id/hero.webp"],
-            imageVariants: [
-              {
-                heroUrl: "https://example.supabase.co/storage/v1/object/public/listing-images/agent-id/hero.webp",
-                cardUrl: "https://example.supabase.co/storage/v1/object/public/listing-images/agent-id/card.webp",
-                blurDataUrl: "data:image/webp;base64,abc",
-                width: 1200,
-                height: 800,
-                cardWidth: 600,
-                cardHeight: 400,
-                order: 0
-              }
-            ]
-          });
-        }
-
-        return Response.json({ url: "https://example.supabase.co/storage/v1/object/public/listing-images/agent-id/server.webp" });
-      })
+      vi.fn(async () =>
+        Response.json({ url: "https://example.supabase.co/storage/v1/object/public/listing-images/agent-id/server.webp" })
+      )
     );
   });
 
-  it("keeps six common Android-sized JPEGs on the sequential browser processing path", async () => {
+  it("keeps large phone JPEGs on the browser compression path", async () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
-    const files = Array.from({ length: 6 }, (_, index) => makeFile(`android-${index}.jpg`, Math.round(3.7 * 1024 * 1024)));
-
-    await uploadListingImages(files, "token");
-
-    expect(mocks.processListingImage).toHaveBeenCalledTimes(6);
-    expect(mocks.publicUpload).toHaveBeenCalledTimes(12);
-    expect(fetch).not.toHaveBeenCalledWith(
-      "/api/uploads/listing-images/fallback",
-      expect.objectContaining({ method: "POST" })
-    );
-    expect(mocks.originalUpload).not.toHaveBeenCalled();
-  });
-
-  it("routes large phone JPEGs through private original conversion instead of multipart conversion", async () => {
-    const { uploadListingImages } = await import("../../src/lib/uploads");
-    const files = [makeFile("android-large.jpg", Math.round(4.5 * 1024 * 1024))];
+    const files = [makeFile("android-large.jpg", Math.round(8 * 1024 * 1024))];
 
     const result = await uploadListingImages(files, "token");
 
+    expect(result.imageUrls).toHaveLength(1);
     expect(result.imageVariants).toHaveLength(1);
-    expect(mocks.processListingImage).not.toHaveBeenCalled();
-    expect(mocks.publicUpload).not.toHaveBeenCalled();
-    expect(mocks.originalUpload).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledWith(
+    expect(mocks.processListingImage).toHaveBeenCalledTimes(1);
+    expect(mocks.publicUpload).toHaveBeenCalledTimes(2);
+    expect(fetch).not.toHaveBeenCalledWith(
       "/api/uploads/listing-images/convert",
-      expect.objectContaining({
-        method: "POST",
-        body: expect.stringContaining("-original.jpg")
-      })
+      expect.objectContaining({ method: "POST" })
     );
   });
 
-  it("uploads ten listing images without relying on upload route rate limits", async () => {
+  it("uploads fifteen listing images without server conversion", async () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
-    const files = Array.from({ length: 10 }, (_, index) => makeFile(`listing-${index}.jpg`, 500_000));
+    const files = Array.from({ length: 15 }, (_, index) => makeFile(`listing-${index}.jpg`, 500_000));
 
     const result = await uploadListingImages(files, "token");
 
-    expect(result.imageUrls).toHaveLength(10);
-    expect(result.imageVariants).toHaveLength(10);
-    expect(mocks.processListingImage).toHaveBeenCalledTimes(10);
-    expect(mocks.publicUpload).toHaveBeenCalledTimes(20);
+    expect(result.imageUrls).toHaveLength(15);
+    expect(result.imageVariants).toHaveLength(15);
+    expect(mocks.processListingImage).toHaveBeenCalledTimes(15);
+    expect(mocks.publicUpload).toHaveBeenCalledTimes(30);
     expect(fetch).not.toHaveBeenCalledWith(
-      "/api/uploads/listing-images/fallback",
+      "/api/uploads/listing-images/convert",
       expect.objectContaining({ method: "POST" })
     );
-    expect(mocks.originalUpload).not.toHaveBeenCalled();
   });
 
   it("processes browser-optimized images sequentially", async () => {
@@ -157,7 +114,7 @@ describe("client listing image upload flow", () => {
     let active = 0;
     let maxActive = 0;
 
-    mocks.processListingImage.mockImplementation(async (_file, _watermark) => {
+    mocks.processListingImage.mockImplementation(async () => {
       active += 1;
       maxActive = Math.max(maxActive, active);
       await Promise.resolve();
@@ -171,7 +128,7 @@ describe("client listing image upload flow", () => {
     expect(maxActive).toBe(1);
   });
 
-  it("falls back to authenticated server upload when direct storage upload fails and retries transient fallback failures", async () => {
+  it("falls back to authenticated server upload only for compressed final images", async () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
     const files = [makeFile("small.jpg", 500_000)];
     let uploadAttempts = 0;
@@ -180,12 +137,9 @@ describe("client listing image upload flow", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
-        if (!url.includes("/api/uploads/listing-images/fallback")) {
-          return Response.json({});
-        }
-
+        expect(url).toBe("/api/uploads/listing-images/fallback");
         uploadAttempts += 1;
-        if (uploadAttempts === 1) {
+        if (uploadAttempts % 2 === 1) {
           return Response.json({ message: "Server image upload failed." }, { status: 500 });
         }
 
@@ -196,89 +150,62 @@ describe("client listing image upload flow", () => {
     const result = await uploadListingImages(files, "token");
 
     expect(result.imageVariants).toHaveLength(1);
-    expect(uploadAttempts).toBe(3);
+    expect(uploadAttempts).toBe(4);
     expect(mocks.publicUpload).toHaveBeenCalledTimes(2);
   });
 
-  it("uploads small hard phone formats through the multipart server conversion endpoint", async () => {
+  it("keeps JPEG fallback output as valid final variants", async () => {
+    const { uploadListingImages } = await import("../../src/lib/uploads");
+    const files = [makeFile("small.jpg", 500_000)];
+
+    mocks.processListingImage.mockResolvedValue(processedImage(0, "image/jpeg"));
+
+    const result = await uploadListingImages(files, "token");
+
+    expect(result.imageVariants[0]?.heroUrl).toContain("-hero.jpg");
+    expect(result.imageVariants[0]?.cardUrl).toContain("-card.jpg");
+  });
+
+  it("uses business name watermark for Pro and Agency Plus agents", async () => {
+    const { uploadListingImages } = await import("../../src/lib/uploads");
+    const files = [makeFile("small.jpg", 500_000)];
+
+    mocks.apiRequest.mockImplementation(async (url: string) => {
+      if (url === "/api/agents/me") {
+        return {
+          user: { fullName: "Julie Stockton" },
+          profile: { agent: { businessName: "PCL HOMES" }, subscription: { planSlug: "agency_plus", status: "active", isActive: true } }
+        };
+      }
+
+      return { ok: true };
+    });
+
+    await uploadListingImages(files, "token");
+
+    expect(mocks.processListingImage).toHaveBeenCalledWith(files[0], { type: "agent", text: "PCL HOMES" });
+  });
+
+  it("rejects HEIC and AVIF with clear iPhone guidance instead of server conversion", async () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
     const files = [makeFile("ios-photo.heic", Math.round(3 * 1024 * 1024), "image/heic")];
 
-    const result = await uploadListingImages(files, "token");
-
-    expect(result.imageVariants).toHaveLength(1);
+    await expect(uploadListingImages(files, "token")).rejects.toThrow("choose Options and send as JPG/Most Compatible");
     expect(mocks.processListingImage).not.toHaveBeenCalled();
-    expect(fetch).toHaveBeenCalledWith(
+    expect(fetch).not.toHaveBeenCalledWith(
       "/api/uploads/listing-images/convert",
       expect.objectContaining({ method: "POST" })
     );
-    expect(mocks.originalUpload).not.toHaveBeenCalled();
   });
 
-  it("routes large hard phone formats through private original conversion", async () => {
+  it("returns a useful message when browser compression fails", async () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
-    const files = [makeFile("ios-photo.heic", Math.round(8 * 1024 * 1024), "image/heic")];
-
-    const result = await uploadListingImages(files, "token");
-
-    expect(result.imageVariants).toHaveLength(1);
-    expect(mocks.originalUpload).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledWith(
-      "/api/uploads/listing-images/convert",
-      expect.objectContaining({
-        method: "POST",
-        body: expect.stringContaining("-original.heic")
-      })
-    );
-  });
-
-  it("uses authenticated server fallback for browser-processable photos if mobile compression fails", async () => {
-    const { uploadListingImages } = await import("../../src/lib/uploads");
-    const files = [makeFile("android.jpg", Math.round(3 * 1024 * 1024))];
+    const files = [makeFile("android.jpg", Math.round(4 * 1024 * 1024))];
 
     mocks.processListingImage.mockRejectedValue(new Error("Canvas image decode failed"));
 
-    const result = await uploadListingImages(files, "token");
-
-    expect(result.imageVariants).toEqual([]);
-    expect(result.imageUrls).toEqual(["https://example.supabase.co/storage/v1/object/public/listing-images/agent-id/server.webp"]);
-    expect(mocks.originalUpload).not.toHaveBeenCalled();
-    expect(fetch).toHaveBeenCalledWith(
-      "/api/uploads/listing-images/fallback",
-      expect.objectContaining({
-        method: "POST"
-      })
-    );
-  });
-
-  it("uses private original conversion when compression fails for a large browser-processable photo", async () => {
-    const { uploadListingImages } = await import("../../src/lib/uploads");
-    const files = [makeFile("large-android.jpg", Math.round(8 * 1024 * 1024))];
-
-    mocks.processListingImage.mockRejectedValue(new Error("Canvas image decode failed"));
-
-    const result = await uploadListingImages(files, "token");
-
-    expect(result.imageVariants).toHaveLength(1);
-    expect(mocks.originalUpload).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledWith(
-      "/api/uploads/listing-images/convert",
-      expect.objectContaining({
-        method: "POST",
-        body: expect.stringContaining("-original.jpg")
-      })
-    );
-  });
-
-  it("removes temporary originals when private original conversion fails", async () => {
-    const { uploadListingImages } = await import("../../src/lib/uploads");
-    const files = [makeFile("ios-photo.heic", Math.round(8 * 1024 * 1024), "image/heic")];
-
-    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ message: "conversion failed" }, { status: 500 })));
-
-    await expect(uploadListingImages(files, "token")).rejects.toThrow("conversion failed");
-    expect(mocks.originalUpload).toHaveBeenCalledTimes(1);
-    expect(mocks.originalRemove).toHaveBeenCalledTimes(1);
+    await expect(uploadListingImages(files, "token")).rejects.toThrow("Upload code: IMAGE_COMPRESS_FAILED");
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("returns a useful message when server fallback succeeds without an image URL", async () => {
@@ -290,17 +217,6 @@ describe("client listing image upload flow", () => {
 
     await expect(uploadListingImages(files, "token")).rejects.toThrow(
       "Server upload completed without an image URL. Try again with fewer photos."
-    );
-  });
-
-  it("returns a useful message when server conversion returns a generic failure", async () => {
-    const { uploadListingImages } = await import("../../src/lib/uploads");
-    const files = [makeFile("ios-photo.heic", Math.round(3 * 1024 * 1024), "image/heic")];
-
-    vi.stubGlobal("fetch", vi.fn(async () => Response.json({}, { status: 500 })));
-
-    await expect(uploadListingImages(files, "token")).rejects.toThrow(
-      "Upload code: IMAGE_COMPRESS_FAILED"
     );
   });
 });
