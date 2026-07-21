@@ -79,6 +79,7 @@ export type AgentProfile = {
   verificationStatus: VerificationStatus;
   businessName: string | null;
   ninNumber: string | null;
+  cacNumber: string | null;
   isBlocked: boolean;
   trialEndsAt: string;
 };

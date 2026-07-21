@@ -32,6 +32,14 @@ function getFriendlyMessage(error: unknown) {
       return "Your NIN must be exactly 11 digits.";
     }
 
+    if (issue.path.includes("cacNumber")) {
+      return "Enter a valid CAC registration number.";
+    }
+
+    if (issue.path.includes("verification")) {
+      return "Provide either your NIN or CAC registration number.";
+    }
+
     if (issue.path.includes("acceptedLegalTerms")) {
       return "Please agree to the Terms and Conditions and Privacy Policy before creating an agent account.";
     }
@@ -46,6 +54,10 @@ function getFriendlyMessage(error: unknown) {
   const message = error.message.toLowerCase();
 
   if (message.includes("nin")) {
+    return error.message;
+  }
+
+  if (message.includes("cac")) {
     return error.message;
   }
 
@@ -127,7 +139,8 @@ export async function POST(request: NextRequest) {
       password: body.password,
       fullName: body.fullName,
       phone: body.phone,
-      ninNumber: body.ninNumber
+      ninNumber: body.ninNumber,
+      cacNumber: body.cacNumber
     });
     return withRateLimitHeaders(
       NextResponse.json(

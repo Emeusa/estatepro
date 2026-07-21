@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 const agentRules = [
-  "You must provide accurate identity, contact, NIN, agency, listing, price, location, ownership, mandate, and availability information.",
+  "You must provide accurate identity, contact, NIN or CAC details, agency, listing, price, location, ownership, mandate, and availability information.",
   "You must not impersonate a landlord, owner, developer, agent, company, government office, or any other person.",
   "You must not upload fake properties, stolen photos, misleading prices, duplicate scam listings, unavailable properties, or listings you are not authorized to market.",
   "You must promptly update a listing when it becomes sold, rented, booked, unavailable, disputed, or materially inaccurate.",
@@ -53,9 +53,9 @@ export default function TermsPage() {
           <h2 className="font-heading text-2xl font-semibold text-slate-950">2. Agent registration and verification</h2>
           <p className="mt-3">
             Agents must submit truthful registration information. C59 Estatehub may verify identity, contact details,
-            NIN, listing activity, account behavior, and fraud reports before approving or continuing an agent account.
-            Approval may be refused, delayed, suspended, or withdrawn where we detect inaccurate information, suspicious
-            behavior, user complaints, or fraud risk.
+            NIN, CAC registration details, listing activity, account behavior, and fraud reports before approving or
+            continuing an agent account. Approval may be refused, delayed, suspended, or withdrawn where we detect
+            inaccurate information, suspicious behavior, user complaints, or fraud risk.
           </p>
         </section>
 
@@ -105,9 +105,9 @@ export default function TermsPage() {
           </p>
           <p className="mt-3">
             If C59 Estatehub later publishes fraud reports or public safety posts, we may review, summarize, redact,
-            decline, or remove reports. We may hide sensitive information such as NIN, bank details, private addresses,
-            phone numbers not already public, payment credentials, and unverified accusations. Where practical, a
-            reported agent may be given a chance to respond before public publication.
+            decline, or remove reports. We may hide sensitive information such as NIN, CAC details, bank details,
+            private addresses, phone numbers not already public, payment credentials, and unverified accusations. Where
+            practical, a reported agent may be given a chance to respond before public publication.
           </p>
         </section>
 

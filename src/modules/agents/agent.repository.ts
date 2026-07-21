@@ -38,8 +38,16 @@ function mapSupabaseRegistrationError(message: string) {
     return "users table is missing or not initialized";
   }
 
+  if (value.includes("cac_number") && value.includes("does not exist")) {
+    return "Supabase setup is incomplete: CAC verification column is missing or not initialized.";
+  }
+
   if (value.includes("nin")) {
     return "An agent with this NIN already exists.";
+  }
+
+  if (value.includes("cac")) {
+    return "An agent with this CAC registration number already exists.";
   }
 
   if (value.includes("duplicate key value") || value.includes("already exists") || value.includes("user already registered")) {
@@ -109,10 +117,30 @@ async function assertNinAvailable(ninNumber: string) {
   }
 }
 
-async function assertRegistrationAvailable(input: { email: string; ninNumber?: string }) {
+async function assertCacAvailable(cacNumber: string) {
+  const supabase = createServerSupabaseClient();
+  const { data: existingAgent, error } = await supabase
+    .from("agents")
+    .select("id")
+    .eq("cac_number", cacNumber)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(mapSupabaseRegistrationError(error.message));
+  }
+
+  if (existingAgent) {
+    throw new RegistrationConflictError("An agent with this CAC registration number already exists.");
+  }
+}
+
+async function assertRegistrationAvailable(input: { email: string; ninNumber?: string | null; cacNumber?: string | null }) {
   await assertEmailAvailable(input.email);
   if (input.ninNumber) {
     await assertNinAvailable(input.ninNumber);
+  }
+  if (input.cacNumber) {
+    await assertCacAvailable(input.cacNumber);
   }
 }
 
@@ -202,10 +230,11 @@ export async function registerAgent(input: {
   password: string;
   fullName: string;
   phone: string;
-  ninNumber: string;
+  ninNumber: string | null;
+  cacNumber: string | null;
 }) {
   const supabase = createServerSupabaseClient();
-  await assertRegistrationAvailable({ email: input.email, ninNumber: input.ninNumber });
+  await assertRegistrationAvailable({ email: input.email, ninNumber: input.ninNumber, cacNumber: input.cacNumber });
   const userId = await createAuthUserWithConfirmation({
     email: input.email,
     password: input.password,
@@ -240,6 +269,7 @@ export async function registerAgent(input: {
       id: userId,
       verification_status: "pending" as const,
       nin_number: input.ninNumber,
+      cac_number: input.cacNumber,
       is_blocked: false,
       trial_ends_at: trialEndsAt
     };

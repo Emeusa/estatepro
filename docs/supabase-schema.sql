@@ -34,8 +34,10 @@ create table if not exists public.agents (
   verification_status text not null check (verification_status in ('pending', 'approved', 'rejected')),
   business_name text,
   nin_number text,
+  cac_number text,
   is_blocked boolean not null default false,
-  trial_ends_at timestamptz not null
+  trial_ends_at timestamptz not null,
+  check (nin_number is not null or cac_number is not null)
 );
 
 create table if not exists public.plans (
@@ -550,6 +552,7 @@ alter table public.listings
 
 alter table public.agents
   add column if not exists nin_number text,
+  add column if not exists cac_number text,
   add column if not exists business_name text;
 
 alter table public.listing_reports
@@ -709,6 +712,23 @@ begin
     alter table public.agents
       add constraint agents_nin_number_check
       check (nin_number is null or nin_number ~ '^[0-9]{11}$');
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint where conname = 'agents_cac_number_check'
+  ) then
+    alter table public.agents
+      add constraint agents_cac_number_check
+      check (cac_number is null or cac_number ~ '^[A-Z0-9][A-Z0-9-]{1,29}$');
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint where conname = 'agents_verification_identifier_check'
+  ) then
+    alter table public.agents
+      add constraint agents_verification_identifier_check
+      check (nin_number is not null or cac_number is not null)
+      not valid;
   end if;
 
   if not exists (
@@ -1062,6 +1082,10 @@ create index if not exists agents_public_visibility_idx
 create unique index if not exists agents_nin_number_unique_idx
   on public.agents (nin_number)
   where nin_number is not null;
+
+create unique index if not exists agents_cac_number_unique_idx
+  on public.agents (cac_number)
+  where cac_number is not null;
 
 create index if not exists security_events_created_at_idx
   on public.security_events (created_at desc);

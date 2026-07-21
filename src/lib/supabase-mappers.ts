@@ -24,6 +24,7 @@ type DatabaseAgent = {
   verification_status: AgentProfile["verificationStatus"];
   business_name?: string | null;
   nin_number: string | null;
+  cac_number?: string | null;
   is_blocked: boolean;
   trial_ends_at: string;
 };
@@ -177,6 +178,7 @@ export function toAgentProfile(row: DatabaseAgent): AgentProfile {
     verificationStatus: row.verification_status,
     businessName: normalizeBusinessName(row.business_name),
     ninNumber: row.nin_number ?? null,
+    cacNumber: row.cac_number ?? null,
     isBlocked: row.is_blocked,
     trialEndsAt: row.trial_ends_at
   };

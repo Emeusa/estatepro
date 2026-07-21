@@ -395,10 +395,21 @@ export default function AdminAgentDetailPage() {
 
           <div className="space-y-4">
             <div className="rounded-2xl border border-slate-300/80 bg-slate-200 p-4 shadow-sm sm:rounded-3xl sm:p-6">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">NIN details</p>
-              <p className="mt-3 break-all text-sm font-semibold text-slate-800">
-                {review.agent.ninNumber ?? "No NIN provided for this agent."}
-              </p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Verification details</p>
+              <dl className="mt-3 space-y-3 text-sm">
+                <div>
+                  <dt className="text-slate-500">NIN</dt>
+                  <dd className="mt-1 break-all font-semibold text-slate-800">
+                    {review.agent.ninNumber ?? "No NIN provided."}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500">CAC registration number</dt>
+                  <dd className="mt-1 break-all font-semibold text-slate-800">
+                    {review.agent.cacNumber ?? "No CAC provided."}
+                  </dd>
+                </div>
+              </dl>
               <div className="mt-6 rounded-2xl bg-slate-300/60 p-4 text-sm text-slate-600">
                 Admin-only verification information is shown here. Do not expose this data on public pages.
               </div>

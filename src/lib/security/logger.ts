@@ -16,7 +16,16 @@ function cleanMetadata(metadata?: Record<string, unknown>) {
     return {};
   }
 
-  const blockedKeys = new Set(["password", "token", "access_token", "refresh_token", "ninNumber", "nin_number"]);
+  const blockedKeys = new Set([
+    "password",
+    "token",
+    "access_token",
+    "refresh_token",
+    "ninNumber",
+    "nin_number",
+    "cacNumber",
+    "cac_number"
+  ]);
   return Object.fromEntries(
     Object.entries(metadata).filter(([key]) => !blockedKeys.has(key))
   );

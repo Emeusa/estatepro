@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 
 const dataCategories = [
   "Account data, including name, email address, phone number, role, authentication status, and profile updates.",
-  "Agent verification data, including NIN, verification status, blocked status, moderation decisions, and review history.",
+  "Agent verification data, including NIN, CAC registration details, verification status, blocked status, moderation decisions, and review history.",
   "Listing data, including titles, descriptions, prices, locations, images, image metadata, amenities, availability, contact numbers, and promotion status.",
   "Billing data, including plan, payment provider, transaction references, subscription status, billing mode, current period, and cancellation status.",
   "Security and analytics data, including request IDs, IP hashes, user agent, rate-limit events, security events, listing impressions, detail views, phone clicks, and WhatsApp clicks.",
@@ -56,7 +56,7 @@ export default function PrivacyPage() {
           <p className="mt-3">
             {SITE_NAME} processes personal data to operate a Nigerian property marketplace, verify agents, publish
             listings, prevent fraud, process subscriptions, provide support, and protect users. We apply privacy and
-            security controls so sensitive information, including full NIN values, is not made public.
+            security controls so sensitive information, including full NIN and CAC values, is not made public.
           </p>
         </section>
 
@@ -83,12 +83,13 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="font-heading text-2xl font-semibold text-slate-950">4. Agent verification and NIN data</h2>
+          <h2 className="font-heading text-2xl font-semibold text-slate-950">4. Agent verification data</h2>
           <p className="mt-3">
-            Agents submit NIN and related verification data so C59 Estatehub can reduce impersonation, fake agents, and
-            property fraud. Full NIN values are not shown publicly. Access is limited to trusted admin workflows and
-            server-side verification/support needs. We may retain verification records where reasonably necessary for
-            fraud prevention, account safety, dispute handling, legal compliance, or audit purposes.
+            Agents submit NIN, CAC registration details, or related verification data so C59 Estatehub can reduce
+            impersonation, fake agents, and property fraud. Full NIN and CAC values are not shown publicly. Access is
+            limited to trusted admin workflows and server-side verification/support needs. We may retain verification
+            records where reasonably necessary for fraud prevention, account safety, dispute handling, legal compliance,
+            or audit purposes.
           </p>
         </section>
 

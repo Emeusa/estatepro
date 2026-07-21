@@ -425,9 +425,20 @@ export function AgentRegisterForm() {
     const form = new FormData(event.currentTarget);
     const email = normalizeEmailInput(form.get("email")?.toString() ?? "");
     const ninNumber = form.get("ninNumber")?.toString().trim() ?? "";
+    const cacNumber = (form.get("cacNumber")?.toString() ?? "").trim().toUpperCase().replace(/\s+/g, "");
     const acceptedLegalTerms = form.get("acceptedLegalTerms") === "on";
-    if (!/^\d{11}$/.test(ninNumber)) {
+    if (!ninNumber && !cacNumber) {
+      setMessage("Provide either your NIN or CAC registration number.");
+      return;
+    }
+
+    if (ninNumber && !/^\d{11}$/.test(ninNumber)) {
       setMessage("Your NIN must be exactly 11 digits.");
+      return;
+    }
+
+    if (cacNumber && !/^[A-Z0-9][A-Z0-9-]{1,29}$/.test(cacNumber)) {
+      setMessage("Enter a valid CAC registration number.");
       return;
     }
 
@@ -447,7 +458,8 @@ export function AgentRegisterForm() {
           password,
           fullName: form.get("fullName"),
           phone: form.get("phone"),
-          ninNumber,
+          ninNumber: ninNumber || null,
+          cacNumber: cacNumber || null,
           acceptedLegalTerms,
           ...readBotFields(form)
         })
@@ -482,7 +494,14 @@ export function AgentRegisterForm() {
         }}
       />
       <input className="input" name="phone" placeholder="Phone e.g. 08031234567" />
-      <input className="input" name="ninNumber" inputMode="numeric" maxLength={11} placeholder="NIN number (11 digits)" />
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <p className="text-sm font-semibold text-slate-800">Verification details</p>
+        <p className="mt-1 text-xs text-slate-500">Provide either your personal NIN or your business CAC registration number.</p>
+        <div className="mt-3 grid gap-3">
+          <input className="input" name="ninNumber" inputMode="numeric" maxLength={11} placeholder="NIN number (optional)" />
+          <input className="input" name="cacNumber" autoCapitalize="characters" placeholder="CAC registration number (optional)" />
+        </div>
+      </div>
       <PasswordField name="password" placeholder="Password" value={password} onChange={setPassword} />
       <PasswordField
         name="confirmPassword"

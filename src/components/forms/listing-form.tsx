@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, ReactNode, useEffect, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, ReactNode, useEffect, useState } from "react";
 
 import { ApiRequestError, apiRequest } from "@/lib/api";
 import {
@@ -107,8 +107,6 @@ export function ListingForm({ token, listing, onSaved }: Props) {
   const [imageInputKey, setImageInputKey] = useState(0);
   const [uploadThumbnailIndex, setUploadThumbnailIndex] = useState(0);
   const [existingThumbnailIndex, setExistingThumbnailIndex] = useState(0);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
-  const browseInputRef = useRef<HTMLInputElement>(null);
 
   const lgas = getLgasForState(selectedState);
   const cityOptions = selectedLga && !lgas.includes(selectedLga) ? [selectedLga, ...lgas] : lgas;
@@ -595,71 +593,38 @@ export function ListingForm({ token, listing, onSaved }: Props) {
           ) : null}
         </div>
       </div>
-      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div>
         <input
-          ref={galleryInputRef}
-          key={`gallery-${imageInputKey}`}
-          className="sr-only"
-          type="file"
-          multiple
-          accept="image/*"
-          aria-label="Select listing photos from gallery"
-          onChange={onImageChange}
-        />
-        <input
-          ref={browseInputRef}
-          key={`browse-${imageInputKey}`}
-          className="sr-only"
+          className="input"
+          name="images"
+          key={imageInputKey}
           type="file"
           multiple
           accept={SUPPORTED_LISTING_IMAGE_ACCEPT}
-          aria-label="Browse listing image files"
           onChange={onImageChange}
         />
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-sm font-bold text-slate-950">Listing photos</p>
-            <p className="mt-1 text-xs text-slate-500">
-              {selectedFiles.length}/{MAX_LISTING_IMAGES} selected. Supports {SUPPORTED_LISTING_IMAGE_LABEL}. Large
-              phone photos are compressed automatically. Each original image must be {MAX_LISTING_IMAGE_MB} MB or less.
-            </p>
-            <p className="mt-1 text-xs text-slate-500">The first selected image becomes the listing thumbnail.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="rounded-full bg-teal-700 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-              disabled={selectedFiles.length >= MAX_LISTING_IMAGES}
-              onClick={() => galleryInputRef.current?.click()}
-            >
-              {selectedFiles.length ? "Add more photos" : "Select photos from gallery"}
-            </button>
-            <button
-              type="button"
-              className="rounded-full border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700 transition hover:border-teal-700 hover:text-teal-800 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
-              disabled={selectedFiles.length >= MAX_LISTING_IMAGES}
-              onClick={() => browseInputRef.current?.click()}
-            >
-              Browse files
-            </button>
-            {selectedFiles.length ? (
-              <button
-                type="button"
-                className="rounded-full border border-rose-200 px-4 py-2 text-xs font-bold text-rose-700 transition hover:border-rose-400"
-                onClick={resetImageSelection}
-              >
-                Clear all
-              </button>
-            ) : null}
-          </div>
-        </div>
-        {fieldErrors.images ? <p className="mt-3 text-sm text-rose-600">{fieldErrors.images}</p> : null}
+        <p className="mt-1 text-xs text-slate-500">
+          Choose files from your gallery or file manager. {selectedFiles.length}/{MAX_LISTING_IMAGES} selected. Supports{" "}
+          {SUPPORTED_LISTING_IMAGE_LABEL}. Large phone photos are compressed automatically. Each original image must be{" "}
+          {MAX_LISTING_IMAGE_MB} MB or less.
+        </p>
+        <p className="mt-1 text-xs text-slate-500">The first selected image becomes the listing thumbnail.</p>
+        {fieldErrors.images ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.images}</p> : null}
       </div>
       {previewUrls.length ? (
         <div className="rounded-2xl border border-slate-200 p-3">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm font-medium text-slate-950">Review selected photos</p>
-            <p className="text-xs font-semibold text-slate-500">Tap a photo to choose the listing thumbnail.</p>
+            <div>
+              <p className="text-sm font-medium text-slate-950">Review selected photos</p>
+              <p className="text-xs font-semibold text-slate-500">Tap a photo to choose the listing thumbnail.</p>
+            </div>
+            <button
+              type="button"
+              className="w-fit rounded-full border border-rose-200 px-4 py-2 text-xs font-bold text-rose-700 transition hover:border-rose-400"
+              onClick={resetImageSelection}
+            >
+              Clear all
+            </button>
           </div>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
             {previewUrls.map((url, index) => (

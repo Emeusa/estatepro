@@ -19,14 +19,18 @@ import { getListingOriginalPathBlockReason } from "../../src/lib/listing-image-o
 import { getListingImageUploadBlockReason } from "../../src/lib/upload-permissions";
 
 describe("listing image mobile file handling", () => {
-  it("uses a gallery-first picker plus strict file-browser fallback", () => {
+  it("uses the visible native picker with strict supported formats", () => {
     const source = readFileSync(path.join(process.cwd(), "src/components/forms/listing-form.tsx"), "utf8");
 
-    expect(source).toContain('accept="image/*"');
+    expect(source).toContain('name="images"');
+    expect(source).toContain('type="file"');
+    expect(source).toContain("multiple");
     expect(source).toContain("accept={SUPPORTED_LISTING_IMAGE_ACCEPT}");
-    expect(source).toContain("Select photos from gallery");
-    expect(source).toContain("Browse files");
-    expect(source).toContain("Add more photos");
+    expect(source).toContain('className="input"');
+    expect(source).toContain("Choose files from your gallery or file manager.");
+    expect(source).not.toContain('accept="image/*"');
+    expect(source).not.toContain("Select photos from gallery");
+    expect(source).not.toContain("Browse files");
   });
 
   it("accepts Android-style JPG metadata", () => {

@@ -41,16 +41,59 @@ const optionalBusinessNameSchema = z
   }, z.union([z.null(), z.string().trim().min(2).max(120)]))
   .transform((value) => (value === null ? null : normalizeBusinessName(value)));
 
-export const agentRegistrationSchema = z.object({
+const optionalNinNumberSchema = z
+  .preprocess((value) => {
+    if (value === undefined || value === null) {
+      return null;
+    }
+    if (typeof value === "string" && !value.trim()) {
+      return null;
+    }
+    return value;
+  }, z.union([z.null(), z.string().trim().regex(/^\d{11}$/, "NIN must be exactly 11 digits.")]));
+
+export function normalizeCacNumber(value: string) {
+  return sanitizeText(value).toUpperCase().replace(/\s+/g, "");
+}
+
+const optionalCacNumberSchema = z
+  .preprocess((value) => {
+    if (value === undefined || value === null) {
+      return null;
+    }
+    if (typeof value === "string" && !value.trim()) {
+      return null;
+    }
+    return value;
+  }, z.union([z.null(), z.string().trim().min(2).max(40)]))
+  .transform((value) => (value === null ? null : normalizeCacNumber(value)))
+  .refine((value) => value === null || /^[A-Z0-9][A-Z0-9-]{1,29}$/.test(value), {
+    message: "CAC registration number must use letters, numbers, or hyphens only."
+  });
+
+function requireAgentVerificationIdentifier(
+  value: { ninNumber?: string | null; cacNumber?: string | null },
+  context: z.RefinementCtx
+) {
+  if (!value.ninNumber && !value.cacNumber) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["verification"],
+      message: "Provide either your NIN or CAC registration number."
+    });
+  }
+}
+
+const agentRegistrationBaseSchema = z.object({
   email: normalizedEmailSchema,
   password: z.string().min(6).max(72),
   fullName: z.string().min(3).max(120).transform((value) => toNameCase(sanitizeText(value))),
   phone: z.string().min(10).max(20).transform(normalizePhone),
-  ninNumber: z
-    .string()
-    .trim()
-    .regex(/^\d{11}$/, "NIN must be exactly 11 digits.")
+  ninNumber: optionalNinNumberSchema,
+  cacNumber: optionalCacNumberSchema
 }).strict();
+
+export const agentRegistrationSchema = agentRegistrationBaseSchema.superRefine(requireAgentVerificationIdentifier);
 
 export const clientRegistrationSchema = z.object({
   email: normalizedEmailSchema,
@@ -67,12 +110,13 @@ export const clientRegistrationSchema = z.object({
   phone: optionalPhoneSchema
 }).strict();
 
-export const agentRegistrationRequestSchema = agentRegistrationSchema
+export const agentRegistrationRequestSchema = agentRegistrationBaseSchema
   .extend({
     ...botProtectionSchema.shape,
     acceptedLegalTerms: z.literal(true)
   })
-  .strict();
+  .strict()
+  .superRefine(requireAgentVerificationIdentifier);
 
 export const clientRegistrationRequestSchema = clientRegistrationSchema
   .extend(botProtectionSchema.shape)

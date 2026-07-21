@@ -33,7 +33,7 @@ vi.mock("@/lib/security/logger", () => ({
 
 import { POST } from "../../src/app/api/agents/register/route";
 
-function agentRegisterRequest() {
+function agentRegisterRequest(overrides: Record<string, unknown> = {}) {
   return new NextRequest("http://localhost:3000/api/agents/register", {
     method: "POST",
     body: JSON.stringify({
@@ -45,7 +45,8 @@ function agentRegisterRequest() {
       acceptedLegalTerms: true,
       website: "",
       formStartedAt: Date.now() - 5000,
-      turnstileToken: "token"
+      turnstileToken: "token",
+      ...overrides
     })
   });
 }
@@ -80,8 +81,53 @@ describe("registration confirmation flow", () => {
       password: "strongpass",
       fullName: "Test Agent",
       phone: "+2348031234567",
-      ninNumber: "12345678901"
+      ninNumber: "12345678901",
+      cacNumber: null
     });
+  });
+
+  it("returns a check-email redirect URL after CAC-only agent registration succeeds", async () => {
+    const response = await POST(agentRegisterRequest({ ninNumber: "", cacNumber: "rc 1234567" }));
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body.checkEmailUrl).toBe("/auth/check-email?email=agent%40example.com&type=agent");
+    expect(mocks.createAgentAccount).toHaveBeenCalledWith({
+      email: "agent@example.com",
+      password: "strongpass",
+      fullName: "Test Agent",
+      phone: "+2348031234567",
+      ninNumber: null,
+      cacNumber: "RC1234567"
+    });
+  });
+
+  it("rejects agent registration when both NIN and CAC are blank", async () => {
+    const response = await POST(agentRegisterRequest({ ninNumber: "", cacNumber: "" }));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.message).toBe("Provide either your NIN or CAC registration number.");
+    expect(mocks.createAgentAccount).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid CAC before account creation", async () => {
+    const response = await POST(agentRegisterRequest({ ninNumber: "", cacNumber: "RC/123" }));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.message).toBe("Enter a valid CAC registration number.");
+    expect(mocks.createAgentAccount).not.toHaveBeenCalled();
+  });
+
+  it("returns a conflict when CAC already belongs to another agent", async () => {
+    mocks.createAgentAccount.mockRejectedValueOnce(new Error("An agent with this CAC registration number already exists."));
+
+    const response = await POST(agentRegisterRequest({ ninNumber: "", cacNumber: "RC1234567" }));
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.message).toBe("An agent with this CAC registration number already exists.");
   });
 
   it("does not use the async React event target reset pattern in registration forms", () => {
@@ -90,6 +136,18 @@ describe("registration confirmation flow", () => {
     expect(source).not.toContain("event.currentTarget.reset()");
     expect(source).toContain('redirectToCheckEmail(email, "client", response.checkEmailUrl);');
     expect(source).toContain('redirectToCheckEmail(email, "agent", response.checkEmailUrl);');
+  });
+
+  it("checks CAC availability before creating the auth user", () => {
+    const source = readFileSync(path.join(process.cwd(), "src/modules/agents/agent.repository.ts"), "utf8");
+
+    expect(source).toContain("async function assertCacAvailable(cacNumber: string)");
+    expect(source).toContain('.eq("cac_number", cacNumber)');
+    expect(source).toContain("await assertRegistrationAvailable({ email: input.email, ninNumber: input.ninNumber, cacNumber: input.cacNumber });");
+    expect(source.indexOf("await assertRegistrationAvailable({ email: input.email")).toBeLessThan(
+      source.indexOf("const userId = await createAuthUserWithConfirmation")
+    );
+    expect(source).toContain("cac_number: input.cacNumber");
   });
 
   it("remounts auth Turnstile widgets after failed submissions", () => {
