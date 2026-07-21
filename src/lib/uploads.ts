@@ -4,11 +4,13 @@ import { processListingImage, type ListingImageWatermark } from "@/lib/image";
 import { getAgentDisplayName } from "@/lib/agent-display";
 import { apiRequest } from "@/lib/api";
 import {
+  BROWSER_PROCESSABLE_LISTING_IMAGE_TYPES,
   getListingImageFormatErrorMessage,
   getListingImageExtensionForType,
   getListingImageCountLimitMessage,
   isServerConvertedListingImageFile,
   isSupportedListingImageFile,
+  MAX_LISTING_FINAL_IMAGE_BYTES,
   MAX_LISTING_IMAGE_BYTES,
   MAX_LISTING_IMAGE_MB,
   normalizeListingImageType,
@@ -48,6 +50,8 @@ const SELECTED_PHOTO_UPLOAD_FAILED_MESSAGE =
   "We could not upload the selected photos. Check your connection and try again with fewer photos.";
 const TEMP_IMAGE_STORAGE_SETUP_MESSAGE = "Temporary image storage is not configured. Run the latest Supabase storage setup.";
 const TEMP_IMAGE_STORAGE_POLICY_MESSAGE = "Temporary image storage is blocked by Supabase policy. Run the latest storage policies.";
+const TEMP_IMAGE_ORIGINAL_UPLOAD_FAILED_MESSAGE =
+  "We could not upload temporary copies of these photos for compression. Try smaller photos or fewer photos.";
 const PHONE_PHOTO_PROCESSING_FAILED_MESSAGE =
   "We could not compress one of these phone photos. Try uploading fewer photos or export the photo as JPG.";
 const SERVER_UPLOAD_RESPONSE_FAILED_MESSAGE = "Server upload completed without an image URL. Try again with fewer photos.";
@@ -256,10 +260,34 @@ function getTemporaryOriginalUploadErrorMessage(error: unknown) {
   }
 
   if (isTransientStorageFailure(error)) {
-    return SELECTED_PHOTO_UPLOAD_FAILED_MESSAGE;
+    return TEMP_IMAGE_ORIGINAL_UPLOAD_FAILED_MESSAGE;
   }
 
   return "We could not prepare these phone photos for compression. Try uploading fewer photos.";
+}
+
+function canUploadOriginalsThroughServerFallback(files: File[]) {
+  return files.every((file) => {
+    const normalizedType = normalizeListingImageType(file);
+    return (
+      normalizedType &&
+      BROWSER_PROCESSABLE_LISTING_IMAGE_TYPES.includes(normalizedType as (typeof BROWSER_PROCESSABLE_LISTING_IMAGE_TYPES)[number]) &&
+      file.size <= MAX_LISTING_FINAL_IMAGE_BYTES
+    );
+  });
+}
+
+async function uploadOriginalsThroughServerFallback(files: File[], token: string): Promise<ListingImageUploadResult> {
+  const urls: string[] = [];
+
+  for (const [index, file] of files.entries()) {
+    urls.push(await uploadViaServerFallback(file, token, safeImageName(index, normalizeListingImageType(file))));
+  }
+
+  return {
+    imageUrls: urls,
+    imageVariants: []
+  };
 }
 
 async function uploadOriginalsForServerConversion(files: File[], token: string, userId: string) {
@@ -404,6 +432,14 @@ export async function uploadListingImages(files: File[], token: string): Promise
     }
 
     warnUploadFallback("process", acceptedFiles, error, processFailedIndex);
+    if (canUploadOriginalsThroughServerFallback(acceptedFiles)) {
+      try {
+        return await uploadOriginalsThroughServerFallback(acceptedFiles, token);
+      } catch (serverUploadError) {
+        warnUploadFallback("processed-server-upload", acceptedFiles, serverUploadError, processFailedIndex);
+      }
+    }
+
     try {
       return await uploadOriginalsForServerConversion(acceptedFiles, token, userId);
     } catch (conversionError) {

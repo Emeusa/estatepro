@@ -294,6 +294,10 @@ export function ListingForm({ token, listing, onSaved }: Props) {
       return "Temporary image storage is blocked by Supabase policy. Run the latest storage policies.";
     }
 
+    if (message.includes("temporary copies")) {
+      return "We could not upload temporary copies of these photos for compression. Try smaller photos or fewer photos.";
+    }
+
     if (message.includes("selected photos") || message.includes("without an image url")) {
       return "We could not upload the selected photos. Check your connection and try again with fewer photos.";
     }

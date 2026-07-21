@@ -100,20 +100,14 @@ describe("client listing image upload flow", () => {
     );
   });
 
-  it("routes six Android-sized JPEGs through server conversion instead of browser canvas processing", async () => {
+  it("keeps six common Android-sized JPEGs on the sequential browser processing path", async () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
     const files = Array.from({ length: 6 }, (_, index) => makeFile(`android-${index}.jpg`, Math.round(4.7 * 1024 * 1024)));
 
     await uploadListingImages(files, "token");
 
-    expect(mocks.processListingImage).not.toHaveBeenCalled();
-    expect(mocks.originalUpload).toHaveBeenCalledTimes(6);
-    expect(fetch).toHaveBeenCalledWith(
-      "/api/uploads/listing-images/convert",
-      expect.objectContaining({
-        method: "POST"
-      })
-    );
+    expect(mocks.processListingImage).toHaveBeenCalledTimes(6);
+    expect(mocks.originalUpload).not.toHaveBeenCalled();
   });
 
   it("processes browser-optimized images sequentially", async () => {
@@ -158,12 +152,42 @@ describe("client listing image upload flow", () => {
 
   it("returns a specific setup message when temporary original upload fails", async () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
-    const files = [makeFile("large.jpg", Math.round(4.7 * 1024 * 1024))];
+    const files = [makeFile("large.jpg", Math.round(9 * 1024 * 1024))];
 
     mocks.originalUpload.mockResolvedValue({ error: { message: "Bucket not found" } });
 
     await expect(uploadListingImages(files, "token")).rejects.toThrow(
       "Temporary image storage is not configured. Run the latest Supabase storage setup."
+    );
+  });
+
+  it("does not blame connection when temporary original upload fails transiently", async () => {
+    const { uploadListingImages } = await import("../../src/lib/uploads");
+    const files = [makeFile("large.jpg", Math.round(9 * 1024 * 1024))];
+
+    mocks.originalUpload.mockResolvedValue({ error: { message: "Network timeout while uploading to storage" } });
+
+    await expect(uploadListingImages(files, "token")).rejects.toThrow(
+      "We could not upload temporary copies of these photos for compression. Try smaller photos or fewer photos."
+    );
+  });
+
+  it("uses authenticated server fallback for browser-processable photos if mobile compression fails", async () => {
+    const { uploadListingImages } = await import("../../src/lib/uploads");
+    const files = [makeFile("android.jpg", Math.round(4.7 * 1024 * 1024))];
+
+    mocks.processListingImage.mockRejectedValue(new Error("Canvas image decode failed"));
+
+    const result = await uploadListingImages(files, "token");
+
+    expect(result.imageVariants).toEqual([]);
+    expect(result.imageUrls).toEqual(["https://example.supabase.co/storage/v1/object/public/listing-images/agent-id/server.webp"]);
+    expect(mocks.originalUpload).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/uploads/listing-images/fallback",
+      expect.objectContaining({
+        method: "POST"
+      })
     );
   });
 
@@ -181,7 +205,7 @@ describe("client listing image upload flow", () => {
 
   it("returns a useful message when server conversion returns a generic failure", async () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
-    const files = [makeFile("large.jpg", Math.round(4.7 * 1024 * 1024))];
+    const files = [makeFile("large.jpg", Math.round(9 * 1024 * 1024))];
 
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({}, { status: 500 })));
 

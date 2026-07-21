@@ -69,13 +69,20 @@ describe("listing image mobile file handling", () => {
     expect(isServerConvertedListingImageFile({ name: "ios-photo.heic", type: "image/heic", size: 3000000 })).toBe(true);
   });
 
-  it("routes large browser-supported phone photos to server conversion", () => {
-    expect(LARGE_BROWSER_LISTING_IMAGE_SERVER_CONVERSION_BYTES).toBe(4 * 1024 * 1024);
+  it("keeps common Android-sized JPEGs on the browser path and routes only very large photos to server conversion", () => {
+    expect(LARGE_BROWSER_LISTING_IMAGE_SERVER_CONVERSION_BYTES).toBe(8 * 1024 * 1024);
     expect(
       isServerConvertedListingImageFile({
         name: "android-gallery-photo.jpg",
         type: "image/jpeg",
         size: Math.round(4.7 * 1024 * 1024)
+      })
+    ).toBe(false);
+    expect(
+      isServerConvertedListingImageFile({
+        name: "very-large-gallery-photo.jpg",
+        type: "image/jpeg",
+        size: Math.round(9 * 1024 * 1024)
       })
     ).toBe(true);
   });
