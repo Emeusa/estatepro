@@ -30,6 +30,7 @@ type ServerConvertResponse = ListingImageUploadResult;
 type UploadStage =
   | "authorize"
   | "browser-compress"
+  | "direct-final-upload"
   | "server-final-upload"
   | "server-raw-upload"
   | "server-convert";
@@ -104,6 +105,29 @@ async function uploadViaServer(file: Blob, token: string, filename: string) {
   }
 
   throw new Error(SERVER_IMAGE_UPLOAD_FAILED_MESSAGE);
+}
+
+async function uploadDirectFinalImage(file: File, userId: string, filename: string) {
+  const path = `${userId}/${crypto.randomUUID()}-${filename}`;
+  const { error } = await supabase.storage.from("listing-images").upload(path, file, {
+    contentType: file.type,
+    upsert: false
+  });
+
+  if (error) {
+    throw new Error(`Direct storage upload failed. ${error.message} Upload code: DIRECT_STORAGE_UPLOAD_FAILED`);
+  }
+
+  return supabase.storage.from("listing-images").getPublicUrl(path).data.publicUrl;
+}
+
+async function uploadFinalImage(file: File, token: string, userId: string, filename: string, allFiles: File[], order: number) {
+  try {
+    return await uploadDirectFinalImage(file, userId, filename);
+  } catch (error) {
+    warnUploadStage("direct-final-upload", allFiles, error, order);
+    return await uploadViaServer(file, token, filename);
+  }
 }
 
 async function convertViaServer(file: File, token: string, order: number): Promise<ServerConvertResponse> {
@@ -249,14 +273,29 @@ function canUploadOriginalThroughServer(file: File) {
 async function uploadBrowserProcessedImage(
   file: File,
   token: string,
+  userId: string,
   watermark: ListingImageWatermark,
   order: number,
   allFiles: File[]
 ): Promise<{ imageUrl: string; imageVariant: ListingImageVariant | null }> {
   try {
     const optimized = await processListingImage(file, watermark);
-    const heroUrl = await uploadViaServer(optimized.hero, token, `listing-image-${order + 1}-hero.webp`);
-    const cardUrl = await uploadViaServer(optimized.card, token, `listing-image-${order + 1}-card.webp`);
+    const heroUrl = await uploadFinalImage(
+      optimized.hero,
+      token,
+      userId,
+      `listing-image-${order + 1}-hero.webp`,
+      allFiles,
+      order
+    );
+    const cardUrl = await uploadFinalImage(
+      optimized.card,
+      token,
+      userId,
+      `listing-image-${order + 1}-card.webp`,
+      allFiles,
+      order
+    );
 
     return {
       imageUrl: heroUrl,
@@ -288,7 +327,7 @@ async function uploadBrowserProcessedImage(
 }
 
 export async function uploadListingImages(files: File[], token: string): Promise<ListingImageUploadResult> {
-  await requireUserId();
+  const userId = await requireUserId();
   const countLimitMessage = getListingImageCountLimitMessage(files.length);
 
   if (countLimitMessage) {
@@ -337,7 +376,7 @@ export async function uploadListingImages(files: File[], token: string): Promise
     }
 
     try {
-      const uploaded = await uploadBrowserProcessedImage(file, token, watermark, index, acceptedFiles);
+      const uploaded = await uploadBrowserProcessedImage(file, token, userId, watermark, index, acceptedFiles);
       imageUrls.push(uploaded.imageUrl);
       if (uploaded.imageVariant) {
         imageVariants.push(uploaded.imageVariant);

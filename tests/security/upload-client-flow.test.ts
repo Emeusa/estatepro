@@ -107,12 +107,11 @@ describe("client listing image upload flow", () => {
     await uploadListingImages(files, "token");
 
     expect(mocks.processListingImage).toHaveBeenCalledTimes(6);
-    expect(fetch).toHaveBeenCalledTimes(12);
-    expect(fetch).toHaveBeenCalledWith(
+    expect(mocks.publicUpload).toHaveBeenCalledTimes(12);
+    expect(fetch).not.toHaveBeenCalledWith(
       "/api/uploads/listing-images/fallback",
       expect.objectContaining({ method: "POST" })
     );
-    expect(mocks.publicUpload).not.toHaveBeenCalled();
     expect(mocks.originalUpload).not.toHaveBeenCalled();
   });
 
@@ -125,8 +124,11 @@ describe("client listing image upload flow", () => {
     expect(result.imageUrls).toHaveLength(10);
     expect(result.imageVariants).toHaveLength(10);
     expect(mocks.processListingImage).toHaveBeenCalledTimes(10);
-    expect(fetch).toHaveBeenCalledTimes(20);
-    expect(mocks.publicUpload).not.toHaveBeenCalled();
+    expect(mocks.publicUpload).toHaveBeenCalledTimes(20);
+    expect(fetch).not.toHaveBeenCalledWith(
+      "/api/uploads/listing-images/fallback",
+      expect.objectContaining({ method: "POST" })
+    );
     expect(mocks.originalUpload).not.toHaveBeenCalled();
   });
 
@@ -150,11 +152,12 @@ describe("client listing image upload flow", () => {
     expect(maxActive).toBe(1);
   });
 
-  it("retries transient authenticated server upload failures before failing", async () => {
+  it("falls back to authenticated server upload when direct storage upload fails and retries transient fallback failures", async () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
     const files = [makeFile("small.jpg", 500_000)];
     let uploadAttempts = 0;
 
+    mocks.publicUpload.mockResolvedValue({ error: new Error("direct storage failed") });
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
@@ -175,7 +178,7 @@ describe("client listing image upload flow", () => {
 
     expect(result.imageVariants).toHaveLength(1);
     expect(uploadAttempts).toBe(3);
-    expect(mocks.publicUpload).not.toHaveBeenCalled();
+    expect(mocks.publicUpload).toHaveBeenCalledTimes(2);
   });
 
   it("uploads hard phone formats through the server conversion endpoint", async () => {
@@ -227,6 +230,7 @@ describe("client listing image upload flow", () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
     const files = [makeFile("small.jpg", 500_000)];
 
+    mocks.publicUpload.mockResolvedValue({ error: new Error("direct storage failed") });
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({})));
 
     await expect(uploadListingImages(files, "token")).rejects.toThrow(
