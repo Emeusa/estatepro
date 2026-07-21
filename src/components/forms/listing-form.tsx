@@ -7,7 +7,6 @@ import {
   getListingImageFormatErrorMessage,
   getListingImageCountLimitMessage,
   isSupportedListingImageFile,
-  LISTING_GALLERY_PICKER_ACCEPT,
   MAX_LISTING_IMAGES,
   MAX_LISTING_IMAGE_BYTES,
   MAX_LISTING_IMAGE_MB,
@@ -574,13 +573,20 @@ export function ListingForm({ token, listing, onSaved }: Props) {
         </div>
       </div>
       <div>
+        <label
+          htmlFor={`listing-gallery-${formKey}`}
+          className="flex cursor-pointer items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
+        >
+          Select photos from gallery
+        </label>
         <input
-          className="input"
+          id={`listing-gallery-${formKey}`}
+          className="sr-only"
           name="images"
           key={imageInputKey}
           type="file"
           multiple
-          accept={LISTING_GALLERY_PICKER_ACCEPT}
+          accept="image/*"
           onChange={onImageChange}
         />
         <p className="mt-1 text-xs text-slate-500">
