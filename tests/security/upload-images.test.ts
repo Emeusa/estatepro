@@ -36,7 +36,7 @@ describe("listing image mobile file handling", () => {
     expect(rateLimitSource).not.toContain("imageUpload");
   });
 
-  it("uses the visible native picker without heavy selected-photo controls", () => {
+  it("uses the visible native picker with a simple thumbnail selector", () => {
     const source = readFileSync(path.join(process.cwd(), "src/components/forms/listing-form.tsx"), "utf8");
 
     expect(source).toContain('name="images"');
@@ -46,6 +46,8 @@ describe("listing image mobile file handling", () => {
     expect(source).toContain('className="input"');
     expect(source).toContain("Choose photos from your gallery.");
     expect(source).toContain("photos selected");
+    expect(source).toContain("Choose upload thumbnail");
+    expect(source).toContain("Thumbnail selected");
     expect(source).not.toContain('accept="image/*"');
     expect(source).not.toContain("Review selected photos");
     expect(source).not.toContain("Clear all");

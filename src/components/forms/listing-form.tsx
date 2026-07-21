@@ -102,7 +102,9 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     listing ? listing.contactPhone === listing.contactWhatsapp : true
   );
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [imageInputKey, setImageInputKey] = useState(0);
+  const [uploadThumbnailIndex, setUploadThumbnailIndex] = useState(0);
   const [existingThumbnailIndex, setExistingThumbnailIndex] = useState(0);
 
   const lgas = getLgasForState(selectedState);
@@ -113,7 +115,9 @@ export function ListingForm({ token, listing, onSaved }: Props) {
 
   useEffect(() => {
     setSelectedFiles([]);
+    setPreviewUrls([]);
     setImageInputKey((current) => current + 1);
+    setUploadThumbnailIndex(0);
     setExistingThumbnailIndex(0);
     setSelectedState(listing?.location.state ?? "");
     setSelectedLga(listing?.location.city ?? "");
@@ -124,6 +128,15 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     setContactWhatsapp(listing?.contactWhatsapp ?? "");
     setWhatsappSameAsPhone(listing ? listing.contactPhone === listing.contactWhatsapp : true);
   }, [listing]);
+
+  useEffect(() => {
+    const urls = selectedFiles.map((file) => URL.createObjectURL(file));
+    setPreviewUrls(urls);
+
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [selectedFiles]);
 
   function moveToFront<T>(items: T[], index: number) {
     if (index <= 0 || index >= items.length) {
@@ -210,6 +223,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
 
     clearImageError();
     setSelectedFiles(acceptedFiles);
+    setUploadThumbnailIndex(0);
   }
 
   function getUploadFailureMessage(error: unknown) {
@@ -334,7 +348,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     try {
       if (imageFiles.length) {
         try {
-          const uploadedImages = await uploadListingImages(imageFiles, token);
+          const uploadedImages = await uploadListingImages(moveToFront(imageFiles, uploadThumbnailIndex), token);
           payload.imageUrls = uploadedImages.imageUrls;
           payload.imageVariants = uploadedImages.imageVariants;
         } catch (error) {
@@ -364,7 +378,9 @@ export function ListingForm({ token, listing, onSaved }: Props) {
       if (!listing) {
         formElement.reset();
         setSelectedFiles([]);
+        setPreviewUrls([]);
         setImageInputKey((current) => current + 1);
+        setUploadThumbnailIndex(0);
         setExistingThumbnailIndex(0);
         setSelectedState("");
         setSelectedLga("");
@@ -574,7 +590,32 @@ export function ListingForm({ token, listing, onSaved }: Props) {
         <p className="mt-1 text-xs text-slate-500">The first selected image becomes the listing thumbnail.</p>
         {fieldErrors.images ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.images}</p> : null}
       </div>
-      {existingImages.length ? (
+      {previewUrls.length ? (
+        <div className="rounded-2xl border border-slate-200 p-3">
+          <p className="text-sm font-medium text-slate-950">Choose upload thumbnail</p>
+          <div className="mt-3 grid grid-cols-3 gap-2 sm:gap-3">
+            {previewUrls.map((url, index) => (
+              <button
+                key={url}
+                type="button"
+                className={`overflow-hidden rounded-2xl border text-left transition ${
+                  uploadThumbnailIndex === index ? "border-teal-600 ring-2 ring-teal-100" : "border-slate-200"
+                }`}
+                onClick={() => setUploadThumbnailIndex(index)}
+              >
+                <span
+                  aria-hidden="true"
+                  className="block h-20 w-full bg-cover bg-center sm:h-28"
+                  style={{ backgroundImage: `url("${url}")` }}
+                />
+                <span className="block px-2 py-2 text-[11px] font-medium text-slate-600 sm:px-3">
+                  {uploadThumbnailIndex === index ? "Thumbnail selected" : "Use as thumbnail"}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : existingImages.length ? (
         <div className="rounded-2xl border border-slate-200 p-3">
           <p className="text-sm font-medium text-slate-950">Current listing thumbnail</p>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
