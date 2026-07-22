@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { formatDate, formatPrice, whatsappLink } from "@/lib/format";
+import { shouldOptimizeListingImage } from "@/lib/listing-image-optimization";
 import { trackListingEvent } from "@/lib/listing-events";
 import { getListingImages } from "@/lib/listing-images";
 import { getListingHref } from "@/lib/listing-urls";
@@ -83,6 +84,7 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
   const images = getListingImages(listing);
   const image = images[0];
   const previewImages = images.slice(1, 4);
+  const photoCount = listing.imageCount ?? images.length;
   const [previewRatios, setPreviewRatios] = useState<Record<number, number>>({});
   const promotionBadge = getListingPromotionBadge(listing);
   const listingHref = getListingHref(listing);
@@ -133,15 +135,15 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
               className="object-cover transition duration-300 group-hover:scale-[1.02] group-hover:opacity-95"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
               quality={70}
-              unoptimized={image.isPreprocessed}
+              unoptimized={!shouldOptimizeListingImage(image.cardUrl)}
             />
           ) : null}
-          {images.length > 1 ? (
+          {photoCount > 1 ? (
             <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-slate-950/80 px-2.5 py-1 text-xs font-bold text-white shadow-sm">
               <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current">
                 <path d="M7 5.5 8.4 4h7.2L17 5.5h2.5A2.5 2.5 0 0 1 22 8v9a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 2 17V8a2.5 2.5 0 0 1 2.5-2.5H7Zm5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0-1.8a2.2 2.2 0 1 1 0-4.4 2.2 2.2 0 0 1 0 4.4Z" />
               </svg>
-              {images.length}
+              {photoCount}
             </span>
           ) : null}
           {unavailableBadge ? (
@@ -175,7 +177,7 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
                 className="object-cover transition duration-300 group-hover:scale-[1.03] group-hover:opacity-95"
                 sizes="120px"
                 quality={70}
-                unoptimized={preview.isPreprocessed}
+                unoptimized={!shouldOptimizeListingImage(preview.cardUrl)}
                 onLoad={(event) => rememberPreviewRatio(index, event.currentTarget)}
               />
             </Link>

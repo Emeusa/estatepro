@@ -4,6 +4,7 @@ import { ZodError } from "zod";
 import { AuthError, requireAgent } from "@/lib/auth";
 import { captureServerError, logSecurityEvent } from "@/lib/security/logger";
 import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
+import { revalidateListingMutationPaths } from "@/modules/listings/listing-cache";
 import { applyListingPromotion } from "@/modules/promotions/promotion.service";
 
 type Props = {
@@ -20,6 +21,7 @@ export async function POST(request: NextRequest, { params }: Props) {
 
     const { listingId } = await params;
     const result = await applyListingPromotion(decoded.uid, listingId, await request.json());
+    revalidateListingMutationPaths(result.listing);
 
     await logSecurityEvent({
       request,

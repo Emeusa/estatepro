@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { formatPrice } from "@/lib/format";
+import { shouldOptimizeListingImage } from "@/lib/listing-image-optimization";
 import { trackListingEvent } from "@/lib/listing-events";
 import { SaveListingButton } from "@/components/listings/save-listing-button";
 
@@ -114,7 +115,15 @@ export function ListingContactActions({
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-slate-100">
             {thumbnailUrl ? (
-              <Image src={thumbnailUrl} alt="" fill className="object-cover" sizes="48px" quality={70} />
+              <Image
+                src={thumbnailUrl}
+                alt=""
+                fill
+                className="object-cover"
+                sizes="48px"
+                quality={70}
+                unoptimized={!shouldOptimizeListingImage(thumbnailUrl)}
+              />
             ) : (
               <div className="grid h-full w-full place-items-center text-slate-400">
                 <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-current">

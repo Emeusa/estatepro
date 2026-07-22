@@ -8,6 +8,7 @@ import {
 import { splitListingsByActiveLimit } from "@/lib/listing-limits";
 import { createPlanLimitLifecycle, getMediaBearingListingAllowance } from "@/lib/listing-retention";
 import { toNameCase } from "@/lib/format";
+import { getListingImageCount } from "@/lib/listing-images";
 import { getListingCardFeatureBadges } from "@/lib/listing-quality";
 import { rankListingsForFeed } from "@/lib/listing-visibility";
 import { toListingRecord } from "@/lib/supabase-mappers";
@@ -23,6 +24,7 @@ import {
 } from "@/lib/types";
 
 const PUBLIC_FEED_LISTINGS_SOURCE = "public_feed_listings";
+const PUBLIC_CARD_IMAGE_LIMIT = 4;
 
 type KeywordFilters = {
   state?: string;
@@ -132,8 +134,11 @@ function toPublicListingCardRecord(
     availability: listing.availability,
     status: listing.status,
     updatedAt: listing.updatedAt,
-    imageUrls: listing.imageUrls,
-    imageVariants: listing.imageVariants,
+    imageCount: getListingImageCount(listing),
+    imageUrls: listing.imageUrls.slice(0, PUBLIC_CARD_IMAGE_LIMIT),
+    imageVariants: [...listing.imageVariants]
+      .sort((first, second) => first.order - second.order)
+      .slice(0, PUBLIC_CARD_IMAGE_LIMIT),
     promotionType: listing.promotionType,
     featuredUntil: listing.featuredUntil,
     sponsoredUntil: listing.sponsoredUntil,

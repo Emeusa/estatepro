@@ -5,6 +5,7 @@ import { AuthError, requireAgent } from "@/lib/auth";
 import { captureServerError, logSecurityEvent } from "@/lib/security/logger";
 import { RATE_LIMITS, rateLimit, rateLimitByIp, withRateLimitHeaders } from "@/lib/security/rate-limit";
 import { mapListingErrors, mapListingRuntimeError, summarizeListingImageIssues } from "@/modules/listings/listing-error-mapper";
+import { revalidateListingMutationPaths } from "@/modules/listings/listing-cache";
 import {
   ensureAgentOwnsListing,
   getPublicListingDetails,
@@ -45,6 +46,7 @@ export async function PATCH(request: NextRequest, { params }: Props) {
     await ensureAgentOwnsListing(decoded.uid, listingId);
     const body = await request.json();
     const listing = await updateAgentListing(decoded.uid, listingId, body);
+    revalidateListingMutationPaths(listing);
     return withRateLimitHeaders(NextResponse.json({ listing }), limited.headers);
   } catch (error) {
     if (error instanceof ZodError) {
@@ -82,8 +84,9 @@ export async function DELETE(request: NextRequest, { params }: Props) {
       return limited.response;
     }
     const { listingId } = await params;
-    await ensureAgentOwnsListing(decoded.uid, listingId);
+    const listing = await ensureAgentOwnsListing(decoded.uid, listingId);
     await removeAgentListing(decoded.uid, listingId);
+    revalidateListingMutationPaths(listing);
     await logSecurityEvent({
       request,
       action: "listing_delete",

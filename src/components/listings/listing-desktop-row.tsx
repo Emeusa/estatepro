@@ -8,6 +8,7 @@ import { VerifiedBadgeIcon } from "@/components/agents/verified-badge";
 import { SaveListingButton } from "@/components/listings/save-listing-button";
 import { getQualityIconForLabel, QualityIcon } from "@/components/listings/listing-quality-icons";
 import { formatDate, formatPrice, whatsappLink } from "@/lib/format";
+import { shouldOptimizeListingImage } from "@/lib/listing-image-optimization";
 import { trackListingEvent } from "@/lib/listing-events";
 import { getListingImages } from "@/lib/listing-images";
 import { getListingHref } from "@/lib/listing-urls";
@@ -92,6 +93,7 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
   const images = getListingImages(listing);
   const image = images[0];
   const previewImages = images.slice(1, 4);
+  const photoCount = listing.imageCount ?? images.length;
   const listingHref = getListingHref(listing);
   const promotionBadge = getListingPromotionBadge(listing);
   const unavailableBadge = getUnavailableBadge(listing);
@@ -140,10 +142,10 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
               className="object-cover transition duration-300 group-hover:scale-[1.02] group-hover:opacity-95"
               sizes="(max-width: 1536px) 286px, 304px"
               quality={72}
-              unoptimized={image.isPreprocessed}
+              unoptimized={!shouldOptimizeListingImage(image.cardUrl)}
             />
           ) : null}
-          <PhotoCount count={images.length} />
+          <PhotoCount count={photoCount} />
           {unavailableBadge ? (
             <span className="absolute left-2.5 top-2.5 rounded-full bg-rose-600 px-2.5 py-0.5 text-[0.65rem] font-bold text-white shadow-sm">
               {unavailableBadge}
@@ -171,7 +173,7 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
                   className="object-cover transition duration-300 group-hover:scale-[1.03] group-hover:opacity-95"
                   sizes="90px"
                   quality={68}
-                  unoptimized={preview.isPreprocessed}
+                  unoptimized={!shouldOptimizeListingImage(preview.cardUrl)}
                 />
               </Link>
             ))}

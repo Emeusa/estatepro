@@ -1,0 +1,19 @@
+export function shouldOptimizeListingImage(url: string) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) {
+    return false;
+  }
+
+  try {
+    const imageUrl = new URL(url);
+    const configuredUrl = new URL(supabaseUrl);
+
+    return (
+      imageUrl.protocol === "https:" &&
+      imageUrl.hostname === configuredUrl.hostname &&
+      imageUrl.pathname.startsWith("/storage/v1/object/public/listing-images/")
+    );
+  } catch {
+    return false;
+  }
+}

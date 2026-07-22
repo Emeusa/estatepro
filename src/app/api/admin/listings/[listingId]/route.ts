@@ -4,6 +4,7 @@ import { AuthError, requireAdmin } from "@/lib/auth";
 import { captureServerError, logSecurityEvent } from "@/lib/security/logger";
 import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
 import { sendListingModerationEmail } from "@/modules/email/email.service";
+import { revalidateListingMutationPaths } from "@/modules/listings/listing-cache";
 import { updateListing } from "@/modules/listings/listing.repository";
 import { listingModerationSchema } from "@/modules/listings/listing.schema";
 
@@ -34,6 +35,7 @@ export async function PATCH(request: NextRequest, { params }: Props) {
     if (body.status) {
       await sendListingModerationEmail(listing);
     }
+    revalidateListingMutationPaths(listing);
     return withRateLimitHeaders(NextResponse.json({ listing }), limited.headers);
   } catch (error) {
     captureServerError(error, { route: "/api/admin/listings/[listingId]" });

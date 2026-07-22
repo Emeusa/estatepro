@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 
 import { FilterBar } from "@/components/listings/filter-bar";
+import { HomepageFreshnessGuard } from "@/components/listings/homepage-freshness-guard";
 import { ListingGrid } from "@/components/listings/listing-grid";
 import { StickyListingFilter } from "@/components/listings/sticky-listing-filter";
 import {
@@ -16,6 +17,8 @@ import { getPublicListings } from "@/modules/listings/listing.service";
 type Props = {
   searchParams: Promise<HomeSearchParams>;
 };
+
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   return buildHomepageMetadata(await searchParams);
@@ -40,6 +43,7 @@ export default async function HomePage({ searchParams }: Props) {
 
   return (
     <div className="space-y-8">
+      <HomepageFreshnessGuard />
       <section
         className="relative left-1/2 -mt-8 w-screen -translate-x-1/2 overflow-hidden bg-slate-950 px-4 py-1 text-center text-amber-50 sm:px-6 sm:py-3 lg:py-2"
       >

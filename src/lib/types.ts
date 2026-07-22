@@ -167,6 +167,7 @@ export type PublicListingCardRecord = Pick<
   | "landSize"
   | "landSizeUnit"
 > & {
+  imageCount: number;
   descriptionPreview: string;
   contactPhone: string;
   contactWhatsapp: string;

@@ -4,6 +4,7 @@ import { ZodError } from "zod";
 import { AuthError, requireAgent } from "@/lib/auth";
 import { captureServerError } from "@/lib/security/logger";
 import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
+import { revalidateListingMutationPaths } from "@/modules/listings/listing-cache";
 import {
   reactivateAgentListing,
   setAgentListingKeepActivePreference
@@ -29,6 +30,7 @@ export async function POST(request: NextRequest, { params }: Props) {
         ? await reactivateAgentListing(decoded.uid, listingId)
         : await setAgentListingKeepActivePreference(decoded.uid, listingId, body.action === "keep_active");
 
+    revalidateListingMutationPaths(listing);
     return withRateLimitHeaders(NextResponse.json({ listing }), limited.headers);
   } catch (error) {
     captureServerError(error, { route: "/api/listings/[listingId]/retention" });

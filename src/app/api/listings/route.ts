@@ -5,6 +5,7 @@ import { requireAgent } from "@/lib/auth";
 import { captureServerError } from "@/lib/security/logger";
 import { RATE_LIMITS, rateLimitByIp, withRateLimitHeaders } from "@/lib/security/rate-limit";
 import { mapListingErrors, mapListingRuntimeError, summarizeListingImageIssues } from "@/modules/listings/listing-error-mapper";
+import { revalidateListingMutationPaths } from "@/modules/listings/listing-cache";
 import { createAgentListing, getPublicListings } from "@/modules/listings/listing.service";
 
 export async function GET(request: NextRequest) {
@@ -30,7 +31,9 @@ export async function GET(request: NextRequest) {
       limit: searchParams.get("limit") ?? undefined
     });
 
-    return withRateLimitHeaders(NextResponse.json(data), limited.headers);
+    const response = NextResponse.json(data);
+    response.headers.set("Cache-Control", "no-store, max-age=0");
+    return withRateLimitHeaders(response, limited.headers);
   } catch (error) {
     captureServerError(error, { route: "/api/listings", method: "GET" });
     return NextResponse.json(
@@ -45,6 +48,7 @@ export async function POST(request: NextRequest) {
     const decoded = await requireAgent(request);
     const body = await request.json();
     const listing = await createAgentListing(decoded.uid, body);
+    revalidateListingMutationPaths(listing);
 
     return NextResponse.json({ listing }, { status: 201 });
   } catch (error) {

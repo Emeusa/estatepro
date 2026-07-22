@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { PromotionControls } from "@/components/agents/promotion-controls";
 import { ListingForm } from "@/components/forms/listing-form";
+import { markHomepageListingsStale } from "@/components/listings/homepage-freshness-guard";
 import { apiRequest } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { AVAILABILITY_LABELS, getUnavailableBadge, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
@@ -119,6 +120,7 @@ export function ListingManager({
         headers: { Authorization: `Bearer ${token}` }
       });
       commitListings((current) => current.filter((listing) => listing.id !== listingId));
+      markHomepageListingsStale();
       if (selected?.id === listingId) {
         setSelected(undefined);
       }
@@ -141,6 +143,7 @@ export function ListingManager({
       copy[index] = next;
       return copy;
     });
+    markHomepageListingsStale();
     setSelected(keepEditingSavedListing ? next : undefined);
   }
 
@@ -157,6 +160,7 @@ export function ListingManager({
         }
       );
       commitListings((current) => current.map((listing) => (listing.id === listingId ? response.listing : listing)));
+      markHomepageListingsStale();
       onEntitlementsChanged?.(response.entitlements);
       setMessage(
         promotionType === "boost"
@@ -180,6 +184,7 @@ export function ListingManager({
         body: JSON.stringify({ action })
       });
       commitListings((current) => current.map((listing) => (listing.id === listingId ? response.listing : listing)));
+      markHomepageListingsStale();
       setMessage(
         action === "reactivate"
           ? "Listing reactivated."
