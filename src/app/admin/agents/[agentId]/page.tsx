@@ -12,7 +12,13 @@ import { AVAILABILITY_LABELS, LISTING_CATEGORY_LABELS } from "@/lib/listing-labe
 import { getListingQualityBadges } from "@/lib/listing-quality";
 import { ADMIN_LEGAL_HOLD_DAYS, addDays, retentionSummary } from "@/lib/listing-retention";
 import { getListingPromotionBadge } from "@/lib/listing-visibility";
-import { formatPlanPrice, getPricingPlan, hasPriorityReview, hasPrioritySupport } from "@/lib/pricing";
+import {
+  formatPlanPrice,
+  getPricingPlan,
+  hasPriorityReview,
+  hasPrioritySupport,
+  isPaidPricingPlanSlug
+} from "@/lib/pricing";
 import { getEffectivePlanSlug, isSubscriptionCurrentlyActive } from "@/lib/subscriptions";
 import { supabase } from "@/lib/supabase/client";
 import { AdminAgentDetails, AgentProfile, SubscriptionAdminGrantRecord, SubscriptionRecord, UserRecord } from "@/lib/types";
@@ -266,11 +272,12 @@ export default function AdminAgentDetailPage() {
   const isPriorityAgent = hasPriorityReview(effectivePlanSlug);
   const isPrioritySupportAgent = hasPrioritySupport(effectivePlanSlug);
   const currentSubscription = review.subscription;
-  const hasActiveRecurringPaystack =
+  const hasActivePaidRecurringPaystack =
     currentSubscription !== null &&
     isSubscriptionCurrentlyActive(currentSubscription) &&
     currentSubscription.paymentProvider === "paystack" &&
-    currentSubscription.billingMode === "recurring";
+    currentSubscription.billingMode === "recurring" &&
+    isPaidPricingPlanSlug(currentSubscription.planSlug);
   const selectedPromoPlan = getPricingPlan(promoPlanSlug);
 
   return (
@@ -434,9 +441,9 @@ export default function AdminAgentDetailPage() {
                 ) : null}
               </div>
 
-              {hasActiveRecurringPaystack ? (
+              {hasActivePaidRecurringPaystack ? (
                 <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-900">
-                  Cancel or wait for the active paid subscription before applying a manual promo grant.
+                  Cancel or wait for the active paid auto-renewing subscription before applying a manual promo grant.
                 </p>
               ) : null}
 
@@ -445,7 +452,7 @@ export default function AdminAgentDetailPage() {
                   Plan
                   <select
                     className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-slate-950"
-                    disabled={busyAction !== null || hasActiveRecurringPaystack}
+                    disabled={busyAction !== null || hasActivePaidRecurringPaystack}
                     onChange={(event) => setPromoPlanSlug(event.target.value as PromoPlanSlug)}
                     value={promoPlanSlug}
                   >
@@ -463,7 +470,7 @@ export default function AdminAgentDetailPage() {
                       Valid until
                       <input
                         className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-slate-950"
-                        disabled={busyAction !== null || hasActiveRecurringPaystack}
+                        disabled={busyAction !== null || hasActivePaidRecurringPaystack}
                         min={dateInputValue(addDays(new Date(), 1))}
                         onChange={(event) => setPromoExpiresAt(event.target.value)}
                         type="date"
@@ -474,7 +481,7 @@ export default function AdminAgentDetailPage() {
                       {promoDurationPresets.map((days) => (
                         <button
                           className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-700 ring-1 ring-slate-300 transition hover:bg-blue-50 hover:text-blue-700 disabled:opacity-60"
-                          disabled={busyAction !== null || hasActiveRecurringPaystack}
+                          disabled={busyAction !== null || hasActivePaidRecurringPaystack}
                           key={days}
                           onClick={() => setPromoExpiresAt(dateInputValue(addDays(new Date(), days)))}
                           type="button"
@@ -494,7 +501,7 @@ export default function AdminAgentDetailPage() {
                   Admin reason
                   <input
                     className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-slate-950"
-                    disabled={busyAction !== null || hasActiveRecurringPaystack}
+                    disabled={busyAction !== null || hasActivePaidRecurringPaystack}
                     maxLength={240}
                     minLength={3}
                     onChange={(event) => setPromoReason(event.target.value)}
@@ -506,7 +513,7 @@ export default function AdminAgentDetailPage() {
 
                 <button
                   className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={busyAction !== null || hasActiveRecurringPaystack}
+                  disabled={busyAction !== null || hasActivePaidRecurringPaystack}
                   type="submit"
                 >
                   {busyAction === "subscription-grant" ? "Applying grant..." : `Apply ${selectedPromoPlan.name}`}

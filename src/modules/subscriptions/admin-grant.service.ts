@@ -60,7 +60,8 @@ function assertCanReplaceSubscription(subscription?: SubscriptionRecord | null) 
     subscription &&
     isSubscriptionCurrentlyActive(subscription) &&
     subscription.paymentProvider === "paystack" &&
-    subscription.billingMode === "recurring"
+    subscription.billingMode === "recurring" &&
+    isPaidPricingPlanSlug(subscription.planSlug)
   ) {
     throw new AdminSubscriptionGrantError(
       "Cancel or wait for the active paid subscription before applying a manual promo grant.",

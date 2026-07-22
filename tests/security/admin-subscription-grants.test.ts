@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const mocks = vi.hoisted(() => ({
   enforceAgentActiveListingLimit: vi.fn(),
@@ -160,6 +162,39 @@ describe("admin subscription grants", () => {
     expect(mocks.upsertManualSubscription).not.toHaveBeenCalled();
   });
 
+  it("allows manual promo grants for active recurring Free Starter subscriptions", async () => {
+    mocks.getAgentProfile.mockResolvedValue({
+      agent: { id: "agent-id", verificationStatus: "approved", isBlocked: false },
+      subscription: {
+        ...activePrepaidSubscription,
+        planSlug: "free_starter",
+        paymentProvider: "paystack",
+        billingMode: "recurring"
+      }
+    });
+
+    const expiresAt = futureExpiry();
+    const result = await grantAdminSubscription({
+      agentId: "agent-id",
+      adminId: "admin-id",
+      payload: {
+        planSlug: "agency_plus",
+        expiresAt,
+        reason: "Launch promo"
+      }
+    });
+
+    expect(result.subscription.planSlug).toBe("agency_plus");
+    expect(mocks.upsertManualSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: "agent-id",
+        planSlug: "agency_plus",
+        currentPeriodEnd: expiresAt
+      })
+    );
+    expect(mocks.syncAgentPlanCredits).toHaveBeenCalledWith("agent-id", result.subscription);
+  });
+
   it("rejects excessive promo durations", async () => {
     await expect(
       grantAdminSubscription({
@@ -192,5 +227,15 @@ describe("admin subscription grants", () => {
     );
     expect(mocks.syncAgentPlanCredits).not.toHaveBeenCalled();
     expect(mocks.enforceAgentActiveListingLimit).toHaveBeenCalledWith("agent-id", result.subscription);
+  });
+});
+
+describe("admin promo grant UI guard", () => {
+  it("guards only active paid recurring Paystack subscriptions", () => {
+    const source = readFileSync(join(process.cwd(), "src/app/admin/agents/[agentId]/page.tsx"), "utf8");
+
+    expect(source).toContain("hasActivePaidRecurringPaystack");
+    expect(source).toContain("isPaidPricingPlanSlug(currentSubscription.planSlug)");
+    expect(source).not.toContain("const hasActiveRecurringPaystack");
   });
 });
