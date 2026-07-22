@@ -39,6 +39,19 @@ describe("listing image mobile file handling", () => {
     expect(rateLimitSource).not.toContain("imageUpload");
   });
 
+  it("returns stable server upload error codes", () => {
+    const routeSource = readFileSync(
+      path.join(process.cwd(), "src/app/api/uploads/listing-images/fallback/route.ts"),
+      "utf8"
+    );
+
+    expect(routeSource).toContain("UPLOAD_SESSION_EXPIRED");
+    expect(routeSource).toContain("UPLOAD_AGENT_BLOCKED");
+    expect(routeSource).toContain("UPLOAD_FILE_TYPE_INVALID");
+    expect(routeSource).toContain("UPLOAD_FINAL_SIZE_EXCEEDED");
+    expect(routeSource).toContain("UPLOAD_STORAGE_FAILED");
+  });
+
   it("uses one hidden gallery picker with a simple thumbnail selector", () => {
     const source = readFileSync(path.join(process.cwd(), "src/components/forms/listing-form.tsx"), "utf8");
 
@@ -93,8 +106,22 @@ describe("listing image mobile file handling", () => {
     expect(uploadSource).toContain("type ListingImageUploadProgress");
     expect(uploadSource).toContain("onProgress?.({ stage: \"processing\"");
     expect(uploadSource).toContain("onProgress?.({ stage: \"uploading\"");
+    expect(uploadSource).toContain("/api/uploads/listing-images/fallback");
+    expect(uploadSource).toContain("requireFreshSessionToken");
+    expect(uploadSource).not.toContain("/api/uploads/listing-images/authorize");
     expect(uploadSource).not.toContain("/api/uploads/listing-images/convert");
     expect(uploadSource).not.toContain("listing-image-originals");
+    expect(uploadSource).not.toContain(".storage.from(\"listing-images\").upload");
+  });
+
+  it("refreshes the auth token at listing submit time", () => {
+    const source = readFileSync(path.join(process.cwd(), "src/components/forms/listing-form.tsx"), "utf8");
+
+    expect(source).toContain("async function getFreshSubmitToken");
+    expect(source).toContain("await supabase.auth.getSession()");
+    expect(source).toContain("const submitToken = await getFreshSubmitToken()");
+    expect(source).toContain("uploadListingImages(orderedImageFiles, submitToken");
+    expect(source).toContain("Authorization: `Bearer ${submitToken}`");
   });
 
   it("uses memory-safe browser image processing for large mobile photos", () => {

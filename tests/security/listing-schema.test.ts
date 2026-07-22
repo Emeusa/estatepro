@@ -23,6 +23,19 @@ const validListing = {
   }
 };
 
+function validVariant(extension: "webp" | "jpg" | "jpeg" = "webp", blurType: "webp" | "jpeg" = "webp") {
+  return {
+    heroUrl: `https://example.supabase.co/storage/v1/object/public/listing-images/user/photo-hero.${extension}`,
+    cardUrl: `https://example.supabase.co/storage/v1/object/public/listing-images/user/photo-card.${extension}`,
+    blurDataUrl: `data:image/${blurType};base64,abc`,
+    width: 900,
+    height: 900,
+    cardWidth: 450,
+    cardHeight: 450,
+    order: 0
+  };
+}
+
 describe("listingInputSchema", () => {
   it("rejects unexpected fields", () => {
     const result = listingInputSchema.safeParse({ ...validListing, unknown: true });
@@ -55,7 +68,50 @@ describe("listingInputSchema", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(mapListingErrors(result.error).images).toMatch(/could not be verified/i);
+      expect(mapListingErrors(result.error).images).not.toMatch(/5 MB/i);
     }
+  });
+
+  it("accepts JPEG fallback optimized variants from Safari uploads", () => {
+    const result = listingInputSchema.safeParse({
+      ...validListing,
+      imageUrls: ["https://example.supabase.co/storage/v1/object/public/listing-images/user/photo-hero.jpg"],
+      imageVariants: [validVariant("jpg", "jpeg")]
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts JPEG extension variants and WebP variants from platform storage only", () => {
+    expect(
+      listingInputSchema.safeParse({
+        ...validListing,
+        imageUrls: ["https://example.supabase.co/storage/v1/object/public/listing-images/user/photo-hero.jpeg"],
+        imageVariants: [validVariant("jpeg", "webp")]
+      }).success
+    ).toBe(true);
+
+    const externalResult = listingInputSchema.safeParse({
+      ...validListing,
+      imageVariants: [
+        {
+          ...validVariant("jpg", "jpeg"),
+          heroUrl: "https://example.com/listing-images/photo-hero.jpg"
+        }
+      ]
+    });
+    expect(externalResult.success).toBe(false);
+
+    const unsupportedResult = listingInputSchema.safeParse({
+      ...validListing,
+      imageVariants: [
+        {
+          ...validVariant("jpg", "jpeg"),
+          cardUrl: "https://example.supabase.co/storage/v1/object/public/listing-images/user/photo-card.gif"
+        }
+      ]
+    });
+    expect(unsupportedResult.success).toBe(false);
   });
 
   it("maps the old database image-variant constraint to a setup message", () => {

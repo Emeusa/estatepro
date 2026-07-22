@@ -34,12 +34,12 @@ import {
   ZONING_TYPES
 } from "@/lib/listing-quality";
 import { getLgasForState, NIGERIA_STATES } from "@/lib/nigeria-locations";
+import { supabase } from "@/lib/supabase/client";
 import { ListingCategory, ListingImageVariant, ListingRecord } from "@/lib/types";
 import { normalizeListingImageFileAsync, uploadListingImages, type ListingImageUploadProgress } from "@/lib/uploads";
 import { createListingImagePreview } from "@/lib/image";
 
 type Props = {
-  token: string;
   listing?: ListingRecord;
   onSaved?: (listing: ListingRecord) => void;
 };
@@ -101,7 +101,7 @@ function createPreviewPlaceholder(index: number) {
   )}`;
 }
 
-export function ListingForm({ token, listing, onSaved }: Props) {
+export function ListingForm({ listing, onSaved }: Props) {
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -284,6 +284,26 @@ export function ListingForm({ token, listing, onSaved }: Props) {
 
     const message = error.message.toLowerCase();
 
+    if (message.includes("upload_session_expired")) {
+      return "Your session expired. Log in again before uploading images.";
+    }
+
+    if (message.includes("upload_agent_blocked")) {
+      return error.message.replace(/\s*Upload code:\s*UPLOAD_AGENT_BLOCKED/i, "");
+    }
+
+    if (message.includes("upload_file_type_invalid")) {
+      return `This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`;
+    }
+
+    if (message.includes("upload_final_size_exceeded")) {
+      return `A processed image is still too large after compression. Try fewer photos or choose smaller images.`;
+    }
+
+    if (message.includes("upload_storage_failed")) {
+      return "Server image upload failed. Please try again or choose fewer photos. Upload code: UPLOAD_STORAGE_FAILED";
+    }
+
     if (message.includes("image_compress_failed")) {
       return "Image could not be compressed on this phone. Try JPG or upload fewer photos. Upload code: IMAGE_COMPRESS_FAILED";
     }
@@ -347,6 +367,18 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     }
 
     return `Preparing ${progress.total} ${progress.total === 1 ? "photo" : "photos"}... Keep this page open.`;
+  }
+
+  async function getFreshSubmitToken() {
+    const {
+      data: { session }
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error("Your session expired. Log in again before uploading images.");
+    }
+
+    return session.access_token;
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -414,13 +446,14 @@ export function ListingForm({ token, listing, onSaved }: Props) {
     };
 
     try {
+      const submitToken = await getFreshSubmitToken();
       if (imageFiles.length) {
         try {
           const orderedImageFiles = moveToFront(imageFiles, uploadThumbnailIndex);
           setUploadProgressMessage(
             `Preparing ${orderedImageFiles.length} ${orderedImageFiles.length === 1 ? "photo" : "photos"}... Keep this page open.`
           );
-          const uploadedImages = await uploadListingImages(orderedImageFiles, token, (progress) => {
+          const uploadedImages = await uploadListingImages(orderedImageFiles, submitToken, (progress) => {
             setUploadProgressMessage(getUploadProgressMessage(progress));
           });
           payload.imageUrls = uploadedImages.imageUrls;
@@ -438,7 +471,7 @@ export function ListingForm({ token, listing, onSaved }: Props) {
         listing ? `/api/listings/${listing.id}` : "/api/listings",
         {
           method: listing ? "PATCH" : "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${submitToken}` },
           body: JSON.stringify(payload)
         }
       );

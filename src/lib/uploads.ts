@@ -32,7 +32,7 @@ export type ListingImageUploadProgress = {
   total: number;
 };
 
-type UploadStage = "authorize" | "browser-compress" | "direct-final-upload" | "server-final-upload";
+type UploadStage = "browser-compress" | "server-final-upload";
 
 type AgentWatermarkResponse = {
   user: {
@@ -53,16 +53,16 @@ const IMAGE_COMPRESS_FAILED_MESSAGE =
 const SERVER_UPLOAD_RESPONSE_FAILED_MESSAGE =
   "Server upload completed without an image URL. Try again with fewer photos. Upload code: SERVER_UPLOAD_RESPONSE_MISSING";
 
-async function requireUserId() {
+async function requireFreshSessionToken() {
   const {
     data: { session }
   } = await supabase.auth.getSession();
 
-  if (!session?.user?.id) {
-    throw new Error("You must be logged in before uploading files.");
+  if (!session?.access_token) {
+    throw new Error("Your session expired. Log in again before uploading images. Upload code: UPLOAD_SESSION_EXPIRED");
   }
 
-  return session.user.id;
+  return session.access_token;
 }
 
 async function uploadViaServer(file: Blob, token: string, filename: string) {
@@ -87,10 +87,11 @@ async function uploadViaServer(file: Blob, token: string, filename: string) {
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       const message = body.message ?? SERVER_IMAGE_UPLOAD_FAILED_MESSAGE;
+      const code = typeof body.code === "string" ? body.code : null;
       if (response.status >= 500 && attempt === 0) {
         continue;
       }
-      throw new Error(message);
+      throw new Error(code && !message.includes(code) ? `${message} Upload code: ${code}` : message);
     }
 
     const body = (await response.json()) as { url?: string };
@@ -104,46 +105,17 @@ async function uploadViaServer(file: Blob, token: string, filename: string) {
   throw new Error(SERVER_IMAGE_UPLOAD_FAILED_MESSAGE);
 }
 
-async function uploadDirectFinalImage(file: File, userId: string, filename: string) {
-  const path = `${userId}/${crypto.randomUUID()}-${filename}`;
-  const { error } = await supabase.storage.from("listing-images").upload(path, file, {
-    contentType: file.type,
-    upsert: false
-  });
-
-  if (error) {
-    throw new Error(`Direct storage upload failed. ${error.message} Upload code: DIRECT_STORAGE_UPLOAD_FAILED`);
-  }
-
-  return supabase.storage.from("listing-images").getPublicUrl(path).data.publicUrl;
-}
-
-async function uploadFinalImage(file: File, token: string, userId: string, filename: string, allFiles: File[], order: number) {
+async function uploadFinalImage(file: File, token: string, filename: string, allFiles: File[], order: number) {
   if (file.size <= 0 || file.size > MAX_LISTING_FINAL_IMAGE_BYTES) {
     throw new Error(`Each processed image must be ${MAX_LISTING_FINAL_IMAGE_MB} MB or less.`);
   }
 
   try {
-    return await uploadDirectFinalImage(file, userId, filename);
-  } catch (error) {
-    warnUploadStage("direct-final-upload", allFiles, error, order);
     return await uploadViaServer(file, token, filename);
+  } catch (error) {
+    warnUploadStage("server-final-upload", allFiles, error, order);
+    throw error;
   }
-}
-
-async function authorizeListingImageUpload(files: File[], token: string) {
-  await apiRequest("/api/uploads/listing-images/authorize", {
-    method: "POST",
-    retries: 0,
-    headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify({
-      files: files.map((file) => ({
-        name: file.name,
-        size: file.size,
-        type: file.type
-      }))
-    })
-  });
 }
 
 async function getListingImageWatermark(token: string): Promise<ListingImageWatermark> {
@@ -229,7 +201,6 @@ function warnUploadStage(stage: UploadStage, files: File[], error: unknown, fail
 async function uploadBrowserProcessedImage(
   file: File,
   token: string,
-  userId: string,
   watermark: ListingImageWatermark,
   order: number,
   allFiles: File[],
@@ -251,7 +222,6 @@ async function uploadBrowserProcessedImage(
     const heroUrl = await uploadFinalImage(
       optimized.hero,
       token,
-      userId,
       safeImageName(order, heroType, "hero"),
       allFiles,
       order
@@ -259,7 +229,6 @@ async function uploadBrowserProcessedImage(
     const cardUrl = await uploadFinalImage(
       optimized.card,
       token,
-      userId,
       safeImageName(order, cardType, "card"),
       allFiles,
       order
@@ -286,10 +255,10 @@ async function uploadBrowserProcessedImage(
 
 export async function uploadListingImages(
   files: File[],
-  token: string,
+  _token: string,
   onProgress?: (progress: ListingImageUploadProgress) => void
 ): Promise<ListingImageUploadResult> {
-  const userId = await requireUserId();
+  const token = await requireFreshSessionToken();
   const countLimitMessage = getListingImageCountLimitMessage(files.length);
 
   if (countLimitMessage) {
@@ -311,13 +280,6 @@ export async function uploadListingImages(
     throw new Error(`Each image must be ${MAX_LISTING_IMAGE_MB} MB or less before compression.`);
   }
 
-  try {
-    await authorizeListingImageUpload(acceptedFiles, token);
-  } catch (error) {
-    warnUploadStage("authorize", acceptedFiles, error);
-    throw error;
-  }
-
   const watermark = await getListingImageWatermark(token);
   const imageUrls: string[] = [];
   const imageVariants: ListingImageVariant[] = [];
@@ -325,7 +287,7 @@ export async function uploadListingImages(
   onProgress?.({ stage: "preparing", current: 0, total: acceptedFiles.length });
 
   for (const [index, file] of acceptedFiles.entries()) {
-    const uploaded = await uploadBrowserProcessedImage(file, token, userId, watermark, index, acceptedFiles, onProgress);
+    const uploaded = await uploadBrowserProcessedImage(file, token, watermark, index, acceptedFiles, onProgress);
     imageUrls.push(uploaded.imageUrl);
     imageVariants.push(uploaded.imageVariant);
   }

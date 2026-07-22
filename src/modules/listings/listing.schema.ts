@@ -15,7 +15,7 @@ import {
 import { isNigeriaLga, isNigeriaState } from "@/lib/nigeria-locations";
 import { normalizePhone, sanitizeText, slugifyLocation } from "@/lib/sanitize";
 
-function isAllowedListingImageUrl(value: string, options?: { webpOnly?: boolean }) {
+function isAllowedListingImageUrl(value: string, options?: { optimizedVariantOnly?: boolean }) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!supabaseUrl) {
     return false;
@@ -28,7 +28,7 @@ function isAllowedListingImageUrl(value: string, options?: { webpOnly?: boolean 
       imageUrl.protocol === "https:" &&
       imageUrl.hostname === configuredHost &&
       imageUrl.pathname.startsWith("/storage/v1/object/public/listing-images/") &&
-      (!options?.webpOnly || imageUrl.pathname.toLowerCase().endsWith(".webp"))
+      (!options?.optimizedVariantOnly || /\.(webp|jpe?g)$/i.test(imageUrl.pathname))
     );
   } catch {
     return false;
@@ -107,16 +107,16 @@ const textArraySchema = z
 
 const imageVariantSchema = z
   .object({
-    heroUrl: z.string().url().refine((value) => isAllowedListingImageUrl(value, { webpOnly: true }), {
+    heroUrl: z.string().url().refine((value) => isAllowedListingImageUrl(value, { optimizedVariantOnly: true }), {
       message: "Hero images must be uploaded through this platform."
     }),
-    cardUrl: z.string().url().refine((value) => isAllowedListingImageUrl(value, { webpOnly: true }), {
+    cardUrl: z.string().url().refine((value) => isAllowedListingImageUrl(value, { optimizedVariantOnly: true }), {
       message: "Card images must be uploaded through this platform."
     }),
     blurDataUrl: z
       .string()
       .max(3000)
-      .regex(/^data:image\/webp;base64,[a-z0-9+/=]+$/i)
+      .regex(/^data:image\/(webp|jpeg);base64,[a-z0-9+/=]+$/i)
       .nullable(),
     width: z.number().int().positive().max(1200).nullable(),
     height: z.number().int().positive().max(900).nullable(),

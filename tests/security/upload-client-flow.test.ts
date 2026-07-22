@@ -58,7 +58,7 @@ describe("client listing image upload flow", () => {
     vi.restoreAllMocks();
     Object.values(mocks).forEach((mock) => mock.mockReset());
 
-    mocks.getSession.mockResolvedValue({ data: { session: { user: { id: "agent-id" } } } });
+    mocks.getSession.mockResolvedValue({ data: { session: { user: { id: "agent-id" }, access_token: "fresh-token" } } });
     mocks.apiRequest.mockImplementation(async (url: string) => {
       if (url === "/api/agents/me") {
         return { user: { fullName: "Test Agent" }, profile: { agent: { businessName: null }, subscription: null } };
@@ -74,9 +74,13 @@ describe("client listing image upload flow", () => {
     mocks.processListingImage.mockImplementation(async () => processedImage());
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        Response.json({ url: "https://example.supabase.co/storage/v1/object/public/listing-images/agent-id/server.webp" })
-      )
+      vi.fn(async (_url: string, options?: RequestInit) => {
+        const file = options?.body instanceof FormData ? options.body.get("file") : null;
+        const filename = file instanceof File ? file.name : "server.webp";
+        return Response.json({
+          url: `https://example.supabase.co/storage/v1/object/public/listing-images/agent-id/${filename}`
+        });
+      })
     );
   });
 
@@ -89,7 +93,12 @@ describe("client listing image upload flow", () => {
     expect(result.imageUrls).toHaveLength(1);
     expect(result.imageVariants).toHaveLength(1);
     expect(mocks.processListingImage).toHaveBeenCalledTimes(1);
-    expect(mocks.publicUpload).toHaveBeenCalledTimes(2);
+    expect(mocks.publicUpload).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(mocks.apiRequest).not.toHaveBeenCalledWith(
+      "/api/uploads/listing-images/authorize",
+      expect.objectContaining({ method: "POST" })
+    );
     expect(fetch).not.toHaveBeenCalledWith(
       "/api/uploads/listing-images/convert",
       expect.objectContaining({ method: "POST" })
@@ -106,7 +115,8 @@ describe("client listing image upload flow", () => {
     expect(result.imageVariants).toHaveLength(1);
     expect(processedFile.name).toBe("listing-image-1.jpg");
     expect(processedFile.type).toBe("image/jpeg");
-    expect(mocks.publicUpload).toHaveBeenCalledTimes(2);
+    expect(mocks.publicUpload).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it("uploads fifteen listing images without server conversion", async () => {
@@ -118,7 +128,8 @@ describe("client listing image upload flow", () => {
     expect(result.imageUrls).toHaveLength(15);
     expect(result.imageVariants).toHaveLength(15);
     expect(mocks.processListingImage).toHaveBeenCalledTimes(15);
-    expect(mocks.publicUpload).toHaveBeenCalledTimes(30);
+    expect(mocks.publicUpload).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(30);
     expect(fetch).not.toHaveBeenCalledWith(
       "/api/uploads/listing-images/convert",
       expect.objectContaining({ method: "POST" })
@@ -160,22 +171,26 @@ describe("client listing image upload flow", () => {
       { stage: "uploading", current: 2, total: 2 }
     ]);
     expect(mocks.processListingImage).toHaveBeenCalledTimes(2);
-    expect(mocks.publicUpload).toHaveBeenCalledTimes(4);
+    expect(mocks.publicUpload).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(4);
   });
 
-  it("falls back to authenticated server upload only for compressed final images", async () => {
+  it("uploads compressed final images through the authenticated server endpoint with retry", async () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
     const files = [makeFile("small.jpg", 500_000)];
     let uploadAttempts = 0;
 
-    mocks.publicUpload.mockResolvedValue({ error: new Error("direct storage failed") });
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (url: string) => {
+      vi.fn(async (url: string, options?: RequestInit) => {
         expect(url).toBe("/api/uploads/listing-images/fallback");
+        expect(options?.headers).toEqual({ Authorization: "Bearer fresh-token" });
         uploadAttempts += 1;
         if (uploadAttempts % 2 === 1) {
-          return Response.json({ message: "Server image upload failed." }, { status: 500 });
+          return Response.json(
+            { message: "Server image upload failed.", code: "UPLOAD_STORAGE_FAILED" },
+            { status: 500 }
+          );
         }
 
         return Response.json({ url: `https://example.supabase.co/storage/v1/object/public/listing-images/agent-id/${uploadAttempts}.webp` });
@@ -186,7 +201,7 @@ describe("client listing image upload flow", () => {
 
     expect(result.imageVariants).toHaveLength(1);
     expect(uploadAttempts).toBe(4);
-    expect(mocks.publicUpload).toHaveBeenCalledTimes(2);
+    expect(mocks.publicUpload).not.toHaveBeenCalled();
   });
 
   it("keeps JPEG fallback output as valid final variants", async () => {
@@ -199,6 +214,39 @@ describe("client listing image upload flow", () => {
 
     expect(result.imageVariants[0]?.heroUrl).toContain("-hero.jpg");
     expect(result.imageVariants[0]?.cardUrl).toContain("-card.jpg");
+  });
+
+  it("produces JPEG fallback variants that pass listing save validation", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    const { uploadListingImages } = await import("../../src/lib/uploads");
+    const { listingInputSchema } = await import("../../src/modules/listings/listing.schema");
+    const files = [makeFile("small.jpg", 500_000)];
+
+    mocks.processListingImage.mockResolvedValue({
+      ...processedImage(0, "image/jpeg"),
+      blurDataUrl: "data:image/jpeg;base64,abc"
+    });
+
+    const result = await uploadListingImages(files, "token");
+    const validation = listingInputSchema.safeParse({
+      title: "Clean two bedroom apartment",
+      description: "A clean and spacious apartment suitable for family living.",
+      price: 2000000,
+      propertyType: "apartment",
+      listingCategory: "for_rent",
+      availability: "available",
+      imageUrls: result.imageUrls,
+      imageVariants: result.imageVariants,
+      contactPhone: "08031234567",
+      contactWhatsapp: "08031234567",
+      location: {
+        state: "Lagos",
+        city: "Ikeja",
+        area: "Allen Avenue"
+      }
+    });
+
+    expect(validation.success).toBe(true);
   });
 
   it("uses business name watermark for Pro and Agency Plus agents", async () => {
@@ -247,11 +295,35 @@ describe("client listing image upload flow", () => {
     const { uploadListingImages } = await import("../../src/lib/uploads");
     const files = [makeFile("small.jpg", 500_000)];
 
-    mocks.publicUpload.mockResolvedValue({ error: new Error("direct storage failed") });
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({})));
 
     await expect(uploadListingImages(files, "token")).rejects.toThrow(
       "Server upload completed without an image URL. Try again with fewer photos."
     );
+  });
+
+  it("uses the current session token instead of the stale token argument", async () => {
+    const { uploadListingImages } = await import("../../src/lib/uploads");
+    const files = [makeFile("small.jpg", 500_000)];
+
+    await uploadListingImages(files, "stale-token");
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/uploads/listing-images/fallback",
+      expect.objectContaining({
+        headers: { Authorization: "Bearer fresh-token" }
+      })
+    );
+  });
+
+  it("rejects expired sessions before compression or upload", async () => {
+    const { uploadListingImages } = await import("../../src/lib/uploads");
+    const files = [makeFile("small.jpg", 500_000)];
+
+    mocks.getSession.mockResolvedValue({ data: { session: null } });
+
+    await expect(uploadListingImages(files, "stale-token")).rejects.toThrow("Your session expired");
+    expect(mocks.processListingImage).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

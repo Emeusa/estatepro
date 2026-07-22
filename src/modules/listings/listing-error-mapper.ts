@@ -11,7 +11,7 @@ function mapImageIssue(issue: ZodIssue) {
     return `You can upload up to ${MAX_LISTING_IMAGES} images per listing. Remove extra images and try again.`;
   }
 
-  return "One or more uploaded images could not be verified. Please choose the images again and submit. Use JPG, PNG, or WebP files under 5 MB.";
+  return "One or more uploaded images could not be verified. Please choose the images again and submit. Use images uploaded through C59 Estatehub in JPG, PNG, or WebP format.";
 }
 
 export function mapListingErrors(error: ZodError) {

@@ -332,7 +332,7 @@ export function ListingManager({
               {selected ? "Update listing details" : "Create a new listing"}
             </h2>
           </div>
-          <ListingForm token={token} listing={selected} onSaved={upsertListing} />
+          <ListingForm listing={selected} onSaved={upsertListing} />
         </section>
       ) : null}
     </div>

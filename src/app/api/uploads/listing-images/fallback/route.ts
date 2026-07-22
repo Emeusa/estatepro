@@ -15,8 +15,16 @@ import { captureServerError, logSecurityEvent } from "@/lib/security/logger";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getListingImageUploadBlockReason } from "@/lib/upload-permissions";
 
-function jsonError(message: string, status: number) {
-  return NextResponse.json({ message }, { status });
+type UploadErrorCode =
+  | "UPLOAD_SESSION_EXPIRED"
+  | "UPLOAD_AGENT_BLOCKED"
+  | "UPLOAD_FILE_TYPE_INVALID"
+  | "UPLOAD_FINAL_SIZE_EXCEEDED"
+  | "UPLOAD_STORAGE_FAILED"
+  | "UPLOAD_FILE_MISSING";
+
+function jsonError(message: string, status: number, code: UploadErrorCode) {
+  return NextResponse.json({ message, code }, { status });
 }
 
 export async function POST(request: NextRequest) {
@@ -35,13 +43,13 @@ export async function POST(request: NextRequest) {
 
     const blockReason = getListingImageUploadBlockReason(agentError ? null : agent);
     if (blockReason) {
-      return jsonError(blockReason, 403);
+      return jsonError(blockReason, 403, "UPLOAD_AGENT_BLOCKED");
     }
 
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {
-      return jsonError("No image file was provided.", 400);
+      return jsonError("No image file was provided.", 400, "UPLOAD_FILE_MISSING");
     }
 
     const normalizedType = normalizeListingImageType(file);
@@ -49,11 +57,19 @@ export async function POST(request: NextRequest) {
       !normalizedType ||
       !BROWSER_PROCESSABLE_LISTING_IMAGE_TYPES.includes(normalizedType as (typeof BROWSER_PROCESSABLE_LISTING_IMAGE_TYPES)[number])
     ) {
-      return jsonError(`This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`, 400);
+      return jsonError(
+        `This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`,
+        400,
+        "UPLOAD_FILE_TYPE_INVALID"
+      );
     }
 
     if (file.size <= 0 || file.size > MAX_LISTING_FINAL_IMAGE_BYTES) {
-      return jsonError(`Each processed image must be ${MAX_LISTING_FINAL_IMAGE_MB} MB or less.`, 400);
+      return jsonError(
+        `Each processed image must be ${MAX_LISTING_FINAL_IMAGE_MB} MB or less.`,
+        400,
+        "UPLOAD_FINAL_SIZE_EXCEEDED"
+      );
     }
 
     const extension = getListingImageExtensionForType(normalizedType);
@@ -89,12 +105,17 @@ export async function POST(request: NextRequest) {
     });
 
     if (error instanceof AuthError) {
-      return jsonError(error.message, error.status);
+      if (error.status === 401) {
+        return jsonError("Your session expired. Log in again before uploading images.", error.status, "UPLOAD_SESSION_EXPIRED");
+      }
+
+      return jsonError("Only active agent accounts can upload listing images.", error.status, "UPLOAD_AGENT_BLOCKED");
     }
 
     return jsonError(
       "Server image upload failed. Please try again or choose fewer photos. Upload code: SERVER_IMAGE_UPLOAD_FAILED",
-      500
+      500,
+      "UPLOAD_STORAGE_FAILED"
     );
   }
 }
