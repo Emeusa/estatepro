@@ -80,6 +80,29 @@ function optionalEnum<T extends readonly [string, ...string[]]>(values: T) {
   return z.preprocess(emptyToNull, z.enum(values).nullable().optional()).transform((value) => value ?? null);
 }
 
+function nullableImageDimension(max: number) {
+  return z.preprocess((value) => {
+    const numberValue = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+    if (!Number.isFinite(numberValue)) {
+      return null;
+    }
+
+    const rounded = Math.round(numberValue);
+    return rounded > 0 && rounded <= max ? rounded : null;
+  }, z.number().int().positive().max(max).nullable());
+}
+
+function nullableBlurDataUrl() {
+  const blurPattern = /^data:image\/(webp|jpeg);base64,[a-z0-9+/=]+$/i;
+  return z.preprocess((value) => {
+    if (typeof value !== "string" || value.length > 3000 || !blurPattern.test(value)) {
+      return null;
+    }
+
+    return value;
+  }, z.string().max(3000).regex(blurPattern).nullable());
+}
+
 function parseTextArray(value: unknown) {
   if (value === "" || value === null || value === undefined) {
     return [];
@@ -113,15 +136,11 @@ const imageVariantSchema = z
     cardUrl: z.string().url().refine((value) => isAllowedListingImageUrl(value, { optimizedVariantOnly: true }), {
       message: "Card images must be uploaded through this platform."
     }),
-    blurDataUrl: z
-      .string()
-      .max(3000)
-      .regex(/^data:image\/(webp|jpeg);base64,[a-z0-9+/=]+$/i)
-      .nullable(),
-    width: z.number().int().positive().max(1200).nullable(),
-    height: z.number().int().positive().max(900).nullable(),
-    cardWidth: z.number().int().positive().max(600).nullable(),
-    cardHeight: z.number().int().positive().max(450).nullable(),
+    blurDataUrl: nullableBlurDataUrl(),
+    width: nullableImageDimension(1200),
+    height: nullableImageDimension(900),
+    cardWidth: nullableImageDimension(600),
+    cardHeight: nullableImageDimension(450),
     order: z.number().int().min(0).max(MAX_LISTING_IMAGES - 1)
   })
   .strict();

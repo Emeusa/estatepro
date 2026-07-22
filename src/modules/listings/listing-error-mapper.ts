@@ -1,17 +1,36 @@
 import { ZodError, type ZodIssue } from "zod";
 
 import { MAX_LISTING_IMAGES } from "@/lib/image-limits";
+import { ListingImagePayloadError } from "@/modules/listings/listing-image-payload";
 
 function mapImageIssue(issue: ZodIssue) {
-  if (issue.code === "too_small") {
+  const path = issue.path.map(String);
+  const lastSegment = path[path.length - 1];
+  const isImageArrayIssue = path.length === 1 && (path[0] === "imageUrls" || path[0] === "imageVariants");
+
+  if (issue.code === "too_small" && isImageArrayIssue) {
     return "Upload at least one property image.";
   }
 
-  if (issue.code === "too_big") {
+  if (issue.code === "too_big" && isImageArrayIssue) {
     return `You can upload up to ${MAX_LISTING_IMAGES} images per listing. Remove extra images and try again.`;
   }
 
-  return "One or more uploaded images could not be verified. Please choose the images again and submit. Use images uploaded through C59 Estatehub in JPG, PNG, or WebP format.";
+  if (lastSegment === "heroUrl" || lastSegment === "cardUrl" || path[0] === "imageUrls") {
+    return "One or more image links are invalid. Please choose the images again and submit. Upload code: LISTING_IMAGE_URL_INVALID";
+  }
+
+  return "One or more uploaded images returned invalid metadata. Please choose the images again and submit. Upload code: LISTING_IMAGE_METADATA_INVALID";
+}
+
+export function summarizeListingImageIssues(error: ZodError) {
+  return error.issues
+    .filter((issue) => issue.path[0] === "imageUrls" || issue.path[0] === "imageVariants")
+    .map((issue) => ({
+      path: issue.path.join("."),
+      code: issue.code,
+      message: issue.message
+    }));
 }
 
 export function mapListingErrors(error: ZodError) {
@@ -75,6 +94,15 @@ export function mapListingErrors(error: ZodError) {
 export function mapListingRuntimeError(error: unknown) {
   if (!(error instanceof Error)) {
     return null;
+  }
+
+  if (error instanceof ListingImagePayloadError) {
+    return {
+      message: error.message,
+      fields: {
+        images: error.message
+      }
+    };
   }
 
   if (error.message.includes("listings_image_variants_check")) {

@@ -27,6 +27,7 @@ import {
 } from "@/lib/listing-limits";
 import { createUnavailableLifecycle, hasListingMedia } from "@/lib/listing-retention";
 import type { ListingRecord, SubscriptionRecord } from "@/lib/types";
+import { normalizeAndVerifyListingImages } from "@/modules/listings/listing-image-payload";
 
 export async function getPublicListings(input: Record<string, unknown>) {
   return listPublicListings(listingFilterSchema.parse(input));
@@ -165,7 +166,7 @@ export async function createAgentListing(agentId: string, input: unknown) {
     throw new Error("Your agent account was rejected and cannot manage listings.");
   }
 
-  const payload = listingInputSchema.parse(input);
+  const payload = listingInputSchema.parse(normalizeAndVerifyListingImages(agentId, input));
   const initialStatus = agent.verificationStatus === "approved" ? "active" : "pending";
   const planSlug = getEffectivePlanSlug(subscription);
 
@@ -195,7 +196,7 @@ export async function updateAgentListing(agentId: string, listingId: string, inp
   }
 
   const currentListing = await ensureAgentOwnsListing(agentId, listingId);
-  const payload = listingUpdateSchema.parse(input);
+  const payload = listingUpdateSchema.parse(normalizeAndVerifyListingImages(agentId, input));
   const planSlug = getEffectivePlanSlug(subscription);
 
   const nextHasMedia =

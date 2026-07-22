@@ -4,7 +4,7 @@ import { ZodError } from "zod";
 import { AuthError, requireAgent } from "@/lib/auth";
 import { captureServerError, logSecurityEvent } from "@/lib/security/logger";
 import { RATE_LIMITS, rateLimit, rateLimitByIp, withRateLimitHeaders } from "@/lib/security/rate-limit";
-import { mapListingErrors, mapListingRuntimeError } from "@/modules/listings/listing-error-mapper";
+import { mapListingErrors, mapListingRuntimeError, summarizeListingImageIssues } from "@/modules/listings/listing-error-mapper";
 import {
   ensureAgentOwnsListing,
   getPublicListingDetails,
@@ -48,6 +48,11 @@ export async function PATCH(request: NextRequest, { params }: Props) {
     return withRateLimitHeaders(NextResponse.json({ listing }), limited.headers);
   } catch (error) {
     if (error instanceof ZodError) {
+      captureServerError(error, {
+        route: "/api/listings/[listingId]",
+        method: "PATCH",
+        imageValidationIssues: summarizeListingImageIssues(error)
+      });
       return NextResponse.json(
         {
           message: "Please correct the highlighted fields.",

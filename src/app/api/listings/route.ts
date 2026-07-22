@@ -4,7 +4,7 @@ import { ZodError } from "zod";
 import { requireAgent } from "@/lib/auth";
 import { captureServerError } from "@/lib/security/logger";
 import { RATE_LIMITS, rateLimitByIp, withRateLimitHeaders } from "@/lib/security/rate-limit";
-import { mapListingErrors, mapListingRuntimeError } from "@/modules/listings/listing-error-mapper";
+import { mapListingErrors, mapListingRuntimeError, summarizeListingImageIssues } from "@/modules/listings/listing-error-mapper";
 import { createAgentListing, getPublicListings } from "@/modules/listings/listing.service";
 
 export async function GET(request: NextRequest) {
@@ -49,6 +49,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ listing }, { status: 201 });
   } catch (error) {
     if (error instanceof ZodError) {
+      captureServerError(error, {
+        route: "/api/listings",
+        method: "POST",
+        imageValidationIssues: summarizeListingImageIssues(error)
+      });
       return NextResponse.json(
         {
           message: "Please correct the highlighted fields.",
