@@ -1,8 +1,7 @@
-import Image from "next/image";
 import Link from "next/link";
 
+import { SafeListingImage } from "@/components/listings/safe-listing-image";
 import { formatPrice } from "@/lib/format";
-import { shouldOptimizeListingImage } from "@/lib/listing-image-optimization";
 import { getListingHeroImage } from "@/lib/listing-images";
 import { LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
 import { getListingHref } from "@/lib/listing-urls";
@@ -23,14 +22,13 @@ export function SimilarListingCard({ listing }: Props) {
     >
       <div className="relative h-24 overflow-hidden rounded-xl bg-stone-200 sm:h-28">
         {image ? (
-          <Image
+          <SafeListingImage
             src={image.cardUrl}
             alt={listing.title}
             fill
             className="object-cover transition duration-300 group-hover:scale-[1.04]"
             sizes="(max-width: 640px) 112px, 220px"
             quality={70}
-            unoptimized={!shouldOptimizeListingImage(image.cardUrl)}
             {...(image.blurDataUrl ? { placeholder: "blur" as const, blurDataURL: image.blurDataUrl } : {})}
           />
         ) : null}

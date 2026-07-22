@@ -1,10 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import { CSSProperties, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { shouldOptimizeListingImage } from "@/lib/listing-image-optimization";
+import { SafeListingImage } from "@/components/listings/safe-listing-image";
 import { ListingImageSource } from "@/lib/listing-images";
 
 type Props = {
@@ -128,14 +127,13 @@ export function ListingImageGallery({ images, title, unavailableBadge }: Props) 
               </svg>
             </button>
             <div className="relative h-full w-full px-3 py-16 sm:px-8">
-              <Image
+              <SafeListingImage
                 src={selectedImage.heroUrl}
                 alt={`${title} preview ${selectedIndex + 1}`}
                 fill
                 className="object-contain"
                 sizes="100vw"
                 quality={78}
-                unoptimized={!shouldOptimizeListingImage(selectedImage.heroUrl)}
               />
             </div>
             {hasMultipleImages ? (
@@ -185,14 +183,13 @@ export function ListingImageGallery({ images, title, unavailableBadge }: Props) 
           style={galleryFrameStyle}
           aria-label={`Open full preview for ${title}`}
         >
-          <Image
+          <SafeListingImage
             src={selectedImage.heroUrl}
             alt={`${title} image ${selectedIndex + 1}`}
             fill
             className="object-contain transition duration-300 group-hover:scale-[1.01]"
             sizes="(max-width: 1024px) 100vw, 780px"
             quality={78}
-            unoptimized={!shouldOptimizeListingImage(selectedImage.heroUrl)}
             onLoad={(event) => rememberRatio(selectedIndex, event.currentTarget)}
           />
           <span className="pointer-events-none absolute bottom-4 right-4 hidden rounded-full bg-slate-950/70 px-3 py-1.5 text-xs font-bold text-white shadow-sm ring-1 ring-white/10 sm:inline-flex">
@@ -244,14 +241,13 @@ export function ListingImageGallery({ images, title, unavailableBadge }: Props) 
                 aria-label={`Show listing image ${index + 1}`}
                 aria-current={index === selectedIndex ? "true" : undefined}
               >
-                <Image
+                <SafeListingImage
                   src={image.cardUrl}
                   alt={`${title} thumbnail ${index + 1}`}
                   fill
                   className="object-contain"
                   sizes="144px"
                   quality={70}
-                  unoptimized={!shouldOptimizeListingImage(image.cardUrl)}
                   onLoad={(event) => rememberRatio(index, event.currentTarget)}
                 />
               </button>

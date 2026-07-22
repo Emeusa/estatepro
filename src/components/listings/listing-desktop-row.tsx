@@ -1,14 +1,13 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 
 import { VerifiedBadgeIcon } from "@/components/agents/verified-badge";
 import { SaveListingButton } from "@/components/listings/save-listing-button";
+import { SafeListingImage } from "@/components/listings/safe-listing-image";
 import { getQualityIconForLabel, QualityIcon } from "@/components/listings/listing-quality-icons";
 import { formatDate, formatPrice, whatsappLink } from "@/lib/format";
-import { shouldOptimizeListingImage } from "@/lib/listing-image-optimization";
 import { trackListingEvent } from "@/lib/listing-events";
 import { getListingImages } from "@/lib/listing-images";
 import { getListingHref } from "@/lib/listing-urls";
@@ -135,14 +134,13 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
           className="group relative block h-[236px] overflow-hidden rounded-2xl bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950 2xl:h-[250px]"
         >
           {image ? (
-            <Image
+            <SafeListingImage
               src={image.cardUrl}
               alt={listing.title}
               fill
               className="object-cover transition duration-300 group-hover:scale-[1.02] group-hover:opacity-95"
               sizes="(max-width: 1536px) 286px, 304px"
-              quality={72}
-              unoptimized={!shouldOptimizeListingImage(image.cardUrl)}
+              quality={70}
             />
           ) : null}
           <PhotoCount count={photoCount} />
@@ -166,14 +164,13 @@ export function ListingDesktopRow({ listing, initialSaved, onSavedChange }: Prop
                 aria-label={`View photo ${index + 2} for ${listing.title}`}
                 className="group relative h-16 overflow-hidden rounded-xl bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
               >
-                <Image
+                <SafeListingImage
                   src={preview.cardUrl}
                   alt={listing.title}
                   fill
                   className="object-cover transition duration-300 group-hover:scale-[1.03] group-hover:opacity-95"
                   sizes="90px"
-                  quality={68}
-                  unoptimized={!shouldOptimizeListingImage(preview.cardUrl)}
+                  quality={70}
                 />
               </Link>
             ))}

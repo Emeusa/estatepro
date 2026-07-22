@@ -41,6 +41,7 @@ describe("public listing feed image performance", () => {
 
   it("uses Next Image optimization for configured Supabase listing images with a safe fallback", () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://project.supabase.co";
+    const safeImageSource = readSource("src/components/listings/safe-listing-image.tsx");
 
     expect(
       shouldOptimizeListingImage(
@@ -54,6 +55,10 @@ describe("public listing feed image performance", () => {
       false
     );
 
+    expect(safeImageSource).toContain("shouldOptimizeListingImage(src)");
+    expect(safeImageSource).toContain("setUseDirectImage(true)");
+    expect(safeImageSource).toContain("unoptimized={!canUseOptimizer || useDirectImage}");
+
     for (const componentPath of [
       "src/components/listings/listing-card.tsx",
       "src/components/listings/listing-desktop-row.tsx",
@@ -62,11 +67,47 @@ describe("public listing feed image performance", () => {
       "src/components/listings/listing-contact-actions.tsx"
     ]) {
       const source = readSource(componentPath);
-      expect(source).toContain("shouldOptimizeListingImage");
+      expect(source).toContain("SafeListingImage");
       expect(source).not.toContain("unoptimized={image.isPreprocessed}");
       expect(source).not.toContain("unoptimized={preview.isPreprocessed}");
       expect(source).not.toContain("unoptimized={selectedImage.isPreprocessed}");
     }
+  });
+
+  it("uses only image quality values allowed by Next config", () => {
+    const nextConfigSource = readSource("next.config.mjs");
+    const allowedQualities = Array.from(nextConfigSource.matchAll(/qualities:\s*\[([^\]]+)\]/g))
+      .flatMap((match) => match[1].split(","))
+      .map((value) => Number(value.trim()))
+      .filter(Number.isFinite);
+
+    expect(allowedQualities).toEqual(expect.arrayContaining([70, 78]));
+
+    for (const componentPath of [
+      "src/components/listings/listing-card.tsx",
+      "src/components/listings/listing-desktop-row.tsx",
+      "src/components/listings/listing-image-gallery.tsx",
+      "src/components/listings/similar-listing-card.tsx",
+      "src/components/listings/listing-contact-actions.tsx"
+    ]) {
+      const source = readSource(componentPath);
+      const qualityValues = Array.from(source.matchAll(/quality=\{(\d+)\}/g)).map((match) => Number(match[1]));
+      expect(qualityValues.length).toBeGreaterThan(0);
+      for (const quality of qualityValues) {
+        expect(allowedQualities).toContain(quality);
+      }
+    }
+  });
+
+  it("batches saved-listing state in the feed instead of fetching once per card", () => {
+    const gridSource = readSource("src/components/listings/listing-grid.tsx");
+    const saveButtonSource = readSource("src/components/listings/save-listing-button.tsx");
+
+    expect(gridSource).toContain("savedListingIds");
+    expect(gridSource).toContain("listingIds=${encodeURIComponent(uncheckedIds.join(\",\"))}");
+    expect(gridSource).toContain("initialSaved={savedIds.has(listing.id)}");
+    expect(gridSource).toContain("onSavedChange={updateSavedState}");
+    expect(saveButtonSource).toContain("if (initialSaved !== undefined)");
   });
 });
 

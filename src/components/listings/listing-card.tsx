@@ -1,11 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+import { SafeListingImage } from "@/components/listings/safe-listing-image";
 import { formatDate, formatPrice, whatsappLink } from "@/lib/format";
-import { shouldOptimizeListingImage } from "@/lib/listing-image-optimization";
 import { trackListingEvent } from "@/lib/listing-events";
 import { getListingImages } from "@/lib/listing-images";
 import { getListingHref } from "@/lib/listing-urls";
@@ -128,14 +127,13 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
       <div className="relative h-48 w-full overflow-hidden sm:h-52 lg:h-48 xl:h-52">
         <Link href={listingHref} aria-label={`View ${listing.title}`} className="group relative block h-full">
           {image ? (
-            <Image
+            <SafeListingImage
               src={image.cardUrl}
               alt={listing.title}
               fill
               className="object-cover transition duration-300 group-hover:scale-[1.02] group-hover:opacity-95"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
               quality={70}
-              unoptimized={!shouldOptimizeListingImage(image.cardUrl)}
             />
           ) : null}
           {photoCount > 1 ? (
@@ -170,14 +168,13 @@ export function ListingCard({ listing, initialSaved, onSavedChange }: Props) {
               className="group relative h-12 max-w-full shrink-0 overflow-hidden rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
               style={{ aspectRatio: previewRatios[index] ?? getCardImageRatio(preview) }}
             >
-              <Image
+              <SafeListingImage
                 src={preview.cardUrl}
                 alt={listing.title}
                 fill
                 className="object-cover transition duration-300 group-hover:scale-[1.03] group-hover:opacity-95"
                 sizes="120px"
                 quality={70}
-                unoptimized={!shouldOptimizeListingImage(preview.cardUrl)}
                 onLoad={(event) => rememberPreviewRatio(index, event.currentTarget)}
               />
             </Link>

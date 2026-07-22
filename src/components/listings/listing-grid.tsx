@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { apiRequest } from "@/lib/api";
+import { supabase } from "@/lib/supabase/client";
 import { PublicListingCardRecord } from "@/lib/types";
 
 import { ListingDesktopRow } from "@/components/listings/listing-desktop-row";
@@ -154,12 +156,81 @@ export function ListingGrid({
   const [cursor, setCursor] = useState(nextCursor);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [checkedSavedIds, setCheckedSavedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setItems(listings);
     setCursor(nextCursor);
     setError("");
+    setSavedIds(new Set());
+    setCheckedSavedIds(new Set());
   }, [listings, nextCursor]);
+
+  useEffect(() => {
+    const uncheckedIds = items.map((listing) => listing.id).filter((listingId) => !checkedSavedIds.has(listingId));
+    if (!uncheckedIds.length) {
+      return;
+    }
+
+    let active = true;
+
+    async function loadSavedState() {
+      const {
+        data: { session }
+      } = await supabase.auth.getSession();
+
+      if (!active) {
+        return;
+      }
+
+      if (!session?.access_token) {
+        setCheckedSavedIds((current) => new Set([...current, ...uncheckedIds]));
+        return;
+      }
+
+      try {
+        const response = await apiRequest<{ savedListingIds: string[] }>(
+          `/api/saved-listings?listingIds=${encodeURIComponent(uncheckedIds.join(","))}`,
+          {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+            retries: 0
+          }
+        );
+
+        if (!active) {
+          return;
+        }
+
+        setSavedIds((current) => new Set([...current, ...response.savedListingIds]));
+      } catch {
+        // Saved state is non-critical; the save button still performs the real action on click.
+      } finally {
+        if (active) {
+          setCheckedSavedIds((current) => new Set([...current, ...uncheckedIds]));
+        }
+      }
+    }
+
+    void loadSavedState();
+
+    return () => {
+      active = false;
+    };
+  }, [checkedSavedIds, items]);
+
+  function updateSavedState(listingId: string, saved: boolean) {
+    setSavedIds((current) => {
+      const next = new Set(current);
+      if (saved) {
+        next.add(listingId);
+      } else {
+        next.delete(listingId);
+      }
+      return next;
+    });
+    setCheckedSavedIds((current) => new Set(current).add(listingId));
+  }
 
   async function loadMore() {
     if (!cursor || loading) {
@@ -245,14 +316,24 @@ export function ListingGrid({
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 xl:hidden">
         {items.map((listing) => (
-          <ListingCard key={listing.id} listing={listing} />
+          <ListingCard
+            key={listing.id}
+            listing={listing}
+            initialSaved={savedIds.has(listing.id)}
+            onSavedChange={updateSavedState}
+          />
         ))}
       </div>
       {showDiscoveryRail ? (
         <div className="hidden xl:grid xl:grid-cols-[minmax(0,56rem)_15.5rem] xl:items-start xl:justify-start xl:gap-5 2xl:grid-cols-[minmax(0,58rem)_17rem] 2xl:gap-6">
           <div className="min-w-0 space-y-4">
             {items.map((listing) => (
-              <ListingDesktopRow key={listing.id} listing={listing} />
+              <ListingDesktopRow
+                key={listing.id}
+                listing={listing}
+                initialSaved={savedIds.has(listing.id)}
+                onSavedChange={updateSavedState}
+              />
             ))}
           </div>
           <ListingDiscoveryRail queryParams={queryParams} />
@@ -261,7 +342,12 @@ export function ListingGrid({
         <div className="hidden xl:block">
           <div className="mx-auto max-w-[58rem] space-y-4 2xl:max-w-[60rem]">
             {items.map((listing) => (
-              <ListingDesktopRow key={listing.id} listing={listing} />
+              <ListingDesktopRow
+                key={listing.id}
+                listing={listing}
+                initialSaved={savedIds.has(listing.id)}
+                onSavedChange={updateSavedState}
+              />
             ))}
           </div>
         </div>
