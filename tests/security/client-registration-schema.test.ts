@@ -53,14 +53,15 @@ describe("agentRegistrationSchema", () => {
     expect(parsed.cacNumber).toBe("RC1234567");
   });
 
-  it("requires either NIN or CAC for agent verification", () => {
-    const parsed = agentRegistrationSchema.safeParse({
+  it("accepts blank NIN and CAC as nullable credibility details", () => {
+    const parsed = agentRegistrationSchema.parse({
       ...baseAgentPayload,
       ninNumber: "",
       cacNumber: ""
     });
 
-    expect(parsed.success).toBe(false);
+    expect(parsed.ninNumber).toBeNull();
+    expect(parsed.cacNumber).toBeNull();
   });
 
   it("rejects invalid non-empty CAC values", () => {

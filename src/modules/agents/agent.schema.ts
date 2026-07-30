@@ -71,19 +71,6 @@ const optionalCacNumberSchema = z
     message: "CAC registration number must use letters, numbers, or hyphens only."
   });
 
-function requireAgentVerificationIdentifier(
-  value: { ninNumber?: string | null; cacNumber?: string | null },
-  context: z.RefinementCtx
-) {
-  if (!value.ninNumber && !value.cacNumber) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["verification"],
-      message: "Provide either your NIN or CAC registration number."
-    });
-  }
-}
-
 const agentRegistrationBaseSchema = z.object({
   email: normalizedEmailSchema,
   password: z.string().min(6).max(72),
@@ -93,7 +80,7 @@ const agentRegistrationBaseSchema = z.object({
   cacNumber: optionalCacNumberSchema
 }).strict();
 
-export const agentRegistrationSchema = agentRegistrationBaseSchema.superRefine(requireAgentVerificationIdentifier);
+export const agentRegistrationSchema = agentRegistrationBaseSchema;
 
 export const clientRegistrationSchema = z.object({
   email: normalizedEmailSchema,
@@ -115,8 +102,7 @@ export const agentRegistrationRequestSchema = agentRegistrationBaseSchema
     ...botProtectionSchema.shape,
     acceptedLegalTerms: z.literal(true)
   })
-  .strict()
-  .superRefine(requireAgentVerificationIdentifier);
+  .strict();
 
 export const clientRegistrationRequestSchema = clientRegistrationSchema
   .extend(botProtectionSchema.shape)

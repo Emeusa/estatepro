@@ -427,10 +427,6 @@ export function AgentRegisterForm() {
     const ninNumber = form.get("ninNumber")?.toString().trim() ?? "";
     const cacNumber = (form.get("cacNumber")?.toString() ?? "").trim().toUpperCase().replace(/\s+/g, "");
     const acceptedLegalTerms = form.get("acceptedLegalTerms") === "on";
-    if (!ninNumber && !cacNumber) {
-      setMessage("Provide either your NIN or CAC registration number.");
-      return;
-    }
 
     if (ninNumber && !/^\d{11}$/.test(ninNumber)) {
       setMessage("Your NIN must be exactly 11 digits.");
@@ -495,8 +491,10 @@ export function AgentRegisterForm() {
       />
       <input className="input" name="phone" placeholder="Phone e.g. 08031234567" />
       <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <p className="text-sm font-semibold text-slate-800">Verification details</p>
-        <p className="mt-1 text-xs text-slate-500">Provide either your personal NIN or your business CAC registration number.</p>
+        <p className="text-sm font-semibold text-slate-800">Credibility details</p>
+        <p className="mt-1 text-xs text-slate-500">
+          NIN or CAC is not required, but providing one can make your agent profile more credible during admin review.
+        </p>
         <div className="mt-3 grid gap-3">
           <input className="input" name="ninNumber" inputMode="numeric" maxLength={11} placeholder="NIN number" />
           <input className="input" name="cacNumber" autoCapitalize="characters" placeholder="CAC registration number" />

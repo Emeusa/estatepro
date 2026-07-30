@@ -14,9 +14,9 @@ export default function AgentRegisterPage() {
   return (
     <section className="mx-auto max-w-xl space-y-4">
       <div>
-        <h1 className="text-3xl font-semibold text-slate-950">Become a verified agent</h1>
+        <h1 className="text-3xl font-semibold text-slate-950">Become an agent</h1>
         <p className="mt-2 text-sm text-slate-500">
-          Submit your details with either NIN or CAC verification to start listing properties.
+          Submit your details for admin review. Add NIN or CAC details if available to improve your credibility.
         </p>
       </div>
       <AgentRegisterForm />

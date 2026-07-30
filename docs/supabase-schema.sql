@@ -36,8 +36,7 @@ create table if not exists public.agents (
   nin_number text,
   cac_number text,
   is_blocked boolean not null default false,
-  trial_ends_at timestamptz not null,
-  check (nin_number is not null or cac_number is not null)
+  trial_ends_at timestamptz not null
 );
 
 create table if not exists public.plans (
@@ -722,13 +721,11 @@ begin
       check (cac_number is null or cac_number ~ '^[A-Z0-9][A-Z0-9-]{1,29}$');
   end if;
 
-  if not exists (
+  if exists (
     select 1 from pg_constraint where conname = 'agents_verification_identifier_check'
   ) then
     alter table public.agents
-      add constraint agents_verification_identifier_check
-      check (nin_number is not null or cac_number is not null)
-      not valid;
+      drop constraint agents_verification_identifier_check;
   end if;
 
   if not exists (

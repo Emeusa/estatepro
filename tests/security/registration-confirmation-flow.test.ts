@@ -102,13 +102,20 @@ describe("registration confirmation flow", () => {
     });
   });
 
-  it("rejects agent registration when both NIN and CAC are blank", async () => {
+  it("allows agent registration when both NIN and CAC are blank", async () => {
     const response = await POST(agentRegisterRequest({ ninNumber: "", cacNumber: "" }));
     const body = await response.json();
 
-    expect(response.status).toBe(400);
-    expect(body.message).toBe("Provide either your NIN or CAC registration number.");
-    expect(mocks.createAgentAccount).not.toHaveBeenCalled();
+    expect(response.status).toBe(201);
+    expect(body.checkEmailUrl).toBe("/auth/check-email?email=agent%40example.com&type=agent");
+    expect(mocks.createAgentAccount).toHaveBeenCalledWith({
+      email: "agent@example.com",
+      password: "strongpass",
+      fullName: "Test Agent",
+      phone: "+2348031234567",
+      ninNumber: null,
+      cacNumber: null
+    });
   });
 
   it("rejects invalid CAC before account creation", async () => {
@@ -189,5 +196,16 @@ describe("registration confirmation flow", () => {
     expect(source).toContain('placeholder="CAC registration number"');
     expect(source).not.toContain("NIN number (optional)");
     expect(source).not.toContain("CAC registration number (optional)");
+  });
+
+  it("presents NIN and CAC as optional credibility details, not required verification", () => {
+    const formSource = readFileSync(path.join(process.cwd(), "src/components/forms/auth-forms.tsx"), "utf8");
+    const pageSource = readFileSync(path.join(process.cwd(), "src/app/agents/register/page.tsx"), "utf8");
+
+    expect(formSource).toContain("Credibility details");
+    expect(formSource).toContain("NIN or CAC is not required");
+    expect(formSource).not.toContain("Provide either your NIN or CAC registration number.");
+    expect(pageSource).toContain("Add NIN or CAC details if available to improve your credibility.");
+    expect(pageSource).not.toContain("Become a verified agent");
   });
 });

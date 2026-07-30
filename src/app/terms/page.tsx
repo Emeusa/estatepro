@@ -16,7 +16,8 @@ export const metadata: Metadata = {
 };
 
 const agentRules = [
-  "You must provide accurate identity, contact, NIN or CAC details, agency, listing, price, location, ownership, mandate, and availability information.",
+  "You must provide accurate identity, contact, agency, listing, price, location, ownership, mandate, and availability information.",
+  "If you submit NIN or CAC details to improve credibility, those details must be truthful and must belong to you or your registered business.",
   "You must not impersonate a landlord, owner, developer, agent, company, government office, or any other person.",
   "You must not upload fake properties, stolen photos, misleading prices, duplicate scam listings, unavailable properties, or listings you are not authorized to market.",
   "You must promptly update a listing when it becomes sold, rented, booked, unavailable, disputed, or materially inaccurate.",
@@ -53,9 +54,10 @@ export default function TermsPage() {
           <h2 className="font-heading text-2xl font-semibold text-slate-950">2. Agent registration and verification</h2>
           <p className="mt-3">
             Agents must submit truthful registration information. C59 Estatehub may verify identity, contact details,
-            NIN, CAC registration details, listing activity, account behavior, and fraud reports before approving or
-            continuing an agent account. Approval may be refused, delayed, suspended, or withdrawn where we detect
-            inaccurate information, suspicious behavior, user complaints, or fraud risk.
+            optional NIN or CAC registration details, listing activity, account behavior, and fraud reports before
+            approving or continuing an agent account. Approval remains a manual admin decision and may be refused,
+            delayed, suspended, or withdrawn where we detect inaccurate information, suspicious behavior, user
+            complaints, or fraud risk.
           </p>
         </section>
 

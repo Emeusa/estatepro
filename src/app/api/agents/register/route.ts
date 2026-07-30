@@ -36,10 +36,6 @@ function getFriendlyMessage(error: unknown) {
       return "Enter a valid CAC registration number.";
     }
 
-    if (issue.path.includes("verification")) {
-      return "Provide either your NIN or CAC registration number.";
-    }
-
     if (issue.path.includes("acceptedLegalTerms")) {
       return "Please agree to the Terms and Conditions and Privacy Policy before creating an agent account.";
     }

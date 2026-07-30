@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 
 const dataCategories = [
   "Account data, including name, email address, phone number, role, authentication status, and profile updates.",
-  "Agent verification data, including NIN, CAC registration details, verification status, blocked status, moderation decisions, and review history.",
+  "Optional agent credibility data, including NIN, CAC registration details, verification status, blocked status, moderation decisions, and review history.",
   "Listing data, including titles, descriptions, prices, locations, images, image metadata, amenities, availability, contact numbers, and promotion status.",
   "Billing data, including plan, payment provider, transaction references, subscription status, billing mode, current period, and cancellation status.",
   "Security and analytics data, including request IDs, IP hashes, user agent, rate-limit events, security events, listing impressions, detail views, phone clicks, and WhatsApp clicks.",
@@ -26,7 +26,7 @@ const dataCategories = [
 
 const dataUses = [
   "Create and manage user, agent, admin, listing, billing, and support accounts.",
-  "Verify agents, prevent impersonation, detect fraud, investigate complaints, and enforce marketplace rules.",
+  "Review agents, prevent impersonation, detect fraud, investigate complaints, and enforce marketplace rules.",
   "Display public property listings, agent contact options, listing quality details, and visibility badges.",
   "Process subscriptions, payments, renewals, prepaid access, cancellations, invoices, and billing support.",
   "Rate-limit requests, block abuse, secure APIs, monitor errors, and protect the platform from bots or suspicious activity.",
@@ -85,11 +85,11 @@ export default function PrivacyPage() {
         <section>
           <h2 className="font-heading text-2xl font-semibold text-slate-950">4. Agent verification data</h2>
           <p className="mt-3">
-            Agents submit NIN, CAC registration details, or related verification data so C59 Estatehub can reduce
-            impersonation, fake agents, and property fraud. Full NIN and CAC values are not shown publicly. Access is
-            limited to trusted admin workflows and server-side verification/support needs. We may retain verification
-            records where reasonably necessary for fraud prevention, account safety, dispute handling, legal compliance,
-            or audit purposes.
+            Agents may submit NIN, CAC registration details, or related credibility data so C59 Estatehub can reduce
+            impersonation, fake agents, and property fraud. These details are optional at signup, but they may support
+            admin review. Full NIN and CAC values are not shown publicly. Access is limited to trusted admin workflows
+            and server-side verification/support needs. We may retain verification records where reasonably necessary
+            for fraud prevention, account safety, dispute handling, legal compliance, or audit purposes.
           </p>
         </section>
 
