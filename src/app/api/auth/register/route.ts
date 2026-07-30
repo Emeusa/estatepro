@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 
-import { assertBotProtection, botProtectionSchema } from "@/lib/security/bot";
+import { assertBotProtection, botProtectionSchema, isBotProtectionError } from "@/lib/security/bot";
 import { captureServerError } from "@/lib/security/logger";
-import { getClientIp } from "@/lib/security/request";
+import { getClientIp, hashValue } from "@/lib/security/request";
 import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
 import { buildCheckEmailUrl } from "@/lib/auth-confirmation";
 import { clientRegistrationRequestSchema } from "@/modules/agents/agent.schema";
@@ -35,7 +35,12 @@ function getFriendlyMessage(error: unknown) {
     return "We could not create your account. Please try again.";
   }
 
-  const message = error.message.toLowerCase();
+  const originalMessage = error.message;
+  const message = originalMessage.toLowerCase();
+
+  if (isBotProtectionError(error)) {
+    return originalMessage;
+  }
 
   if (message.includes("auth/email-already-exists") || message.includes("already exists")) {
     return "An account with this email already exists. Please log in or reset your password.";
@@ -57,7 +62,7 @@ function getFriendlyMessage(error: unknown) {
     return "Enter a valid phone number or leave it blank.";
   }
 
-  return `Account creation failed: ${error.message}`;
+  return `Account creation failed: ${originalMessage}`;
 }
 
 function getErrorStatus(error: unknown) {
@@ -85,11 +90,19 @@ export async function POST(request: NextRequest) {
   try {
     const body = clientRegistrationRequestSchema.parse(await request.json());
     const botFields = botProtectionSchema.parse(body);
-    const limited = await rateLimit(request, RATE_LIMITS.auth, getClientIp(request));
+    const botLimited = await rateLimit(request, RATE_LIMITS.authBotCheck, getClientIp(request));
+    if (!botLimited.allowed) {
+      return botLimited.response;
+    }
+    await assertBotProtection(request, botFields, "client_registration");
+    const limited = await rateLimit(
+      request,
+      RATE_LIMITS.clientRegister,
+      `${getClientIp(request)}:${hashValue(body.email)}`
+    );
     if (!limited.allowed) {
       return limited.response;
     }
-    await assertBotProtection(request, botFields, "client_registration");
     const result = await createClientAccount({
       email: body.email,
       password: body.password,

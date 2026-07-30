@@ -13,9 +13,11 @@ export type RateLimitPolicy = {
 
 export const RATE_LIMITS = {
   publicRead: { name: "public-read", limit: 120, windowSeconds: 60 },
-  auth: { name: "auth", limit: 5, windowSeconds: 60 },
-  agentRegister: { name: "agent-register", limit: 3, windowSeconds: 60 * 60 },
-  passwordReset: { name: "password-reset", limit: 3, windowSeconds: 60 * 60 },
+  authBotCheck: { name: "auth-bot-check", limit: 30, windowSeconds: 60 },
+  login: { name: "login", limit: 12, windowSeconds: 5 * 60 },
+  clientRegister: { name: "client-register", limit: 5, windowSeconds: 60 * 60 },
+  agentRegister: { name: "agent-register", limit: 5, windowSeconds: 60 * 60 },
+  passwordReset: { name: "password-reset", limit: 5, windowSeconds: 60 * 60 },
   listingReportHourly: { name: "listing-report-hourly", limit: 5, windowSeconds: 60 * 60 },
   listingReportDaily: { name: "listing-report-daily", limit: 20, windowSeconds: 24 * 60 * 60 },
   admin: { name: "admin", limit: 60, windowSeconds: 60 },

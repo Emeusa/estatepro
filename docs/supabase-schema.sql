@@ -1316,7 +1316,8 @@ revoke all on function public.record_listing_event(uuid, text, text, text, jsonb
 revoke all on function public.record_listing_event(uuid, text, text, text, jsonb) from authenticated;
 grant execute on function public.record_listing_event(uuid, text, text, text, jsonb) to service_role;
 
-create or replace view public.public_listings as
+create or replace view public.public_listings
+with (security_invoker = true) as
 select listings.*
 from public.listings
 join public.agents
@@ -1325,7 +1326,8 @@ where listings.status = 'active'
   and agents.verification_status = 'approved'
   and agents.is_blocked = false;
 
-create or replace view public.public_feed_listings as
+create or replace view public.public_feed_listings
+with (security_invoker = true) as
 select listings.*
 from public.listings
 join public.agents
@@ -1339,6 +1341,10 @@ where listings.status = 'active'
   )
   and agents.verification_status = 'approved'
   and agents.is_blocked = false;
+
+revoke all on table public.public_listings from anon, authenticated;
+revoke all on table public.public_feed_listings from anon, authenticated;
+grant select on table public.public_listings, public.public_feed_listings to service_role;
 
 alter table public.users enable row level security;
 alter table public.agents enable row level security;

@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   createAgentAccount: vi.fn(),
   rateLimit: vi.fn(),
+  verifyTurnstile: vi.fn(),
   withRateLimitHeaders: vi.fn()
 }));
 
@@ -16,14 +17,15 @@ vi.mock("@/modules/agents/agent.service", () => ({
 
 vi.mock("@/lib/security/rate-limit", () => ({
   RATE_LIMITS: {
-    agentRegister: { limit: 5, window: "1 h" }
+    authBotCheck: { name: "auth-bot-check", limit: 30, windowSeconds: 60 },
+    agentRegister: { name: "agent-register", limit: 5, windowSeconds: 60 * 60 }
   },
   rateLimit: mocks.rateLimit,
   withRateLimitHeaders: mocks.withRateLimitHeaders
 }));
 
 vi.mock("@/lib/security/turnstile", () => ({
-  verifyTurnstile: vi.fn(async () => ({ success: true }))
+  verifyTurnstile: mocks.verifyTurnstile
 }));
 
 vi.mock("@/lib/security/logger", () => ({
@@ -36,6 +38,9 @@ import { POST } from "../../src/app/api/agents/register/route";
 function agentRegisterRequest(overrides: Record<string, unknown> = {}) {
   return new NextRequest("http://localhost:3000/api/agents/register", {
     method: "POST",
+    headers: {
+      "x-forwarded-for": "203.0.113.46"
+    },
     body: JSON.stringify({
       email: "AGENT@Example.COM",
       password: "strongpass",
@@ -55,6 +60,7 @@ describe("registration confirmation flow", () => {
   beforeEach(() => {
     mocks.createAgentAccount.mockReset();
     mocks.rateLimit.mockReset();
+    mocks.verifyTurnstile.mockReset();
     mocks.withRateLimitHeaders.mockReset();
 
     mocks.createAgentAccount.mockResolvedValue({
@@ -67,6 +73,7 @@ describe("registration confirmation flow", () => {
       }
     });
     mocks.rateLimit.mockResolvedValue({ allowed: true, headers: new Headers() });
+    mocks.verifyTurnstile.mockResolvedValue({ success: true, skipped: false });
     mocks.withRateLimitHeaders.mockImplementation((response) => response);
   });
 
@@ -84,6 +91,18 @@ describe("registration confirmation flow", () => {
       ninNumber: "12345678901",
       cacNumber: null
     });
+    expect(mocks.rateLimit).toHaveBeenNthCalledWith(
+      1,
+      expect.any(NextRequest),
+      expect.objectContaining({ name: "auth-bot-check" }),
+      "203.0.113.46"
+    );
+    expect(mocks.rateLimit).toHaveBeenNthCalledWith(
+      2,
+      expect.any(NextRequest),
+      expect.objectContaining({ name: "agent-register" }),
+      expect.stringContaining("203.0.113.46:")
+    );
   });
 
   it("returns a check-email redirect URL after CAC-only agent registration succeeds", async () => {
@@ -137,6 +156,38 @@ describe("registration confirmation flow", () => {
     expect(body.message).toBe("An agent with this CAC registration number already exists.");
   });
 
+  it("returns a conflict when an agent email already exists", async () => {
+    mocks.createAgentAccount.mockRejectedValueOnce(
+      new Error("An account with this email already exists. Please log in or reset your password.")
+    );
+
+    const response = await POST(agentRegisterRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.message).toBe("An account with this email already exists. Please log in or reset your password.");
+  });
+
+  it("does not consume the agent registration limiter when Turnstile fails", async () => {
+    mocks.verifyTurnstile.mockResolvedValue({
+      success: false,
+      message: "Security check could not be confirmed. Tap retry, complete the check, and try again."
+    });
+
+    const response = await POST(agentRegisterRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.message).toBe("Security check could not be confirmed. Tap retry, complete the check, and try again.");
+    expect(mocks.createAgentAccount).not.toHaveBeenCalled();
+    expect(mocks.rateLimit).toHaveBeenCalledTimes(1);
+    expect(mocks.rateLimit).toHaveBeenCalledWith(
+      expect.any(NextRequest),
+      expect.objectContaining({ name: "auth-bot-check" }),
+      "203.0.113.46"
+    );
+  });
+
   it("does not use the async React event target reset pattern in registration forms", () => {
     const source = readFileSync(path.join(process.cwd(), "src/components/forms/auth-forms.tsx"), "utf8");
 
@@ -157,6 +208,20 @@ describe("registration confirmation flow", () => {
     expect(source).toContain("cac_number: input.cacNumber");
   });
 
+  it("checks app and auth email availability before creating auth users", () => {
+    const source = readFileSync(path.join(process.cwd(), "src/modules/agents/agent.repository.ts"), "utf8");
+
+    expect(source).toContain('.from("users")');
+    expect(source).toContain('.eq("email", normalizedEmail)');
+    expect(source).toContain('supabase.rpc("auth_email_exists"');
+    expect(source.indexOf("await assertRegistrationAvailable({ email: input.email });")).toBeLessThan(
+      source.indexOf("const userId = await createAuthUserWithConfirmation")
+    );
+    expect(source.indexOf("await assertRegistrationAvailable({ email: input.email, ninNumber: input.ninNumber, cacNumber: input.cacNumber });")).toBeLessThan(
+      source.lastIndexOf("const userId = await createAuthUserWithConfirmation")
+    );
+  });
+
   it("remounts auth Turnstile widgets after failed submissions", () => {
     const source = readFileSync(path.join(process.cwd(), "src/components/forms/auth-forms.tsx"), "utf8");
 
@@ -174,7 +239,7 @@ describe("registration confirmation flow", () => {
 
     expect(source).not.toContain("setMessage(error.message);");
     expect(source).toContain(
-      'setMessage(getFriendlyAuthMessage(error, "We could not create the agent account. Please try again."));'
+      'getFriendlyAuthMessage(error, "We could not create the agent account. Please try again.", "register")'
     );
   });
 
@@ -182,11 +247,18 @@ describe("registration confirmation flow", () => {
     const source = readFileSync(path.join(process.cwd(), "src/components/security/turnstile-fields.tsx"), "utf8");
 
     expect(source).toContain("Security check could not load. Check your connection, then tap retry.");
-    expect(source).toContain("Security check expired. Tap retry, then submit the form again.");
+    expect(source).toContain("Security check expired. Tap retry, then submit again.");
     expect(source).toContain("Retry security check");
     expect(source).not.toContain("Code:");
     expect(source).not.toContain("Config check:");
     expect(source).not.toContain("/api/security/turnstile-status");
+  });
+
+  it("blocks auth form submissions client-side until Turnstile is ready", () => {
+    const source = readFileSync(path.join(process.cwd(), "src/components/forms/auth-forms.tsx"), "utf8");
+
+    expect(source).toContain("getBotProtectionClientError");
+    expect((source.match(/getBotProtectionClientError\(botFields\)/g) ?? []).length).toBeGreaterThanOrEqual(4);
   });
 
   it("does not label NIN or CAC verification placeholders as optional", () => {

@@ -1,4 +1,22 @@
-export function getFriendlyAuthMessage(error: unknown, fallback: string) {
+export type AuthMessageContext = "login" | "register" | "passwordReset";
+
+function getRateLimitMessage(context?: AuthMessageContext) {
+  if (context === "login") {
+    return "Too many login attempts. Please wait a moment and try again.";
+  }
+
+  if (context === "register") {
+    return "Too many signup attempts. Please wait a moment and try again.";
+  }
+
+  if (context === "passwordReset") {
+    return "Too many password reset requests. Please wait a moment and try again.";
+  }
+
+  return "Too many requests. Please wait a moment and try again.";
+}
+
+export function getFriendlyAuthMessage(error: unknown, fallback: string, context?: AuthMessageContext) {
   if (!(error instanceof Error)) {
     return fallback;
   }
@@ -41,7 +59,7 @@ export function getFriendlyAuthMessage(error: unknown, fallback: string) {
   }
 
   if (message.includes("too many requests") || message.includes("too many login attempts")) {
-    return "Too many login attempts. Please wait a moment and try again.";
+    return getRateLimitMessage(context);
   }
 
   if (message.includes("email not confirmed") || message.includes("email_not_confirmed") || message.includes("confirm your email")) {

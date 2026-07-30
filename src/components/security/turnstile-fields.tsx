@@ -22,6 +22,8 @@ declare global {
   }
 }
 
+type TurnstileStatus = "loading" | "ready" | "expired" | "error" | "disabled";
+
 export function TurnstileFields() {
   const startedAt = useMemo(() => Date.now(), []);
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
@@ -33,6 +35,7 @@ export function TurnstileFields() {
   const [widgetError, setWidgetError] = useState("");
   const [renderAttempt, setRenderAttempt] = useState(0);
   const [renderDelay, setRenderDelay] = useState(0);
+  const [status, setStatus] = useState<TurnstileStatus>(siteKey ? "loading" : "disabled");
 
   function removeWidget() {
     try {
@@ -53,6 +56,7 @@ export function TurnstileFields() {
     removeWidget();
     setToken("");
     setWidgetError("");
+    setStatus(siteKey ? "loading" : "disabled");
     setRenderDelay(0);
     setRenderAttempt((current) => current + 1);
     try {
@@ -93,6 +97,7 @@ export function TurnstileFields() {
 
         setToken("");
         setWidgetError(turnstileLoadMessage());
+        setStatus("error");
         return;
       }
 
@@ -102,18 +107,22 @@ export function TurnstileFields() {
           callback: (value) => {
             setToken(value);
             setWidgetError("");
+            setStatus("ready");
           },
           "expired-callback": () => {
             setToken("");
-            setWidgetError("Security check expired. Tap retry, then submit the form again.");
+            setStatus("expired");
+            setWidgetError("Security check expired. Tap retry, then submit again.");
           },
           "error-callback": () => {
             setToken("");
+            setStatus("error");
             setWidgetError(turnstileLoadMessage());
           }
         });
       } catch {
         setToken("");
+        setStatus("error");
         setWidgetError(turnstileLoadMessage());
       }
     }
@@ -138,6 +147,7 @@ export function TurnstileFields() {
       />
       <input name="formStartedAt" type="hidden" value={startedAt} />
       <input name="cf-turnstile-response" type="hidden" value={token} />
+      <input name="turnstileStatus" type="hidden" value={status} />
       {siteKey ? (
         <>
           <Script
@@ -145,7 +155,10 @@ export function TurnstileFields() {
             strategy="afterInteractive"
             onLoad={() => setScriptReady(true)}
             onReady={() => setScriptReady(true)}
-            onError={() => setWidgetError(turnstileLoadMessage())}
+            onError={() => {
+              setStatus("error");
+              setWidgetError(turnstileLoadMessage());
+            }}
           />
           <div ref={containerRef} />
         </>
@@ -153,6 +166,11 @@ export function TurnstileFields() {
       {showMissingSiteKeyWarning ? (
         <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
           Security check is temporarily unavailable. Please try again later.
+        </p>
+      ) : null}
+      {siteKey && status === "loading" && !widgetError ? (
+        <p className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600">
+          Security check is loading. Wait a few seconds before submitting.
         </p>
       ) : null}
       {widgetError ? (
@@ -175,6 +193,27 @@ export function readBotFields(form: FormData) {
   return {
     website: form.get("website")?.toString() ?? "",
     formStartedAt: Number(form.get("formStartedAt") ?? 0) || undefined,
-    turnstileToken: form.get("cf-turnstile-response")?.toString() || undefined
+    turnstileToken: form.get("cf-turnstile-response")?.toString() || undefined,
+    turnstileStatus: form.get("turnstileStatus")?.toString() || undefined
   };
+}
+
+export function getBotProtectionClientError(fields: ReturnType<typeof readBotFields>) {
+  if (!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) {
+    return null;
+  }
+
+  if (fields.turnstileStatus === "expired") {
+    return "Security check expired. Tap retry, then submit again.";
+  }
+
+  if (fields.turnstileStatus === "error") {
+    return "Security check could not load. Check your connection, tap retry, and try again.";
+  }
+
+  if (!fields.turnstileToken) {
+    return "Security check is still loading. Wait a few seconds, then try again.";
+  }
+
+  return null;
 }

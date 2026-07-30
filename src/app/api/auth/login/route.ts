@@ -40,16 +40,21 @@ export async function POST(request: NextRequest) {
   try {
     const body = loginSchema.parse(await request.json());
     userEmailHash = hashValue(body.email);
+    const botLimited = await rateLimit(request, RATE_LIMITS.authBotCheck, getClientIp(request));
+    if (!botLimited.allowed) {
+      return botLimited.response;
+    }
+
+    await assertBotProtection(request, body, "login_attempt");
+
     const limited = await rateLimit(
       request,
-      RATE_LIMITS.auth,
+      RATE_LIMITS.login,
       `${getClientIp(request)}:${userEmailHash}`
     );
     if (!limited.allowed) {
       return limited.response;
     }
-
-    await assertBotProtection(request, body, "login_attempt");
 
     const supabase = createServerSupabaseAuthClient();
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -95,6 +100,10 @@ export async function POST(request: NextRequest) {
       }
     }), limited.headers);
   } catch (error) {
+    if (isBotProtectionError(error)) {
+      return NextResponse.json({ message: error.message }, { status: 400 });
+    }
+
     captureServerError(error, { route: "/api/auth/login", emailHash: userEmailHash });
     await logSecurityEvent({
       request,
@@ -102,9 +111,6 @@ export async function POST(request: NextRequest) {
       result: "failed",
       metadata: { emailHash: userEmailHash, reason: error instanceof Error ? error.message : "unknown" }
     });
-    if (isBotProtectionError(error)) {
-      return NextResponse.json({ message: error.message }, { status: 400 });
-    }
     return NextResponse.json({ message: "Invalid email or password." }, { status: 400 });
   }
 }

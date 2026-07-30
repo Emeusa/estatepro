@@ -5,8 +5,7 @@ const mocks = vi.hoisted(() => ({
   captureServerError: vi.fn(),
   logSecurityEvent: vi.fn(),
   rateLimit: vi.fn(),
-  sendWelcomeEmailForUser: vi.fn(),
-  signInWithPassword: vi.fn(),
+  resetPasswordForEmail: vi.fn(),
   verifyTurnstile: vi.fn(),
   withRateLimitHeaders: vi.fn()
 }));
@@ -19,7 +18,7 @@ vi.mock("@/lib/security/logger", () => ({
 vi.mock("@/lib/security/rate-limit", () => ({
   RATE_LIMITS: {
     authBotCheck: { name: "auth-bot-check", limit: 30, windowSeconds: 60 },
-    login: { name: "login", limit: 12, windowSeconds: 300 }
+    passwordReset: { name: "password-reset", limit: 5, windowSeconds: 60 * 60 }
   },
   rateLimit: mocks.rateLimit,
   withRateLimitHeaders: mocks.withRateLimitHeaders
@@ -32,26 +31,21 @@ vi.mock("@/lib/security/turnstile", () => ({
 vi.mock("@/lib/supabase/server", () => ({
   createServerSupabaseAuthClient: () => ({
     auth: {
-      signInWithPassword: mocks.signInWithPassword
+      resetPasswordForEmail: mocks.resetPasswordForEmail
     }
   })
 }));
 
-vi.mock("@/modules/email/email.service", () => ({
-  sendWelcomeEmailForUser: mocks.sendWelcomeEmailForUser
-}));
+import { POST } from "../../src/app/api/auth/password-reset/route";
 
-import { POST } from "../../src/app/api/auth/login/route";
-
-function loginRequest() {
-  return new NextRequest("http://localhost:3000/api/auth/login", {
+function resetRequest() {
+  return new NextRequest("http://localhost:3000/api/auth/password-reset", {
     method: "POST",
     headers: {
-      "x-forwarded-for": "203.0.113.44"
+      "x-forwarded-for": "203.0.113.47"
     },
     body: JSON.stringify({
       email: "USER@Example.COM",
-      password: "correct-password",
       website: "",
       formStartedAt: Date.now() - 5000,
       turnstileToken: "token"
@@ -59,84 +53,53 @@ function loginRequest() {
   });
 }
 
-describe("auth login route", () => {
+describe("password reset route", () => {
   beforeEach(() => {
-    mocks.captureServerError.mockReset();
-    mocks.logSecurityEvent.mockReset();
-    mocks.rateLimit.mockReset();
-    mocks.sendWelcomeEmailForUser.mockReset();
-    mocks.signInWithPassword.mockReset();
-    mocks.verifyTurnstile.mockReset();
-    mocks.withRateLimitHeaders.mockReset();
+    Object.values(mocks).forEach((mock) => mock.mockReset());
 
     mocks.rateLimit.mockResolvedValue({ allowed: true, headers: {} });
+    mocks.resetPasswordForEmail.mockResolvedValue({});
     mocks.verifyTurnstile.mockResolvedValue({ success: true, skipped: false });
     mocks.withRateLimitHeaders.mockImplementation((response: NextResponse) => response);
-    mocks.signInWithPassword.mockResolvedValue({
-      data: {
-        user: { id: "user-id" },
-        session: {
-          access_token: "access-token",
-          refresh_token: "refresh-token"
-        }
-      },
-      error: null
-    });
   });
 
-  it("returns a session even when the welcome email fails", async () => {
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    mocks.sendWelcomeEmailForUser.mockRejectedValue(new Error("SMTP unavailable"));
-
-    const response = await POST(loginRequest());
+  it("checks Turnstile before consuming the reset limiter", async () => {
+    const response = await POST(resetRequest());
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.session).toEqual({
-      accessToken: "access-token",
-      refreshToken: "refresh-token"
-    });
-    expect(mocks.signInWithPassword).toHaveBeenCalledWith({
-      email: "user@example.com",
-      password: "correct-password"
-    });
+    expect(body.message).toBe("If this email is registered, password reset instructions will be sent.");
     expect(mocks.rateLimit).toHaveBeenNthCalledWith(
       1,
       expect.any(NextRequest),
       expect.objectContaining({ name: "auth-bot-check" }),
-      "203.0.113.44"
+      "203.0.113.47"
     );
     expect(mocks.rateLimit).toHaveBeenNthCalledWith(
       2,
       expect.any(NextRequest),
-      expect.objectContaining({ name: "login", limit: 12, windowSeconds: 300 }),
-      expect.stringContaining("203.0.113.44:")
+      expect.objectContaining({ name: "password-reset" }),
+      expect.stringContaining("203.0.113.47:")
     );
-
-    await vi.waitFor(() => {
-      expect(mocks.sendWelcomeEmailForUser).toHaveBeenCalledWith("user-id");
-    });
-
-    consoleError.mockRestore();
   });
 
-  it("does not consume the login attempt limiter when Turnstile fails", async () => {
+  it("does not consume the password reset limiter when Turnstile fails", async () => {
     mocks.verifyTurnstile.mockResolvedValue({
       success: false,
       message: "Security check could not be confirmed. Tap retry, complete the check, and try again."
     });
 
-    const response = await POST(loginRequest());
+    const response = await POST(resetRequest());
     const body = await response.json();
 
     expect(response.status).toBe(400);
     expect(body.message).toBe("Security check could not be confirmed. Tap retry, complete the check, and try again.");
-    expect(mocks.signInWithPassword).not.toHaveBeenCalled();
+    expect(mocks.resetPasswordForEmail).not.toHaveBeenCalled();
     expect(mocks.rateLimit).toHaveBeenCalledTimes(1);
     expect(mocks.rateLimit).toHaveBeenCalledWith(
       expect.any(NextRequest),
       expect.objectContaining({ name: "auth-bot-check" }),
-      "203.0.113.44"
+      "203.0.113.47"
     );
   });
 });

@@ -20,10 +20,19 @@ describe("getFriendlyAuthMessage", () => {
     );
   });
 
-  it("shows a clear login rate-limit message", () => {
-    expect(getFriendlyAuthMessage(new Error("Too many requests. Please wait a moment and try again."), "fallback")).toBe(
+  it("shows context-specific rate-limit messages", () => {
+    const error = new Error("Too many requests. Please wait a moment and try again.");
+
+    expect(getFriendlyAuthMessage(error, "fallback", "login")).toBe(
       "Too many login attempts. Please wait a moment and try again."
     );
+    expect(getFriendlyAuthMessage(error, "fallback", "register")).toBe(
+      "Too many signup attempts. Please wait a moment and try again."
+    );
+    expect(getFriendlyAuthMessage(error, "fallback", "passwordReset")).toBe(
+      "Too many password reset requests. Please wait a moment and try again."
+    );
+    expect(getFriendlyAuthMessage(error, "fallback")).toBe("Too many requests. Please wait a moment and try again.");
   });
 
   it("shows a clear security-check loading message", () => {
@@ -40,6 +49,9 @@ describe("getFriendlyAuthMessage", () => {
       "Security check needs a refresh. Tap retry on the security check, then try again."
     );
     expect(getFriendlyAuthMessage(new Error("Turnstile token expired"), "fallback")).toBe(
+      "Security check needs a refresh. Tap retry on the security check, then try again."
+    );
+    expect(getFriendlyAuthMessage(new Error("Security check expired. Tap retry, then submit again."), "fallback")).toBe(
       "Security check needs a refresh. Tap retry on the security check, then try again."
     );
   });

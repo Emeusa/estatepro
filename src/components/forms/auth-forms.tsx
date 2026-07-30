@@ -12,7 +12,7 @@ import {
 } from "@/lib/auth-confirmation";
 import { getFriendlyAuthMessage } from "@/lib/auth-messages";
 import { supabase } from "@/lib/supabase/client";
-import { TurnstileFields, readBotFields } from "@/components/security/turnstile-fields";
+import { TurnstileFields, getBotProtectionClientError, readBotFields } from "@/components/security/turnstile-fields";
 
 type AccountResponse = {
   user: {
@@ -184,12 +184,19 @@ export function LoginForm() {
     setMessage("");
     setIsSubmitting(true);
     const form = new FormData(event.currentTarget);
+    const botFields = readBotFields(form);
+    const botError = getBotProtectionClientError(botFields);
+    if (botError) {
+      setMessage(botError);
+      setIsSubmitting(false);
+      return;
+    }
 
     try {
-      await signInWithBotFields(normalizeEmailInput(email), password, readBotFields(form));
+      await signInWithBotFields(normalizeEmailInput(email), password, botFields);
       await redirectByRole();
     } catch (error) {
-      setMessage(getFriendlyAuthMessage(error, "We could not sign you in. Please try again."));
+      setMessage(getFriendlyAuthMessage(error, "We could not sign you in. Please try again.", "login"));
       setIsSubmitting(false);
       setLoginTurnstileKey((current) => current + 1);
     }
@@ -205,6 +212,14 @@ export function LoginForm() {
     setResetMessageType("success");
     setIsResetSubmitting(true);
     const form = new FormData(event.currentTarget);
+    const botFields = readBotFields(form);
+    const botError = getBotProtectionClientError(botFields);
+    if (botError) {
+      setResetMessage(botError);
+      setResetMessageType("error");
+      setIsResetSubmitting(false);
+      return;
+    }
     const targetEmail = normalizeEmailInput(resetEmail || email);
 
     try {
@@ -213,13 +228,15 @@ export function LoginForm() {
         retries: 0,
         body: JSON.stringify({
           email: targetEmail,
-          ...readBotFields(form)
+          ...botFields
         })
       });
       setResetMessage(response.message);
       setResetMessageType("success");
     } catch (error) {
-      setResetMessage(getFriendlyAuthMessage(error, "We could not send reset instructions. Please try again."));
+      setResetMessage(
+        getFriendlyAuthMessage(error, "We could not send reset instructions. Please try again.", "passwordReset")
+      );
       setResetMessageType("error");
     } finally {
       setResetTurnstileKey((current) => current + 1);
@@ -330,6 +347,12 @@ export function ClientRegisterForm() {
 
     const form = new FormData(event.currentTarget);
     const email = normalizeEmailInput(form.get("email")?.toString() ?? "");
+    const botFields = readBotFields(form);
+    const botError = getBotProtectionClientError(botFields);
+    if (botError) {
+      setMessage(botError);
+      return;
+    }
     setIsSubmitting(true);
 
     try {
@@ -342,14 +365,14 @@ export function ClientRegisterForm() {
           password,
           fullName: undefined,
           phone: phone || null,
-          ...readBotFields(form)
+          ...botFields
         })
       });
       redirectToCheckEmail(email, "client", response.checkEmailUrl);
       return;
     } catch (error) {
       const fallback = error instanceof Error ? error.message : "We could not create your account. Please try again.";
-      setMessage(getFriendlyAuthMessage(error, fallback));
+      setMessage(getFriendlyAuthMessage(error, fallback, "register"));
       setIsSubmitting(false);
       setTurnstileKey((current) => current + 1);
     }
@@ -427,6 +450,12 @@ export function AgentRegisterForm() {
     const ninNumber = form.get("ninNumber")?.toString().trim() ?? "";
     const cacNumber = (form.get("cacNumber")?.toString() ?? "").trim().toUpperCase().replace(/\s+/g, "");
     const acceptedLegalTerms = form.get("acceptedLegalTerms") === "on";
+    const botFields = readBotFields(form);
+    const botError = getBotProtectionClientError(botFields);
+    if (botError) {
+      setMessage(botError);
+      return;
+    }
 
     if (ninNumber && !/^\d{11}$/.test(ninNumber)) {
       setMessage("Your NIN must be exactly 11 digits.");
@@ -457,21 +486,23 @@ export function AgentRegisterForm() {
           ninNumber: ninNumber || null,
           cacNumber: cacNumber || null,
           acceptedLegalTerms,
-          ...readBotFields(form)
+          ...botFields
         })
       });
       redirectToCheckEmail(email, "agent", response.checkEmailUrl);
       return;
     } catch (error) {
       if (error instanceof ApiRequestError) {
-        setMessage(getFriendlyAuthMessage(error, "We could not create the agent account. Please try again."));
+        setMessage(
+          getFriendlyAuthMessage(error, "We could not create the agent account. Please try again.", "register")
+        );
         setIsSubmitting(false);
         setTurnstileKey((current) => current + 1);
         return;
       }
 
       const fallback = error instanceof Error ? error.message : "We could not create the agent account. Please try again.";
-      setMessage(getFriendlyAuthMessage(error, fallback));
+      setMessage(getFriendlyAuthMessage(error, fallback, "register"));
       setIsSubmitting(false);
       setTurnstileKey((current) => current + 1);
     }

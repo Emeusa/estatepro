@@ -7,7 +7,8 @@ import { verifyTurnstile } from "@/lib/security/turnstile";
 export const botProtectionSchema = z.object({
   website: z.string().max(0).optional().default(""),
   formStartedAt: z.coerce.number().int().positive().optional(),
-  turnstileToken: z.string().optional()
+  turnstileToken: z.string().optional(),
+  turnstileStatus: z.string().max(20).optional()
 });
 
 export type BotProtectionPayload = z.infer<typeof botProtectionSchema>;
