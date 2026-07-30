@@ -20,6 +20,18 @@ describe("getFriendlyAuthMessage", () => {
     );
   });
 
+  it("shows a clear generic wrong-credential message", () => {
+    expect(getFriendlyAuthMessage(new Error("Invalid email or password."), "fallback", "login")).toBe(
+      "Incorrect email or password."
+    );
+    expect(getFriendlyAuthMessage(new Error("auth/invalid-credential"), "fallback", "login")).toBe(
+      "Incorrect email or password."
+    );
+    expect(getFriendlyAuthMessage(new Error("Invalid login credentials"), "fallback", "login")).toBe(
+      "Incorrect email or password."
+    );
+  });
+
   it("shows context-specific rate-limit messages", () => {
     const error = new Error("Too many requests. Please wait a moment and try again.");
 

@@ -53,7 +53,8 @@ export function getFriendlyAuthMessage(error: unknown, fallback: string, context
   if (
     message.includes("auth/invalid-credential") ||
     message.includes("auth/invalid-login-credentials") ||
-    message.includes("invalid login credentials")
+    message.includes("invalid login credentials") ||
+    message.includes("invalid email or password")
   ) {
     return "Incorrect email or password.";
   }

@@ -139,4 +139,25 @@ describe("auth login route", () => {
       "203.0.113.44"
     );
   });
+
+  it("returns a safe generic message for wrong credentials", async () => {
+    mocks.signInWithPassword.mockResolvedValueOnce({
+      data: {
+        user: null,
+        session: null
+      },
+      error: { message: "Invalid login credentials" }
+    });
+
+    const response = await POST(loginRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.message).toBe("Invalid email or password.");
+    expect(body.message).not.toMatch(/user not found|wrong password/i);
+    expect(mocks.signInWithPassword).toHaveBeenCalledWith({
+      email: "user@example.com",
+      password: "correct-password"
+    });
+  });
 });
