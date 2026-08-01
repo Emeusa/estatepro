@@ -46,6 +46,20 @@ describe("nationwide SEO architecture", () => {
     expect(detail).toContain("[overflow-wrap:anywhere]");
   });
 
+  it("keeps listing prices separate from the category and save row", () => {
+    const result = readSource("src/components/listings/listing-result.tsx");
+    const priceIndex = result.indexOf("{formatPrice(listing.price)}");
+    const categoryIndex = result.indexOf("{LISTING_CATEGORY_LABELS[listing.listingCategory]}", priceIndex);
+    const saveIndex = result.indexOf("<SaveListingButton", categoryIndex);
+
+    expect(result).toContain("w-full whitespace-nowrap text-lg font-black");
+    expect(result).toContain("xl:text-[0.95rem] 2xl:text-base");
+    expect(result).toContain('className="mt-2 flex items-center justify-between gap-2"');
+    expect(priceIndex).toBeGreaterThan(-1);
+    expect(categoryIndex).toBeGreaterThan(priceIndex);
+    expect(saveIndex).toBeGreaterThan(categoryIndex);
+  });
+
   it("splits canonical sitemap output by listings, markets, and guides", () => {
     const root = readSource("src/app/sitemap.xml/route.ts");
     const markets = readSource("src/app/sitemaps/markets.xml/route.ts");

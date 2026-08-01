@@ -182,13 +182,13 @@ export function ListingResult({ listing, initialSaved, onSavedChange }: Props) {
       </div>
 
       <div className="flex min-w-0 flex-col border-t border-slate-200 p-4 xl:border-l xl:border-t-0 xl:pl-4 xl:pr-0 xl:py-0">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="break-words text-lg font-black leading-snug text-slate-950">{formatPrice(listing.price)}</p>
-            <p className="mt-1 inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[0.68rem] font-bold text-amber-700">
-              {LISTING_CATEGORY_LABELS[listing.listingCategory]}
-            </p>
-          </div>
+        <p className="w-full whitespace-nowrap text-lg font-black leading-snug tracking-tight text-slate-950 xl:text-[0.95rem] 2xl:text-base">
+          {formatPrice(listing.price)}
+        </p>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p className="inline-flex min-w-0 rounded-full bg-amber-50 px-2.5 py-1 text-[0.68rem] font-bold text-amber-700">
+            {LISTING_CATEGORY_LABELS[listing.listingCategory]}
+          </p>
           <SaveListingButton
             listingId={listing.id}
             initialSaved={initialSaved}
