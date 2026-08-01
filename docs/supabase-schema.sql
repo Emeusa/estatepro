@@ -1834,6 +1834,30 @@ create policy "public can view listing images"
   on storage.objects for select
   using (bucket_id = 'listing-images');
 
+-- SEO market eligibility history. This stores no listing or user content; it only
+-- prevents index/noindex status from flapping when a market briefly loses stock.
+create table if not exists public.seo_market_pages (
+  path text primary key,
+  page_type text not null check (page_type in ('national', 'state', 'state_category', 'city_category', 'city_type')),
+  state text,
+  city text,
+  listing_category text,
+  property_type text,
+  listing_count integer not null default 0 check (listing_count >= 0),
+  is_indexable boolean not null default false,
+  eligibility_reason text not null default '',
+  first_eligible_at timestamptz,
+  below_threshold_since timestamptz,
+  last_evaluated_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists seo_market_pages_indexable_idx
+  on public.seo_market_pages (is_indexable, last_evaluated_at desc);
+
+alter table public.seo_market_pages enable row level security;
+revoke all on public.seo_market_pages from anon, authenticated;
+grant select, insert, update, delete on public.seo_market_pages to service_role;
+
 -- One-time repair for pending listings created before approved-agent auto-activation:
 -- update public.listings
 -- set status = 'active',

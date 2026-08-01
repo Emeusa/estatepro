@@ -12,7 +12,7 @@ import {
   TITLE_DOCUMENT_TYPES,
   ZONING_TYPES
 } from "@/lib/listing-quality";
-import { isNigeriaLga, isNigeriaState } from "@/lib/nigeria-locations";
+import { isNigeriaLga, isNigeriaState, normalizeNigeriaState } from "@/lib/nigeria-locations";
 import { normalizePhone, sanitizeText, slugifyLocation } from "@/lib/sanitize";
 
 function isAllowedListingImageUrl(value: string, options?: { optimizedVariantOnly?: boolean }) {
@@ -60,10 +60,10 @@ const locationSchema = z
     }
   })
   .transform((value) => ({
-    state: sanitizeText(value.state),
+    state: normalizeNigeriaState(sanitizeText(value.state)),
     city: sanitizeText(value.city),
     area: sanitizeText(value.area),
-    slug: slugifyLocation([value.state, value.city, value.area])
+    slug: slugifyLocation([normalizeNigeriaState(value.state), value.city, value.area])
   }));
 
 function emptyToNull(value: unknown) {

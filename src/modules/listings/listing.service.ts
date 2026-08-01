@@ -1,3 +1,5 @@
+import { unstable_cache } from "next/cache";
+
 import { listingFilterSchema, listingInputSchema, listingUpdateSchema } from "@/modules/listings/listing.schema";
 import {
   activatePendingListingsForAgent,
@@ -14,6 +16,8 @@ import {
   listListingCountsByAgentIds,
   listListingsForAdmin,
   listPublicListings,
+  listPublicMarketFacets,
+  listPublicMarketPage,
   listPublicListingsByAgent,
   listSimilarPublicListings,
   updateListing,
@@ -29,8 +33,61 @@ import { createUnavailableLifecycle, hasListingMedia } from "@/lib/listing-reten
 import type { ListingRecord, SubscriptionRecord } from "@/lib/types";
 import { normalizeAndVerifyListingImages } from "@/modules/listings/listing-image-payload";
 
+const getCachedHomepageListings = unstable_cache(
+  async () => listPublicListings({ limit: 12 }),
+  ["public-listings-home"],
+  { tags: ["public-listings"], revalidate: 300 }
+);
+
+const getCachedMarketFacets = unstable_cache(
+  async () => listPublicMarketFacets(),
+  ["public-market-facets"],
+  { tags: ["public-listings", "public-markets"], revalidate: 300 }
+);
+
+const getCachedMarketPage = unstable_cache(
+  async (serializedFilters: string, page: number) =>
+    listPublicMarketPage(JSON.parse(serializedFilters) as Parameters<typeof listPublicMarketPage>[0], page),
+  ["public-market-page"],
+  { tags: ["public-listings", "public-markets"], revalidate: 300 }
+);
+
 export async function getPublicListings(input: Record<string, unknown>) {
-  return listPublicListings(listingFilterSchema.parse(input));
+  const filters = listingFilterSchema.parse(input);
+  const isDefaultHomepageQuery =
+    Object.entries(filters).every(([key, value]) => key === "limit" ? value === 12 : value === undefined);
+  return isDefaultHomepageQuery ? getCachedHomepageListings() : listPublicListings(filters);
+}
+
+export async function getPublicMarketFacets() {
+  return getCachedMarketFacets();
+}
+
+export async function getPublicMarketPage(
+  filters: {
+    state?: string;
+    city?: string;
+    propertyType?: string;
+    listingCategory?: string;
+    minPrice?: string | number;
+    maxPrice?: string | number;
+    bedrooms?: string | number;
+    bathrooms?: string | number;
+  },
+  page = 1
+) {
+  const parsed = listingFilterSchema.parse({ ...filters, limit: 12 });
+  const marketFilters = {
+    state: parsed.state,
+    city: parsed.city,
+    propertyType: parsed.propertyType,
+    listingCategory: parsed.listingCategory,
+    minPrice: parsed.minPrice,
+    maxPrice: parsed.maxPrice,
+    bedrooms: parsed.bedrooms,
+    bathrooms: parsed.bathrooms
+  };
+  return getCachedMarketPage(JSON.stringify(marketFilters), Math.max(1, Math.trunc(page)));
 }
 
 export async function getListingDetails(listingId: string) {

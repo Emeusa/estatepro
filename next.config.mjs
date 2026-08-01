@@ -70,6 +70,16 @@ const nextConfig = {
       }
     ];
   },
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.c59estatehub.com" }],
+        destination: "https://c59estatehub.com/:path*",
+        permanent: true
+      }
+    ];
+  },
   webpack(config) {
     config.ignoreWarnings = [
       ...(config.ignoreWarnings ?? []),

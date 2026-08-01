@@ -6,7 +6,8 @@ import { ListingDetail } from "@/components/listings/listing-detail";
 import { getListingHeroImage } from "@/lib/listing-images";
 import { isUuidListingIdentifier } from "@/lib/listing-slugs";
 import { getListingHref } from "@/lib/listing-urls";
-import { buildListingMetaDescription, buildListingMetaTitle, SITE_NAME } from "@/lib/seo";
+import { buildPropertyMarketPath, getPublicStateLabel } from "@/lib/property-search";
+import { buildListingMetaDescription, buildListingMetaTitle, formatListingLocation, getSiteUrl, SITE_NAME } from "@/lib/seo";
 import { getPublicListingDetails, getSimilarListingsForPublicListing } from "@/modules/listings/listing.service";
 
 type Props = {
@@ -32,6 +33,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 
   const { listing } = details;
+  if (isUuidListingIdentifier(listingId) && listing.slug !== listing.id) {
+    permanentRedirect(getListingHref(listing));
+  }
   const title = buildListingMetaTitle(listing);
   const description = buildListingMetaDescription(listing);
   const image = getListingHeroImage(listing)?.heroUrl;
@@ -74,9 +78,57 @@ export default async function ListingPage({ params }: Props) {
   }
 
   const similarListings = await getSimilarListingsForPublicListing(details.listing, 3);
+  const siteUrl = getSiteUrl().toString().replace(/\/$/, "");
+  const listingUrl = `${siteUrl}${getListingHref(details.listing)}`;
+  const statePath = buildPropertyMarketPath({ state: details.listing.location.state });
+  const marketPath = buildPropertyMarketPath({
+    state: details.listing.location.state,
+    city: details.listing.location.city,
+    category: details.listing.listingCategory
+  });
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: siteUrl },
+      { "@type": "ListItem", position: 2, name: "Properties", item: `${siteUrl}/properties` },
+      { "@type": "ListItem", position: 3, name: getPublicStateLabel(details.listing.location.state), item: `${siteUrl}${statePath}` },
+      { "@type": "ListItem", position: 4, name: details.listing.location.city, item: `${siteUrl}${marketPath}` },
+      { "@type": "ListItem", position: 5, name: details.listing.title, item: listingUrl }
+    ]
+  };
+  const listingJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "RealEstateListing",
+    name: details.listing.title,
+    description: details.listing.description,
+    url: listingUrl,
+    datePosted: details.listing.createdAt,
+    dateModified: details.listing.updatedAt,
+    image: details.listing.imageVariants.map((image) => image.heroUrl).filter(Boolean),
+    address: {
+      "@type": "PostalAddress",
+      addressLocality: details.listing.location.city,
+      addressRegion: getPublicStateLabel(details.listing.location.state),
+      streetAddress: details.listing.location.area,
+      addressCountry: "NG"
+    },
+    offers: {
+      "@type": "Offer",
+      price: details.listing.price,
+      priceCurrency: "NGN",
+      availability: details.listing.availability === "available" ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+      url: listingUrl,
+      seller: { "@type": "RealEstateAgent", name: details.agent.displayName }
+    },
+    mainEntityOfPage: listingUrl,
+    areaServed: formatListingLocation(details.listing)
+  };
 
   return (
     <div className="relative left-1/2 -my-8 w-screen -translate-x-1/2 bg-gradient-to-br from-stone-300 via-stone-200 to-slate-300 px-4 py-8">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(listingJsonLd) }} />
       <div className="mx-auto max-w-6xl">
         <ListingDetail details={details} similarListings={similarListings} />
       </div>

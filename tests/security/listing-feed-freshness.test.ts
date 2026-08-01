@@ -60,6 +60,7 @@ describe("public listing feed image performance", () => {
     expect(safeImageSource).toContain("unoptimized={!canUseOptimizer || useDirectImage}");
 
     for (const componentPath of [
+      "src/components/listings/listing-result.tsx",
       "src/components/listings/listing-card.tsx",
       "src/components/listings/listing-desktop-row.tsx",
       "src/components/listings/listing-image-gallery.tsx",
@@ -84,6 +85,7 @@ describe("public listing feed image performance", () => {
     expect(allowedQualities).toEqual(expect.arrayContaining([70, 78]));
 
     for (const componentPath of [
+      "src/components/listings/listing-result.tsx",
       "src/components/listings/listing-card.tsx",
       "src/components/listings/listing-desktop-row.tsx",
       "src/components/listings/listing-image-gallery.tsx",
@@ -123,7 +125,8 @@ describe("homepage listing freshness", () => {
     const pageSource = readSource("src/app/page.tsx");
     const guardSource = readSource("src/components/listings/homepage-freshness-guard.tsx");
 
-    expect(pageSource).toContain('export const dynamic = "force-dynamic"');
+    expect(pageSource).not.toContain('export const dynamic = "force-dynamic"');
+    expect(pageSource).toContain("getPublicMarketFacets");
     expect(pageSource).toContain("<HomepageFreshnessGuard />");
     expect(guardSource).toContain("window.sessionStorage.getItem");
     expect(guardSource).toContain("window.sessionStorage.removeItem");

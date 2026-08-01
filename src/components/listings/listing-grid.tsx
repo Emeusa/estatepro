@@ -6,9 +6,9 @@ import { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
 import { supabase } from "@/lib/supabase/client";
 import { PublicListingCardRecord } from "@/lib/types";
+import { buildPropertyMarketPath } from "@/lib/property-search";
 
-import { ListingDesktopRow } from "@/components/listings/listing-desktop-row";
-import { ListingCard } from "@/components/listings/listing-card";
+import { ListingResult } from "@/components/listings/listing-result";
 
 type Props = {
   listings: PublicListingCardRecord[];
@@ -16,34 +16,21 @@ type Props = {
   nextCursor?: string | null;
   queryParams?: Record<string, string | undefined>;
   showDiscoveryRail?: boolean;
+  discoveryMarkets?: Array<{ state: string; label: string; count: number }>;
+  pagination?: { currentPage: number; totalPages: number; basePath: string };
 };
 
-const popularSearches = ["Flats for rent in Lagos", "Houses for sale in Abuja", "Land for sale in Lagos"];
-
-const exploreStates = [
-  { label: "Lagos", value: "Lagos" },
-  { label: "Abuja", value: "Federal Capital Territory" },
-  { label: "Rivers", value: "Rivers" },
-  { label: "Oyo", value: "Oyo" },
-  { label: "Ogun", value: "Ogun" },
-  { label: "Enugu", value: "Enugu" },
-  { label: "Edo", value: "Edo" },
-  { label: "Delta", value: "Delta" },
-  { label: "Akwa Ibom", value: "Akwa Ibom" },
-  { label: "Kano", value: "Kano" },
-  { label: "Anambra", value: "Anambra" },
-  { label: "Cross River", value: "Cross River" }
+const popularSearches = [
+  { label: "Property for rent in Nigeria", href: "/properties/for-rent" },
+  { label: "Property for sale in Nigeria", href: "/properties/for-sale" },
+  { label: "Short lets in Nigeria", href: "/properties/short-let" }
 ];
 
 const popularRailSearches = [
-  { label: "Flats for rent in Lagos", params: { q: "flats", state: "Lagos", listingCategory: "for_rent" } },
-  {
-    label: "Houses for sale in Abuja",
-    params: { q: "houses", state: "Federal Capital Territory", listingCategory: "for_sale" }
-  },
-  { label: "Land for sale in Lagos", params: { state: "Lagos", propertyType: "land", listingCategory: "for_sale" } },
-  { label: "Self contain for rent", params: { q: "self contain", listingCategory: "for_rent" } },
-  { label: "Short let in Lagos", params: { state: "Lagos", listingCategory: "short_let" } }
+  { label: "Property for rent across Nigeria", href: "/properties/for-rent" },
+  { label: "Property for sale across Nigeria", href: "/properties/for-sale" },
+  { label: "Short lets across Nigeria", href: "/properties/short-let" },
+  { label: "Browse every Nigerian state", href: "/properties/locations" }
 ];
 
 const quickFilters = [
@@ -84,7 +71,13 @@ function buildSearchHref(
   return query ? `/?${query}#search-results` : "/#search-results";
 }
 
-function ListingDiscoveryRail({ queryParams }: { queryParams: Record<string, string | undefined> }) {
+function ListingDiscoveryRail({
+  queryParams,
+  markets
+}: {
+  queryParams: Record<string, string | undefined>;
+  markets: Array<{ state: string; label: string; count: number }>;
+}) {
   return (
     <aside
       id="listing-discovery-rail"
@@ -93,15 +86,18 @@ function ListingDiscoveryRail({ queryParams }: { queryParams: Record<string, str
       <section className="border-b border-slate-200 pb-5">
         <h2 className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Explore by state</h2>
         <div className="mt-3 flex flex-wrap gap-x-2 gap-y-1.5">
-          {exploreStates.map((state) => (
+          {markets.map((state) => (
             <Link
-              key={state.value}
-              href={buildSearchHref(queryParams, { state: state.value, city: null })}
+              key={state.state}
+              href={buildPropertyMarketPath({ state: state.state })}
               className="font-bold text-slate-700 transition hover:text-teal-700 hover:underline"
             >
-              {state.label}
+              {state.label} <span className="text-[0.65rem] text-slate-400">{state.count}</span>
             </Link>
           ))}
+          <Link href="/properties/locations" className="font-black text-teal-700 hover:underline">
+            All states
+          </Link>
         </div>
       </section>
 
@@ -111,7 +107,7 @@ function ListingDiscoveryRail({ queryParams }: { queryParams: Record<string, str
           {popularRailSearches.map((search) => (
             <Link
               key={search.label}
-              href={buildSearchHref(queryParams, { ...search.params, city: null }, false)}
+              href={search.href}
               className="block rounded-xl px-1 py-1 font-bold leading-5 text-slate-800 transition hover:bg-teal-50 hover:text-teal-800"
             >
               {search.label}
@@ -150,7 +146,9 @@ export function ListingGrid({
   hasActiveFilters = false,
   nextCursor = null,
   queryParams = {},
-  showDiscoveryRail = false
+  showDiscoveryRail = false,
+  discoveryMarkets = [],
+  pagination
 }: Props) {
   const [items, setItems] = useState(listings);
   const [cursor, setCursor] = useState(nextCursor);
@@ -300,11 +298,11 @@ export function ListingGrid({
         <div className="mt-5 flex flex-wrap justify-center gap-2">
           {popularSearches.map((search) => (
             <Link
-              key={search}
+              key={search.href}
               className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
-              href={`/?q=${encodeURIComponent(search)}#search-results`}
+              href={search.href}
             >
-              {search}
+              {search.label}
             </Link>
           ))}
         </div>
@@ -314,45 +312,65 @@ export function ListingGrid({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 xl:hidden">
-        {items.map((listing) => (
-          <ListingCard
-            key={listing.id}
-            listing={listing}
-            initialSaved={savedIds.has(listing.id)}
-            onSavedChange={updateSavedState}
-          />
-        ))}
+      <div
+        className={
+          showDiscoveryRail
+            ? "xl:grid xl:grid-cols-[minmax(0,56rem)_15.5rem] xl:items-start xl:justify-start xl:gap-5 2xl:grid-cols-[minmax(0,58rem)_17rem] 2xl:gap-6"
+            : ""
+        }
+      >
+        <div className={`grid min-w-0 gap-4 md:grid-cols-2 xl:block xl:space-y-4 ${showDiscoveryRail ? "" : "mx-auto max-w-[58rem] 2xl:max-w-[60rem]"}`}>
+          {items.map((listing) => (
+            <ListingResult
+              key={listing.id}
+              listing={listing}
+              initialSaved={savedIds.has(listing.id)}
+              onSavedChange={updateSavedState}
+            />
+          ))}
+        </div>
+        {showDiscoveryRail ? (
+          <div className="hidden xl:block">
+            <ListingDiscoveryRail queryParams={queryParams} markets={discoveryMarkets} />
+          </div>
+        ) : null}
       </div>
-      {showDiscoveryRail ? (
-        <div className="hidden xl:grid xl:grid-cols-[minmax(0,56rem)_15.5rem] xl:items-start xl:justify-start xl:gap-5 2xl:grid-cols-[minmax(0,58rem)_17rem] 2xl:gap-6">
-          <div className="min-w-0 space-y-4">
-            {items.map((listing) => (
-              <ListingDesktopRow
-                key={listing.id}
-                listing={listing}
-                initialSaved={savedIds.has(listing.id)}
-                onSavedChange={updateSavedState}
-              />
-            ))}
-          </div>
-          <ListingDiscoveryRail queryParams={queryParams} />
-        </div>
-      ) : (
-        <div className="hidden xl:block">
-          <div className="mx-auto max-w-[58rem] space-y-4 2xl:max-w-[60rem]">
-            {items.map((listing) => (
-              <ListingDesktopRow
-                key={listing.id}
-                listing={listing}
-                initialSaved={savedIds.has(listing.id)}
-                onSavedChange={updateSavedState}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-      {cursor ? (
+      {pagination && pagination.totalPages > 1 ? (
+        <nav aria-label="Property result pages" className="flex flex-wrap items-center justify-center gap-2">
+          {pagination.currentPage > 1 ? (
+            <Link
+              href={`${pagination.basePath}?page=${pagination.currentPage - 1}`}
+              className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700"
+            >
+              Previous
+            </Link>
+          ) : null}
+          {Array.from({ length: Math.min(pagination.totalPages, 7) }, (_, index) => {
+            const page = index + 1;
+            return (
+              <Link
+                key={page}
+                href={page === 1 ? pagination.basePath : `${pagination.basePath}?page=${page}`}
+                aria-current={page === pagination.currentPage ? "page" : undefined}
+                className={`grid h-10 w-10 place-items-center rounded-full text-sm font-black ${
+                  page === pagination.currentPage ? "bg-slate-950 text-white" : "border border-slate-300 bg-white text-slate-700"
+                }`}
+              >
+                {page}
+              </Link>
+            );
+          })}
+          {pagination.currentPage < pagination.totalPages ? (
+            <Link
+              href={`${pagination.basePath}?page=${pagination.currentPage + 1}`}
+              className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700"
+            >
+              Next
+            </Link>
+          ) : null}
+        </nav>
+      ) : null}
+      {cursor && !pagination ? (
         <div className="flex flex-col items-center gap-3">
           <button
             type="button"

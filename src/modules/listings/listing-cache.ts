@@ -1,4 +1,4 @@
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 import type { ListingRecord } from "@/lib/types";
 
@@ -16,7 +16,17 @@ function safeRevalidatePath(path: string) {
 }
 
 export function revalidateListingMutationPaths(listing?: ListingCacheTarget | null) {
+  try {
+    revalidateTag("public-listings");
+    revalidateTag("public-markets");
+  } catch (error) {
+    console.warn("[listings] cache tag revalidation failed", {
+      message: error instanceof Error ? error.message : "Unknown revalidation error"
+    });
+  }
   safeRevalidatePath("/");
+  safeRevalidatePath("/properties");
+  safeRevalidatePath("/sitemap.xml");
 
   if (!listing) {
     return;

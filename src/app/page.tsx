@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import { permanentRedirect } from "next/navigation";
 
 import { FilterBar } from "@/components/listings/filter-bar";
 import { HomepageFreshnessGuard } from "@/components/listings/homepage-freshness-guard";
@@ -12,13 +13,12 @@ import {
   hasHomepageActiveFilters,
   type HomeSearchParams
 } from "@/lib/homepage-filters";
-import { getPublicListings } from "@/modules/listings/listing.service";
+import { getLegacyPropertyRedirect, getPublicStateLabel } from "@/lib/property-search";
+import { getPublicListings, getPublicMarketFacets } from "@/modules/listings/listing.service";
 
 type Props = {
   searchParams: Promise<HomeSearchParams>;
 };
-
-export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   return buildHomepageMetadata(await searchParams);
@@ -26,20 +26,35 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
 
 export default async function HomePage({ searchParams }: Props) {
   const params = await searchParams;
+  const legacyRedirect = getLegacyPropertyRedirect(params);
+  if (legacyRedirect) {
+    permanentRedirect(legacyRedirect);
+  }
   const filterValues = getHomepageFilterValues(params);
   const listingQueryParams = getHomepageListingQueryParams(params);
   const hasActiveFilters = hasHomepageActiveFilters(params);
-  const listings = await getPublicListings({
-    keyword: filterValues.initialKeyword,
-    state: filterValues.initialState,
-    city: filterValues.initialCity,
-    minPrice: filterValues.initialMinPrice,
-    maxPrice: filterValues.initialMaxPrice,
-    bedrooms: filterValues.initialBedrooms,
-    bathrooms: filterValues.initialBathrooms,
-    propertyType: filterValues.initialType,
-    listingCategory: filterValues.initialCategory
-  });
+  const [listings, facets] = await Promise.all([
+    getPublicListings({
+      keyword: filterValues.initialKeyword,
+      state: filterValues.initialState,
+      city: filterValues.initialCity,
+      minPrice: filterValues.initialMinPrice,
+      maxPrice: filterValues.initialMaxPrice,
+      bedrooms: filterValues.initialBedrooms,
+      bathrooms: filterValues.initialBathrooms,
+      propertyType: filterValues.initialType,
+      listingCategory: filterValues.initialCategory
+    }),
+    getPublicMarketFacets()
+  ]);
+  const marketCounts = new Map<string, number>();
+  for (const facet of facets) {
+    marketCounts.set(facet.state, (marketCounts.get(facet.state) ?? 0) + facet.listingCount);
+  }
+  const discoveryMarkets = [...marketCounts.entries()]
+    .map(([state, count]) => ({ state, count, label: getPublicStateLabel(state) }))
+    .sort((first, second) => second.count - first.count || first.label.localeCompare(second.label))
+    .slice(0, 12);
 
   return (
     <div className="space-y-8">
@@ -59,9 +74,9 @@ export default async function HomePage({ searchParams }: Props) {
         <div className="absolute inset-0 bg-stone-950/75 mix-blend-multiply" aria-hidden="true" />
         <div className="absolute inset-0 bg-slate-950/83" aria-hidden="true" />
         <div className="relative">
-          <p className="text-[clamp(0.78rem,2.7vw,1.125rem)] font-semibold uppercase tracking-[0.24em] text-amber-200 sm:tracking-[0.34em]">
-            Property search
-          </p>
+          <h1 className="text-[clamp(1rem,3vw,1.55rem)] font-semibold uppercase tracking-[0.18em] text-amber-200 sm:tracking-[0.28em]">
+            Verified property listings across Nigeria
+          </h1>
           <p className="mx-auto mt-4 max-w-2xl text-[clamp(0.82rem,3.4vw,0.95rem)] leading-6 text-stone-100 sm:mt-5 sm:leading-7 lg:mt-2 lg:leading-5">
             Built for fast contact with verified agents.
           </p>
@@ -85,6 +100,7 @@ export default async function HomePage({ searchParams }: Props) {
           nextCursor={listings.nextCursor}
           queryParams={listingQueryParams}
           showDiscoveryRail
+          discoveryMarkets={discoveryMarkets}
         />
       </section>
     </div>

@@ -1,20 +1,16 @@
 import Link from "next/link";
 
+import { buildPropertyMarketPath, getPublicStateLabel } from "@/lib/property-search";
 import { SITE_SOCIAL_LINKS } from "@/lib/seo";
+import { getPublicMarketFacets } from "@/modules/listings/listing.service";
 
 const popularKeywords = [
-  "Flats for rent in Abuja",
-  "Houses for rent in Abuja",
-  "Houses for sale in Abuja",
-  "Land for sale in Abuja",
-  "Mini flats for rent in Abuja",
-  "Self contain for rent in Abuja",
-  "Flats for rent in Lagos",
-  "Houses for rent in Lagos",
-  "Houses for sale in Lagos",
-  "Land for sale in Lagos",
-  "Mini flats for rent in Lagos",
-  "Self contain for rent in Lagos"
+  { label: "Property for rent in Nigeria", href: "/properties/for-rent" },
+  { label: "Property for sale in Nigeria", href: "/properties/for-sale" },
+  { label: "Short lets in Nigeria", href: "/properties/short-let" },
+  { label: "All property listings", href: "/properties" },
+  { label: "Property safety guides", href: "/guides" },
+  { label: "All Nigerian states", href: "/properties/locations" }
 ];
 
 const socialLinks = [
@@ -37,10 +33,23 @@ const legalLinks = [
   { label: "Privacy Policy", href: "/privacy" }
 ];
 
-export function Footer() {
+export async function Footer() {
+  let activeMarkets: Array<{ state: string; label: string; count: number }> = [];
+  try {
+    const facets = await getPublicMarketFacets();
+    const counts = new Map<string, number>();
+    for (const facet of facets) counts.set(facet.state, (counts.get(facet.state) ?? 0) + facet.listingCount);
+    activeMarkets = [...counts.entries()]
+      .map(([state, count]) => ({ state, count, label: getPublicStateLabel(state) }))
+      .sort((first, second) => second.count - first.count || first.label.localeCompare(second.label))
+      .slice(0, 8);
+  } catch {
+    activeMarkets = [];
+  }
+
   return (
     <footer id="site-footer" className="mt-12 border-t border-slate-200 bg-slate-950 text-white">
-      <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 md:grid-cols-[1fr_1.4fr_0.65fr]">
+      <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 md:grid-cols-[1fr_1.25fr_0.85fr_0.65fr]">
         <section>
           <p className="font-heading text-2xl font-semibold text-amber-100">C59 Estatehub</p>
           <p className="mt-3 max-w-md text-sm leading-7 text-slate-300">
@@ -70,13 +79,25 @@ export function Footer() {
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
             {popularKeywords.map((keyword) => (
               <Link
-                key={keyword}
-                href={`/?q=${encodeURIComponent(keyword)}`}
+                key={keyword.href}
+                href={keyword.href}
                 className="text-sm text-slate-300 transition hover:text-amber-100"
               >
-                {keyword}
+                {keyword.label}
               </Link>
             ))}
+          </div>
+        </section>
+
+        <section>
+          <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-amber-200">Active Markets</h2>
+          <div className="mt-4 grid gap-2">
+            {activeMarkets.map((market) => (
+              <Link key={market.state} href={buildPropertyMarketPath({ state: market.state })} className="text-sm text-slate-300 transition hover:text-amber-100">
+                {market.label} ({market.count})
+              </Link>
+            ))}
+            <Link href="/properties/locations" className="text-sm font-bold text-amber-100 hover:underline">Browse all states</Link>
           </div>
         </section>
 

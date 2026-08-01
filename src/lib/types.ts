@@ -334,6 +334,39 @@ export type PaginatedResponse<T> = {
   nextCursor: string | null;
 };
 
+export type PublicMarketFacet = {
+  state: string;
+  city: string;
+  listingCategory: ListingCategory;
+  propertyType: PropertyType;
+  listingCount: number;
+  latestUpdatedAt: string;
+  listingFingerprints: string[];
+};
+
+export type PublicMarketPage = {
+  items: PublicListingCardRecord[];
+  listingCount: number;
+  latestUpdatedAt: string | null;
+  duplicateRatio: number;
+  currentPage: number;
+  totalPages: number;
+  activeCities: Array<{ name: string; count: number }>;
+  activePropertyTypes: Array<{ propertyType: PropertyType; count: number }>;
+};
+
+export type SeoMarketCoverageRecord = {
+  path: string;
+  pageType: string;
+  label: string;
+  listingCount: number;
+  latestUpdatedAt: string | null;
+  isIndexable: boolean;
+  isInGracePeriod: boolean;
+  reason: string;
+  inSitemap: boolean;
+};
+
 export type AdminAgentReview = {
   user: UserRecord;
   agent: AgentProfile;

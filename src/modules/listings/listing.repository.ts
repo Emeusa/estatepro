@@ -11,6 +11,7 @@ import { toNameCase } from "@/lib/format";
 import { getListingImageCount } from "@/lib/listing-images";
 import { getListingCardFeatureBadges } from "@/lib/listing-quality";
 import { rankListingsForFeed } from "@/lib/listing-visibility";
+import { getNigeriaStateStorageValues, normalizeNigeriaState } from "@/lib/nigeria-locations";
 import { toListingRecord } from "@/lib/supabase-mappers";
 import {
   ListingCategory,
@@ -19,6 +20,8 @@ import {
   ListingStatus,
   PaginatedResponse,
   PropertyType,
+  PublicMarketFacet,
+  PublicMarketPage,
   PublicListingCardRecord,
   PublicAgentSummary
 } from "@/lib/types";
@@ -220,7 +223,10 @@ export async function listPublicListings(
   const listingCategoryFilter = filters.listingCategory ?? keywordFilters.listingCategory;
 
   if (stateFilter) {
-    query = query.eq("location->>state", stateFilter);
+    const stateValues = getNigeriaStateStorageValues(stateFilter);
+    query = stateValues.length === 1
+      ? query.eq("location->>state", stateValues[0])
+      : query.in("location->>state", stateValues);
   }
   if (filters.city) {
     query = query.eq("location->>city", filters.city);
@@ -273,6 +279,138 @@ export async function listPublicListings(
   return { items, nextCursor };
 }
 
+type PublicMarketFilters = Pick<
+  ListingFilters,
+  "state" | "city" | "propertyType" | "listingCategory" | "minPrice" | "maxPrice" | "bedrooms" | "bathrooms"
+>;
+
+function applyPublicMarketFilters<T extends {
+  eq: (column: string, value: unknown) => T;
+  in: (column: string, values: unknown[]) => T;
+  gte: (column: string, value: number) => T;
+  lte: (column: string, value: number) => T;
+}>(
+  query: T,
+  filters: PublicMarketFilters
+) {
+  let filtered = query;
+  if (filters.state) {
+    const stateValues = getNigeriaStateStorageValues(filters.state);
+    filtered = stateValues.length === 1
+      ? filtered.eq("location->>state", stateValues[0])
+      : filtered.in("location->>state", stateValues);
+  }
+  if (filters.city) filtered = filtered.eq("location->>city", filters.city);
+  if (filters.propertyType) filtered = filtered.eq("property_type", filters.propertyType);
+  if (filters.listingCategory) filtered = filtered.eq("listing_category", filters.listingCategory);
+  if (filters.minPrice) filtered = filtered.gte("price", filters.minPrice);
+  if (filters.maxPrice) filtered = filtered.lte("price", filters.maxPrice);
+  if (filters.bedrooms) filtered = filtered.gte("bedrooms", filters.bedrooms);
+  if (filters.bathrooms) filtered = filtered.gte("bathrooms", filters.bathrooms);
+  return filtered;
+}
+
+function getDuplicateListingRatio(listings: ListingRecord[]) {
+  if (!listings.length) return 0;
+  const fingerprints = new Map<string, number>();
+  for (const listing of listings) {
+    const fingerprint = [listing.title, listing.location.area, listing.location.city, listing.price]
+      .map((value) => normalizeKeyword(String(value)))
+      .join("|");
+    fingerprints.set(fingerprint, (fingerprints.get(fingerprint) ?? 0) + 1);
+  }
+  return Math.max(...fingerprints.values()) / listings.length;
+}
+
+export async function listPublicMarketPage(
+  filters: PublicMarketFilters,
+  page = 1,
+  pageSize = 12
+): Promise<PublicMarketPage> {
+  const supabase = createServerSupabaseClient();
+  const safePage = Math.max(1, Math.trunc(page));
+  const safePageSize = Math.min(20, Math.max(1, Math.trunc(pageSize)));
+  const candidateLimit = Math.min(Math.max(safePage * safePageSize * 6, 72), 1000);
+  let query = supabase
+    .from(PUBLIC_FEED_LISTINGS_SOURCE)
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .limit(candidateLimit);
+
+  query = applyPublicMarketFilters(query, filters);
+  const { data, error, count } = await query;
+  if (error) throw new Error(error.message);
+
+  const candidates = (data ?? []).map(toListingRecord);
+  const ranked = rankListingsForFeed(candidates, candidates.length);
+  const start = (safePage - 1) * safePageSize;
+  const selected = ranked.slice(start, start + safePageSize);
+  const listingCount = count ?? candidates.length;
+  const cityCounts = new Map<string, number>();
+  const typeCounts = new Map<PropertyType, number>();
+
+  for (const listing of candidates) {
+    cityCounts.set(listing.location.city, (cityCounts.get(listing.location.city) ?? 0) + 1);
+    typeCounts.set(listing.propertyType, (typeCounts.get(listing.propertyType) ?? 0) + 1);
+  }
+
+  return {
+    items: await toPublicListingCardRecords(selected),
+    listingCount,
+    latestUpdatedAt: candidates
+      .map((listing) => listing.updatedAt)
+      .sort((first, second) => second.localeCompare(first))[0] ?? null,
+    duplicateRatio: getDuplicateListingRatio(candidates),
+    currentPage: safePage,
+    totalPages: Math.max(1, Math.ceil(listingCount / safePageSize)),
+    activeCities: [...cityCounts.entries()]
+      .map(([name, cityCount]) => ({ name, count: cityCount }))
+      .sort((first, second) => second.count - first.count || first.name.localeCompare(second.name)),
+    activePropertyTypes: [...typeCounts.entries()]
+      .map(([propertyType, typeCount]) => ({ propertyType, count: typeCount }))
+      .sort((first, second) => second.count - first.count)
+  };
+}
+
+export async function listPublicMarketFacets(): Promise<PublicMarketFacet[]> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from(PUBLIC_FEED_LISTINGS_SOURCE)
+    .select("location, listing_category, property_type, title, price, updated_at")
+    .order("updated_at", { ascending: false })
+    .limit(5000);
+
+  if (error) throw new Error(error.message);
+
+  const facets = new Map<string, PublicMarketFacet>();
+  for (const row of data ?? []) {
+    const location = row.location as { state?: string; city?: string } | null;
+    if (!location?.state || !location.city) continue;
+    const listingCategory = row.listing_category as ListingCategory;
+    const propertyType = row.property_type as PropertyType;
+    const state = normalizeNigeriaState(location.state);
+    const fingerprint = [row.title, (row.location as { area?: string } | null)?.area, location.city, row.price]
+      .map((value) => normalizeKeyword(String(value ?? "")))
+      .join("|");
+    const key = [state, location.city, listingCategory, propertyType].join("|");
+    const current = facets.get(key);
+    facets.set(key, {
+      state,
+      city: location.city,
+      listingCategory,
+      propertyType,
+      listingCount: (current?.listingCount ?? 0) + 1,
+      listingFingerprints: [...(current?.listingFingerprints ?? []), fingerprint],
+      latestUpdatedAt:
+        !current || String(row.updated_at).localeCompare(current.latestUpdatedAt) > 0
+          ? String(row.updated_at)
+          : current.latestUpdatedAt
+    });
+  }
+
+  return [...facets.values()];
+}
+
 async function listSimilarPublicListingCandidates(
   listing: ListingRecord,
   filters: SimilarListingFilters,
@@ -287,7 +425,10 @@ async function listSimilarPublicListingCandidates(
     .limit(candidateLimit);
 
   if (filters.state) {
-    query = query.eq("location->>state", filters.state);
+    const stateValues = getNigeriaStateStorageValues(filters.state);
+    query = stateValues.length === 1
+      ? query.eq("location->>state", stateValues[0])
+      : query.in("location->>state", stateValues);
   }
   if (filters.propertyType) {
     query = query.eq("property_type", filters.propertyType);

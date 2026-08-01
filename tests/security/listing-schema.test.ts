@@ -41,6 +41,16 @@ function validVariant(extension: "webp" | "jpg" | "jpeg" = "webp", blurType: "we
 }
 
 describe("listingInputSchema", () => {
+  it("normalizes the legacy Nasarawa spelling for future listings", () => {
+    const result = listingInputSchema.safeParse({
+      ...validListing,
+      location: { state: "Nassarawa", city: "Lafia", area: "Central Lafia" }
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.location.state).toBe("Nasarawa");
+  });
+
   it("rejects unexpected fields", () => {
     const result = listingInputSchema.safeParse({ ...validListing, unknown: true });
     expect(result.success).toBe(false);
