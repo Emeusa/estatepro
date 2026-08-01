@@ -21,12 +21,29 @@ describe("nationwide SEO architecture", () => {
 
   it("serves one responsive listing result structure with crawlable pagination", () => {
     const grid = readSource("src/components/listings/listing-grid.tsx");
+    const result = readSource("src/components/listings/listing-result.tsx");
 
     expect(grid).toContain("ListingResult");
     expect(grid).not.toContain('from "@/components/listings/listing-desktop-row"');
     expect(grid).not.toContain('from "@/components/listings/listing-card"');
     expect(grid).toContain('aria-label="Property result pages"');
     expect(grid).toContain("pagination.basePath");
+    expect(result).toContain("whitespace-nowrap");
+    expect(result).toContain('className="h-3.5 w-3.5 shrink-0 fill-current"');
+    expect(result).toMatch(/>\s*Call\s*<\/a>/);
+    expect(result).not.toContain("Call agent");
+  });
+
+  it("keeps mobile listing text contained and reduces mobile feature density", () => {
+    const result = readSource("src/components/listings/listing-result.tsx");
+    const detail = readSource("src/components/listings/listing-detail.tsx");
+
+    expect(result).toContain("whitespace-normal break-words leading-5 [overflow-wrap:anywhere]");
+    expect(result).not.toContain('<span className="truncate">{listing.location.area}');
+    expect(result).toContain('index >= 3 ? "hidden sm:inline-flex" : "inline-flex"');
+    expect(result).toContain("line-clamp-2 max-w-full break-words");
+    expect(detail).toContain("whitespace-pre-wrap break-words");
+    expect(detail).toContain("[overflow-wrap:anywhere]");
   });
 
   it("splits canonical sitemap output by listings, markets, and guides", () => {

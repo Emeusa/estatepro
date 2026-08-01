@@ -59,7 +59,9 @@ export function ListingDetail({ details, similarListings = [] }: Props) {
               />
             </p>
             <p className="mt-4 text-lg font-semibold text-slate-950">{formatPrice(listing.price)}</p>
-            <p className="mt-6 text-sm leading-7 text-slate-800">{listing.description}</p>
+            <p className="mt-6 min-w-0 max-w-full whitespace-pre-wrap break-words text-sm leading-7 text-slate-800 [overflow-wrap:anywhere]">
+              {listing.description}
+            </p>
           </div>
           <ListingQualityChips listing={listing} />
         </div>
