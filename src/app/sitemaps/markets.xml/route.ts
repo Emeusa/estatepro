@@ -48,10 +48,33 @@ export async function GET() {
   for (const facet of facets) {
     add("/properties", facet.listingCount, facet.latestUpdatedAt, facet.listingFingerprints);
     add(buildPropertyMarketPath({ category: facet.listingCategory }), facet.listingCount, facet.latestUpdatedAt, facet.listingFingerprints);
+    add(buildPropertyMarketPath({ category: facet.listingCategory, propertyType: facet.propertyType }), facet.listingCount, facet.latestUpdatedAt, facet.listingFingerprints);
+    if (facet.propertySubtype) {
+      add(buildPropertyMarketPath({ category: facet.listingCategory, propertySubtype: facet.propertySubtype }), facet.listingCount, facet.latestUpdatedAt, facet.listingFingerprints);
+    }
     add(buildPropertyMarketPath({ state: facet.state }), facet.listingCount, facet.latestUpdatedAt, facet.listingFingerprints);
     add(buildPropertyMarketPath({ state: facet.state, category: facet.listingCategory }), facet.listingCount, facet.latestUpdatedAt, facet.listingFingerprints);
+    add(buildPropertyMarketPath({ state: facet.state, category: facet.listingCategory, propertyType: facet.propertyType }), facet.listingCount, facet.latestUpdatedAt, facet.listingFingerprints);
+    if (facet.propertySubtype) {
+      add(buildPropertyMarketPath({ state: facet.state, category: facet.listingCategory, propertySubtype: facet.propertySubtype }), facet.listingCount, facet.latestUpdatedAt, facet.listingFingerprints);
+    }
     add(buildPropertyMarketPath({ state: facet.state, city: facet.city, category: facet.listingCategory }), facet.listingCount, facet.latestUpdatedAt, facet.listingFingerprints);
     add(buildPropertyMarketPath({ state: facet.state, city: facet.city, category: facet.listingCategory, propertyType: facet.propertyType }), facet.listingCount, facet.latestUpdatedAt, facet.listingFingerprints);
+    if (facet.propertySubtype) {
+      add(buildPropertyMarketPath({ state: facet.state, city: facet.city, category: facet.listingCategory, propertySubtype: facet.propertySubtype }), facet.listingCount, facet.latestUpdatedAt, facet.listingFingerprints);
+    }
+    if (facet.areaSlug) {
+      add(buildPropertyMarketPath({ state: facet.state, city: facet.city, areaSlug: facet.areaSlug, category: facet.listingCategory }), facet.listingCount, facet.latestUpdatedAt, facet.listingFingerprints);
+      if (facet.propertySubtype) {
+        add(buildPropertyMarketPath({
+          state: facet.state,
+          city: facet.city,
+          areaSlug: facet.areaSlug,
+          category: facet.listingCategory,
+          propertySubtype: facet.propertySubtype
+        }), facet.listingCount, facet.latestUpdatedAt, facet.listingFingerprints);
+      }
+    }
   }
 
   const eligible = [];

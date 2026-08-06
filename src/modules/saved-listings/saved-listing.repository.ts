@@ -16,20 +16,33 @@ export async function getSavedListingIds(userId: string, listingIds?: string[]) 
   return (data ?? []).map((row) => row.listing_id as string);
 }
 
-export async function listSavedListingReferences(userId: string) {
+export async function listSavedListingReferences(userId: string, page = 1, pageSize = 10) {
   const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase
+  const safePage = Math.max(1, Math.trunc(page));
+  const safePageSize = Math.min(10, Math.max(1, Math.trunc(pageSize)));
+  const from = (safePage - 1) * safePageSize;
+  const { data, error, count } = await supabase
     .from("saved_listings")
-    .select("listing_id")
+    .select("listing_id", { count: "exact" })
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
-    .limit(100);
+    .order("listing_id", { ascending: true })
+    .range(from, from + safePageSize - 1);
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return (data ?? []).map((row) => row.listing_id as string);
+  const totalItems = count ?? 0;
+  return {
+    listingIds: (data ?? []).map((row) => row.listing_id as string),
+    pagination: {
+      currentPage: safePage,
+      pageSize: safePageSize,
+      totalItems,
+      totalPages: Math.max(1, Math.ceil(totalItems / safePageSize))
+    }
+  };
 }
 
 export async function saveListingReference(userId: string, listingId: string) {

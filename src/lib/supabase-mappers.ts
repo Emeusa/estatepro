@@ -1,6 +1,12 @@
 import { toNameCase, toTitleCase } from "@/lib/format";
 import { normalizeBusinessName } from "@/lib/agent-display";
 import {
+  getLegacySubtypeForPropertyType,
+  isPropertySubtype,
+  normalizePropertyType
+} from "@/lib/property-taxonomy";
+import { slugifyLocation } from "@/lib/sanitize";
+import {
   AgentProfile,
   ListingImageVariant,
   ListingRecord,
@@ -70,7 +76,9 @@ type DatabaseListing = {
   title: string;
   description: string;
   price: number;
-  property_type: ListingRecord["propertyType"];
+  property_type: string;
+  property_subtype?: string | null;
+  area_slug?: string | null;
   listing_category?: ListingRecord["listingCategory"];
   availability?: ListingRecord["availability"];
   status: ListingRecord["status"];
@@ -225,6 +233,12 @@ export function toSubscriptionAdminGrantRecord(
 }
 
 export function toListingRecord(row: DatabaseListing): ListingRecord {
+  const propertyType = normalizePropertyType(row.property_type);
+  const propertySubtype = row.property_subtype && isPropertySubtype(row.property_subtype)
+    ? row.property_subtype
+    : getLegacySubtypeForPropertyType(row.property_type);
+  const areaSlug = row.area_slug ?? row.location.areaSlug ?? slugifyLocation([row.location.area]);
+
   return {
     id: row.id,
     slug: row.slug ?? row.id,
@@ -232,7 +246,8 @@ export function toListingRecord(row: DatabaseListing): ListingRecord {
     title: toTitleCase(row.title),
     description: row.description,
     price: row.price,
-    propertyType: row.property_type,
+    propertyType,
+    propertySubtype,
     listingCategory: row.listing_category ?? "for_sale",
     availability: row.availability ?? "available",
     status: row.status,
@@ -255,7 +270,10 @@ export function toListingRecord(row: DatabaseListing): ListingRecord {
     agentKeepActivePriority: row.agent_keep_active_priority ?? null,
     contactPhone: row.contact_phone,
     contactWhatsapp: row.contact_whatsapp,
-    location: row.location,
+    location: {
+      ...row.location,
+      areaSlug
+    },
     bedrooms: row.bedrooms ?? null,
     bathrooms: row.bathrooms ?? null,
     toilets: row.toilets ?? null,

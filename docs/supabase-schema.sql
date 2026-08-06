@@ -118,7 +118,9 @@ create table if not exists public.listings (
   title text not null,
   description text not null,
   price bigint not null,
-  property_type text not null check (property_type in ('apartment', 'duplex', 'land', 'office', 'shop')),
+  property_type text not null check (property_type in ('apartment', 'house', 'room', 'land', 'commercial', 'duplex', 'office', 'shop')),
+  property_subtype text,
+  area_slug text,
   listing_category text not null default 'for_sale' check (listing_category in ('for_sale', 'for_rent', 'short_let')),
   availability text not null default 'available' check (availability in ('available', 'sold', 'rented', 'booked')),
   status text not null check (status in ('pending', 'active', 'inactive', 'blocked')),
@@ -342,7 +344,22 @@ create table if not exists public.agent_quota_overrides (
 
 alter table public.listings
   add column if not exists slug text,
-  add column if not exists listing_category text not null default 'for_sale';
+  add column if not exists listing_category text not null default 'for_sale',
+  add column if not exists property_subtype text,
+  add column if not exists area_slug text;
+
+alter table public.listings
+  drop constraint if exists listings_property_type_check,
+  drop constraint if exists listings_property_subtype_check,
+  drop constraint if exists listings_area_slug_check;
+
+alter table public.listings
+  add constraint listings_property_type_check
+    check (property_type in ('apartment', 'house', 'room', 'land', 'commercial', 'duplex', 'office', 'shop')),
+  add constraint listings_property_subtype_check
+    check (property_subtype is null or property_subtype in ('flat_apartment', 'mini_flat', 'self_contain', 'studio_apartment', 'shared_apartment', 'serviced_apartment', 'maisonette', 'penthouse', 'block_of_flats', 'duplex', 'detached_duplex', 'semi_detached_duplex', 'terraced_duplex', 'bungalow', 'detached_bungalow', 'semi_detached_bungalow', 'terraced_bungalow', 'terrace_house', 'townhouse', 'mansion', 'villa', 'single_room', 'room_and_parlour', 'boys_quarters', 'shared_room', 'residential_land', 'commercial_land', 'industrial_land', 'mixed_use_land', 'agricultural_land', 'joint_venture_land', 'waterfront_land', 'estate_plot', 'other_land', 'office', 'private_office', 'coworking_space', 'workstation', 'conference_room', 'shop', 'showroom', 'plaza_mall_complex', 'warehouse', 'factory', 'filling_station', 'event_hall', 'hotel', 'guest_house', 'resort', 'restaurant_bar', 'school', 'hospital_clinic', 'religious_property', 'commercial_building', 'other_commercial')),
+  add constraint listings_area_slug_check
+    check (area_slug is null or area_slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$');
 
 alter table public.listings
   add column if not exists availability text not null default 'available';
@@ -467,6 +484,48 @@ as $$
     'property-listing'
   );
 $$;
+
+update public.listings
+set area_slug = nullif(
+  trim(both '-' from regexp_replace(
+    regexp_replace(lower(coalesce(location->>'area', '')), '[^a-z0-9]+', '-', 'g'),
+    '-+',
+    '-',
+    'g'
+  )),
+  ''
+)
+where area_slug is null
+  and coalesce(trim(location->>'area'), '') <> '';
+
+update public.listings
+set property_type = 'house',
+    property_subtype = coalesce(property_subtype, 'duplex')
+where property_type = 'duplex';
+
+update public.listings
+set property_type = 'commercial',
+    property_subtype = coalesce(property_subtype, 'office')
+where property_type = 'office';
+
+update public.listings
+set property_type = 'commercial',
+    property_subtype = coalesce(property_subtype, 'shop')
+where property_type = 'shop';
+
+update public.listings
+set property_subtype = case
+  when title ~* '\mmini[ -]?flat\M' then 'mini_flat'
+  when title ~* '\mself[ -]?contain(ed)?\M' then 'self_contain'
+  when title ~* '\msemi[ -]?detached[ -]+duplex\M' then 'semi_detached_duplex'
+  when title ~* '\mterrace(d)?[ -]+duplex\M' then 'terraced_duplex'
+  when title ~* '\mdetached[ -]+duplex\M' then 'detached_duplex'
+  when title ~* '\mbungalow\M' then 'bungalow'
+  when title ~* '\mwarehouse\M' then 'warehouse'
+  when title ~* '\mhotel\M' then 'hotel'
+  else property_subtype
+end
+where property_subtype is null;
 
 do $$
 declare
@@ -900,6 +959,13 @@ create index if not exists listings_feed_availability_idx
 
 create index if not exists listings_feed_category_idx
   on public.listings (availability, property_type, listing_category, status, created_at desc);
+
+create index if not exists listings_taxonomy_idx
+  on public.listings (availability, status, listing_category, property_type, property_subtype, created_at desc);
+
+create index if not exists listings_area_slug_idx
+  on public.listings (area_slug)
+  where area_slug is not null;
 
 create index if not exists listings_location_state_idx
   on public.listings ((location->>'state'));
@@ -1838,11 +1904,13 @@ create policy "public can view listing images"
 -- prevents index/noindex status from flapping when a market briefly loses stock.
 create table if not exists public.seo_market_pages (
   path text primary key,
-  page_type text not null check (page_type in ('national', 'state', 'state_category', 'city_category', 'city_type')),
+  page_type text not null,
   state text,
   city text,
+  area_slug text,
   listing_category text,
   property_type text,
+  property_subtype text,
   listing_count integer not null default 0 check (listing_count >= 0),
   is_indexable boolean not null default false,
   eligibility_reason text not null default '',
@@ -1850,6 +1918,38 @@ create table if not exists public.seo_market_pages (
   below_threshold_since timestamptz,
   last_evaluated_at timestamptz not null default timezone('utc', now())
 );
+
+alter table public.seo_market_pages
+  add column if not exists area_slug text,
+  add column if not exists property_subtype text,
+  drop constraint if exists seo_market_pages_page_type_check;
+
+alter table public.seo_market_pages
+  add constraint seo_market_pages_page_type_check
+  check (page_type in (
+    'national', 'national_type', 'national_subtype', 'state', 'state_category',
+    'state_type', 'state_subtype', 'city_category', 'city_type', 'city_subtype',
+    'area_category', 'area_subtype'
+  ));
+
+create table if not exists public.seo_areas (
+  id uuid primary key default gen_random_uuid(),
+  state text not null,
+  city text not null,
+  canonical_name text not null,
+  slug text not null check (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
+  aliases text[] not null default '{}',
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (state, city, slug)
+);
+
+create index if not exists seo_areas_aliases_idx
+  on public.seo_areas using gin (aliases);
+
+alter table public.seo_areas enable row level security;
+revoke all on public.seo_areas from anon, authenticated;
+grant select, insert, update, delete on public.seo_areas to service_role;
 
 create index if not exists seo_market_pages_indexable_idx
   on public.seo_market_pages (is_indexable, last_evaluated_at desc);

@@ -34,8 +34,14 @@ import {
   ZONING_TYPES
 } from "@/lib/listing-quality";
 import { getLgasForState, NIGERIA_STATES } from "@/lib/nigeria-locations";
+import {
+  isSubtypeForPropertyType,
+  PROPERTY_SUBTYPE_LABELS,
+  PROPERTY_SUBTYPES,
+  PROPERTY_TYPE_LABELS
+} from "@/lib/property-taxonomy";
 import { supabase } from "@/lib/supabase/client";
-import { ListingCategory, ListingImageVariant, ListingRecord } from "@/lib/types";
+import { ListingCategory, ListingImageVariant, ListingRecord, PropertySubtype, PropertyType } from "@/lib/types";
 import { normalizeListingImageFileAsync, uploadListingImages, type ListingImageUploadProgress } from "@/lib/uploads";
 import { createListingImagePreview } from "@/lib/image";
 
@@ -108,7 +114,8 @@ export function ListingForm({ listing, onSaved }: Props) {
   const [uploadProgressMessage, setUploadProgressMessage] = useState<string | null>(null);
   const [selectedState, setSelectedState] = useState(listing?.location.state ?? "");
   const [selectedLga, setSelectedLga] = useState(listing?.location.city ?? "");
-  const [propertyType, setPropertyType] = useState(listing?.propertyType ?? "apartment");
+  const [propertyType, setPropertyType] = useState<PropertyType>(listing?.propertyType ?? "apartment");
+  const [propertySubtype, setPropertySubtype] = useState<PropertySubtype | "">(listing?.propertySubtype ?? "");
   const [listingCategory, setListingCategory] = useState<ListingCategory>(listing?.listingCategory ?? "for_sale");
   const [availability, setAvailability] = useState(listing?.availability ?? "available");
   const [contactPhone, setContactPhone] = useState(listing?.contactPhone ?? "");
@@ -138,6 +145,7 @@ export function ListingForm({ listing, onSaved }: Props) {
     setSelectedState(listing?.location.state ?? "");
     setSelectedLga(listing?.location.city ?? "");
     setPropertyType(listing?.propertyType ?? "apartment");
+    setPropertySubtype(listing?.propertySubtype ?? "");
     setListingCategory(listing?.listingCategory ?? "for_sale");
     setAvailability(listing?.availability ?? "available");
     setContactPhone(listing?.contactPhone ?? "");
@@ -414,6 +422,7 @@ export function ListingForm({ listing, onSaved }: Props) {
       description: form.get("description"),
       price: Number(form.get("price")),
       propertyType: form.get("propertyType"),
+      propertySubtype: optionalString(form, "propertySubtype"),
       listingCategory: form.get("listingCategory"),
       availability: form.get("availability"),
       imageUrls: orderedExistingImages,
@@ -494,6 +503,7 @@ export function ListingForm({ listing, onSaved }: Props) {
         setSelectedState("");
         setSelectedLga("");
         setPropertyType("apartment");
+        setPropertySubtype("");
         setListingCategory("for_sale");
         setAvailability("available");
         setContactPhone("");
@@ -557,15 +567,37 @@ export function ListingForm({ listing, onSaved }: Props) {
             className="input"
             name="propertyType"
             value={propertyType}
-            onChange={(event) => setPropertyType(event.target.value as typeof propertyType)}
+            onChange={(event) => {
+              const nextType = event.target.value as PropertyType;
+              setPropertyType(nextType);
+              if (propertySubtype && !isSubtypeForPropertyType(nextType, propertySubtype)) {
+                setPropertySubtype("");
+              }
+            }}
           >
-            <option value="apartment">Apartment</option>
-            <option value="duplex">Duplex</option>
-            <option value="land">Land</option>
-            <option value="office">Office</option>
-            <option value="shop">Shop</option>
+            {(Object.entries(PROPERTY_TYPE_LABELS) as Array<[PropertyType, string]>).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
           </select>
         </div>
+      </div>
+      <div>
+        <select
+          className="input"
+          name="propertySubtype"
+          value={propertySubtype}
+          onChange={(event) => setPropertySubtype(event.target.value as PropertySubtype | "")}
+        >
+          <option value="">Select property subtype (optional)</option>
+          {PROPERTY_SUBTYPES[propertyType].map((value) => (
+            <option key={value} value={value}>
+              {PROPERTY_SUBTYPE_LABELS[value]}
+            </option>
+          ))}
+        </select>
+        {fieldErrors.propertySubtype ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.propertySubtype}</p> : null}
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <select

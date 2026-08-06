@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
     const path = `${decoded.uid}/${randomUUID()}-server.${extension}`;
     const bytes = Buffer.from(await file.arrayBuffer());
     const { error: uploadError } = await supabase.storage.from("listing-images").upload(path, bytes, {
+      cacheControl: "31536000",
       contentType: normalizedType,
       upsert: false
     });

@@ -10,6 +10,7 @@ import { SimilarListingCard } from "@/components/listings/similar-listing-card";
 import { formatDate, formatPrice, whatsappLink } from "@/lib/format";
 import { getListingImages } from "@/lib/listing-images";
 import { AVAILABILITY_LABELS, getUnavailableBadge, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
+import { PROPERTY_SUBTYPE_LABELS, PROPERTY_TYPE_LABELS } from "@/lib/property-taxonomy";
 import { ListingQualityChips } from "@/components/listings/listing-quality-chips";
 import { PublicListingCardRecord, PublicListingDetails } from "@/lib/types";
 
@@ -105,7 +106,11 @@ export function ListingDetail({ details, similarListings = [] }: Props) {
             </div>
             <div className="flex justify-between gap-4">
               <dt>Type</dt>
-              <dd className="font-medium text-slate-950">{listing.propertyType}</dd>
+              <dd className="text-right font-medium text-slate-950">
+                {listing.propertySubtype
+                  ? PROPERTY_SUBTYPE_LABELS[listing.propertySubtype]
+                  : PROPERTY_TYPE_LABELS[listing.propertyType]}
+              </dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt>Status</dt>

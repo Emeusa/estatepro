@@ -1,7 +1,64 @@
 export type UserRole = "agent" | "client" | "admin";
 export type VerificationStatus = "pending" | "approved" | "rejected";
 export type ListingStatus = "pending" | "active" | "inactive" | "blocked";
-export type PropertyType = "apartment" | "duplex" | "land" | "office" | "shop";
+export type PropertyType = "apartment" | "house" | "room" | "land" | "commercial";
+export type LegacyPropertyType = "duplex" | "office" | "shop";
+export type PropertySubtype =
+  | "flat_apartment"
+  | "mini_flat"
+  | "self_contain"
+  | "studio_apartment"
+  | "shared_apartment"
+  | "serviced_apartment"
+  | "maisonette"
+  | "penthouse"
+  | "block_of_flats"
+  | "duplex"
+  | "detached_duplex"
+  | "semi_detached_duplex"
+  | "terraced_duplex"
+  | "bungalow"
+  | "detached_bungalow"
+  | "semi_detached_bungalow"
+  | "terraced_bungalow"
+  | "terrace_house"
+  | "townhouse"
+  | "mansion"
+  | "villa"
+  | "single_room"
+  | "room_and_parlour"
+  | "boys_quarters"
+  | "shared_room"
+  | "residential_land"
+  | "commercial_land"
+  | "industrial_land"
+  | "mixed_use_land"
+  | "agricultural_land"
+  | "joint_venture_land"
+  | "waterfront_land"
+  | "estate_plot"
+  | "other_land"
+  | "office"
+  | "private_office"
+  | "coworking_space"
+  | "workstation"
+  | "conference_room"
+  | "shop"
+  | "showroom"
+  | "plaza_mall_complex"
+  | "warehouse"
+  | "factory"
+  | "filling_station"
+  | "event_hall"
+  | "hotel"
+  | "guest_house"
+  | "resort"
+  | "restaurant_bar"
+  | "school"
+  | "hospital_clinic"
+  | "religious_property"
+  | "commercial_building"
+  | "other_commercial";
 export type ListingCategory = "for_sale" | "for_rent" | "short_let";
 export type ListingAvailability = "available" | "sold" | "rented" | "booked";
 export type ListingPromotionType = "standard" | "premium" | "featured" | "sponsored";
@@ -51,6 +108,7 @@ export type LocationValue = {
   state: string;
   city: string;
   area: string;
+  areaSlug?: string;
   slug: string;
 };
 
@@ -92,6 +150,7 @@ export type ListingRecord = {
   description: string;
   price: number;
   propertyType: PropertyType;
+  propertySubtype?: PropertySubtype | null;
   listingCategory: ListingCategory;
   availability: ListingAvailability;
   status: ListingStatus;
@@ -148,6 +207,7 @@ export type PublicListingCardRecord = Pick<
   | "title"
   | "price"
   | "propertyType"
+  | "propertySubtype"
   | "listingCategory"
   | "availability"
   | "status"
@@ -324,21 +384,33 @@ export type ListingFilters = {
   bedrooms?: number;
   bathrooms?: number;
   propertyType?: PropertyType;
+  propertySubtype?: PropertySubtype;
+  areaSlug?: string;
   listingCategory?: ListingCategory;
-  cursor?: string;
+  page?: number;
   limit?: number;
+};
+
+export type PaginationMetadata = {
+  currentPage: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
 };
 
 export type PaginatedResponse<T> = {
   items: T[];
-  nextCursor: string | null;
+  pagination: PaginationMetadata;
 };
 
 export type PublicMarketFacet = {
   state: string;
   city: string;
+  area: string;
+  areaSlug: string;
   listingCategory: ListingCategory;
   propertyType: PropertyType;
+  propertySubtype: PropertySubtype | null;
   listingCount: number;
   latestUpdatedAt: string;
   listingFingerprints: string[];
@@ -353,6 +425,8 @@ export type PublicMarketPage = {
   totalPages: number;
   activeCities: Array<{ name: string; count: number }>;
   activePropertyTypes: Array<{ propertyType: PropertyType; count: number }>;
+  activeAreas: Array<{ name: string; slug: string; count: number }>;
+  activePropertySubtypes: Array<{ propertySubtype: PropertySubtype; count: number }>;
 };
 
 export type SeoMarketCoverageRecord = {
@@ -389,6 +463,7 @@ export type AdminAgentSummary = {
 
 export type AdminAgentDetails = AdminAgentSummary & {
   listings: ListingRecord[];
+  listingPagination: PaginationMetadata;
   subscription: SubscriptionRecord | null;
   subscriptionGrants: SubscriptionAdminGrantRecord[];
 };

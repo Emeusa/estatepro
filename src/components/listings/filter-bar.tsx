@@ -35,10 +35,10 @@ const tabs: FilterTab[] = [
 
 const propertyTypeOptions: Array<{ value: PropertyType; label: string }> = [
   { value: "apartment", label: "Apartment" },
-  { value: "duplex", label: "Duplex" },
+  { value: "house", label: "House" },
+  { value: "room", label: "Room" },
   { value: "land", label: "Land" },
-  { value: "office", label: "Office" },
-  { value: "shop", label: "Shop" }
+  { value: "commercial", label: "Commercial" }
 ];
 
 function getInitialTab(category?: string, propertyType?: string) {

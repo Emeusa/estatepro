@@ -3,7 +3,7 @@ import { ListingCategory, ListingRecord } from "@/lib/types";
 export const SITE_NAME = "C59 Estatehub";
 export const PRODUCTION_SITE_URL = "https://c59estatehub.com";
 export const DEFAULT_SITE_DESCRIPTION =
-  "Find verified homes, land, rentals, and commercial properties in Nigeria.";
+  "Find verified properties for rent, sale, and short let across Nigeria.";
 export const SITE_SOCIAL_LINKS = {
   x: "https://x.com/c59Estatehub",
   linkedin: "https://www.linkedin.com/in/emediong-peter-89533a422"

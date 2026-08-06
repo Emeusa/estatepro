@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { getLegacyPropertyRedirect, parsePropertyMarketSegments } from "@/lib/property-search";
+
+const LISTING_UUID_PATH = /^\/listings\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/?$/i;
+
 function getAllowedOrigins(request: NextRequest) {
   const configured = (process.env.ALLOWED_ORIGINS ?? "")
     .split(",")
@@ -62,6 +66,39 @@ function isUnsafeApiMethod(method: string) {
 }
 
 export function middleware(request: NextRequest) {
+  if (request.nextUrl.hostname === "www.c59estatehub.com") {
+    const apexUrl = request.nextUrl.clone();
+    apexUrl.hostname = "c59estatehub.com";
+    apexUrl.port = "";
+    return applySecurityHeaders(NextResponse.redirect(apexUrl, 308));
+  }
+
+  const listingUuid = request.nextUrl.pathname.match(LISTING_UUID_PATH)?.[1];
+  if (request.method === "GET" && listingUuid) {
+    const resolverUrl = request.nextUrl.clone();
+    resolverUrl.pathname = `/api/listings/legacy-redirect/${listingUuid}`;
+    resolverUrl.search = "";
+    return applySecurityHeaders(NextResponse.rewrite(resolverUrl));
+  }
+
+  if (request.method === "GET" && request.nextUrl.pathname === "/") {
+    const redirectPath = getLegacyPropertyRedirect(Object.fromEntries(request.nextUrl.searchParams.entries()));
+    if (redirectPath) {
+      return applySecurityHeaders(NextResponse.redirect(new URL(redirectPath, request.url), 308));
+    }
+  }
+
+  if (request.method === "GET" && request.nextUrl.pathname.startsWith("/properties/")) {
+    const segments = request.nextUrl.pathname.replace(/^\/properties\/?/, "").split("/").filter(Boolean);
+    const route = parsePropertyMarketSegments(segments);
+    const currentPath = request.nextUrl.pathname.replace(/\/$/, "");
+    if (route && route.path !== currentPath) {
+      const destination = new URL(route.path, request.url);
+      destination.search = request.nextUrl.search;
+      return applySecurityHeaders(NextResponse.redirect(destination, 308));
+    }
+  }
+
   if (request.nextUrl.pathname.startsWith("/api/") && isUnsafeApiMethod(request.method)) {
     const origin = request.headers.get("origin");
     if (origin && !getAllowedOrigins(request).has(origin)) {

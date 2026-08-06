@@ -28,6 +28,13 @@ const organizationJsonLd = {
   logo: `${siteUrl}/icon-512.png`,
   sameAs: [SITE_SOCIAL_LINKS.x, SITE_SOCIAL_LINKS.linkedin]
 };
+const websiteJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: SITE_NAME,
+  alternateName: "C59",
+  url: siteUrl
+};
 
 export const metadata: Metadata = {
   metadataBase: getSiteUrl(),
@@ -67,6 +74,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
         />
         <Header />
         <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>

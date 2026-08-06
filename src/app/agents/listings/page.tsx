@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { ListingManager } from "@/components/agents/listing-manager";
+import { PaginationNav } from "@/components/listings/pagination-nav";
 import { VerifiedAgentName } from "@/components/agents/verified-agent-name";
 import { apiRequest } from "@/lib/api";
 import { supabase } from "@/lib/supabase/client";
-import { AgentEntitlements, ListingRecord, UserRecord } from "@/lib/types";
+import { AgentEntitlements, ListingRecord, PaginationMetadata, UserRecord } from "@/lib/types";
 
 type ListingsPageData = {
   user: UserRecord | null;
@@ -18,6 +20,7 @@ type ListingsPageData = {
     };
   };
   listings: ListingRecord[];
+  listingPagination: PaginationMetadata;
   entitlements?: AgentEntitlements;
   token: string;
 };
@@ -41,7 +44,10 @@ function initials(name: string) {
   );
 }
 
-export default function AgentListingsPage() {
+function AgentListingsContent() {
+  const searchParams = useSearchParams();
+  const requestedPage = Number(searchParams.get("page") ?? "1");
+  const currentPage = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const [data, setData] = useState<ListingsPageData | null>(null);
   const [message, setMessage] = useState("Loading listings...");
 
@@ -61,7 +67,7 @@ export default function AgentListingsPage() {
       }
 
       try {
-        const profile = await apiRequest<Omit<ListingsPageData, "token">>("/api/agents/me?includeAnalytics=false", {
+        const profile = await apiRequest<Omit<ListingsPageData, "token">>(`/api/agents/me?includeAnalytics=false&listPage=${currentPage}`, {
           headers: { Authorization: `Bearer ${session.access_token}` }
         });
         if (active) {
@@ -87,7 +93,7 @@ export default function AgentListingsPage() {
       active = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [currentPage]);
 
   async function logout() {
     await supabase.auth.signOut();
@@ -110,7 +116,10 @@ export default function AgentListingsPage() {
       if (!current) {
         return current;
       }
-      const activeListingCount = listings.filter(
+      const previousPageActiveCount = current.listings.filter(
+        (listing) => listing.status === "active" && listing.availability === "available"
+      ).length;
+      const nextPageActiveCount = listings.filter(
         (listing) => listing.status === "active" && listing.availability === "available"
       ).length;
       return {
@@ -119,7 +128,10 @@ export default function AgentListingsPage() {
         entitlements: current.entitlements
           ? {
               ...current.entitlements,
-              activeListingCount
+              activeListingCount: Math.max(
+                0,
+                current.entitlements.activeListingCount + nextPageActiveCount - previousPageActiveCount
+              )
             }
           : current.entitlements
       };
@@ -217,9 +229,22 @@ export default function AgentListingsPage() {
               }
               onListingsChanged={updateListings}
             />
+            <PaginationNav
+              {...data.listingPagination}
+              basePath="/agents/listings"
+              itemLabel="listings"
+            />
           </div>
         </main>
       </div>
     </div>
+  );
+}
+
+export default function AgentListingsPage() {
+  return (
+    <Suspense fallback={<p className="text-sm text-slate-500">Loading listings...</p>}>
+      <AgentListingsContent />
+    </Suspense>
   );
 }

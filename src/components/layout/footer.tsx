@@ -52,9 +52,8 @@ export async function Footer() {
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 md:grid-cols-[1fr_1.25fr_0.85fr_0.65fr]">
         <section>
           <p className="font-heading text-2xl font-semibold text-amber-100">C59 Estatehub</p>
-          <p className="mt-3 max-w-md text-sm leading-7 text-slate-300">
-            About us: C59 Estatehub connects property seekers with verified listings and agent-managed property
-            information across Nigeria, with a mobile-first experience built for fast browsing.
+          <p data-nosnippet className="mt-3 max-w-md text-sm leading-7 text-slate-300">
+            Find verified properties for rent, sale, and short let across Nigeria.
           </p>
           <div className="mt-5 flex gap-3">
             {socialLinks.map((social) => (

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { cache } from "react";
 
 import { ListingGrid } from "@/components/listings/listing-grid";
@@ -8,14 +8,17 @@ import { formatDate } from "@/lib/format";
 import {
   buildPropertyMarketPath,
   getMarketDescription,
+  getMarketSeoTitle,
   getMarketTitle,
-  getPropertyTypeSegment,
   parsePropertyMarketSegments,
   type PropertyMarketRoute
 } from "@/lib/property-search";
 import { getSiteUrl, SITE_NAME, trimMetaDescription } from "@/lib/seo";
-import type { PropertyType } from "@/lib/types";
-import { getPublicMarketPage } from "@/modules/listings/listing.service";
+import {
+  PROPERTY_SUBTYPE_LABELS,
+  PROPERTY_TYPE_LABELS
+} from "@/lib/property-taxonomy";
+import { getPublicMarketPage, resolvePublicMarketArea } from "@/modules/listings/listing.service";
 import { resolveMarketIndexability } from "@/modules/seo/seo-market.service";
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -24,23 +27,33 @@ type Props = {
   searchParams: Promise<SearchParams>;
 };
 
-const PROPERTY_TYPE_LABELS: Record<PropertyType, string> = {
-  apartment: "Apartments",
-  duplex: "Duplexes",
-  land: "Land",
-  office: "Offices",
-  shop: "Shops"
-};
-
 const getBaseMarketContext = cache(async (segmentsKey: string) => {
-  const route = parsePropertyMarketSegments(segmentsKey ? segmentsKey.split("/") : []);
-  if (!route) return null;
+  const parsedRoute = parsePropertyMarketSegments(segmentsKey ? segmentsKey.split("/") : []);
+  if (!parsedRoute) return null;
+  const registeredArea = parsedRoute.areaSlug && parsedRoute.state && parsedRoute.city
+    ? await resolvePublicMarketArea(parsedRoute.state, parsedRoute.city, parsedRoute.areaSlug)
+    : null;
+  const normalizedRoute = registeredArea
+    ? {
+        ...parsedRoute,
+        area: registeredArea.name,
+        areaSlug: registeredArea.slug,
+        path: buildPropertyMarketPath({ ...parsedRoute, areaSlug: registeredArea.slug })
+      }
+    : parsedRoute;
   const page = await getPublicMarketPage({
-    state: route.state,
-    city: route.city,
-    propertyType: route.propertyType,
-    listingCategory: route.category
+    state: normalizedRoute.state,
+    city: normalizedRoute.city,
+    areaSlug: normalizedRoute.areaSlug,
+    propertyType: normalizedRoute.propertyType,
+    propertySubtype: normalizedRoute.propertySubtype,
+    listingCategory: normalizedRoute.category
   });
+  if (normalizedRoute.areaSlug && page.listingCount === 0) return null;
+  const area = normalizedRoute.areaSlug
+    ? registeredArea?.name ?? page.activeAreas.find((item) => item.slug === normalizedRoute.areaSlug)?.name
+    : undefined;
+  const route = area ? { ...normalizedRoute, area } : normalizedRoute;
   const indexability = await resolveMarketIndexability(route, page);
   return { route, page, indexability };
 });
@@ -75,7 +88,9 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
   const page = Math.max(1, Math.trunc(Number(stringParam(query, "page") ?? "1") || 1));
   const filtered = hasAdvancedFilters(query);
-  const title = `${getMarketTitle(context.route)} | ${SITE_NAME}`;
+  const title = context.indexability.eligible
+    ? getMarketSeoTitle(context.route, context.page.listingCount)
+    : `${getMarketTitle(context.route)} | ${SITE_NAME}`;
   const description = trimMetaDescription(getMarketDescription(context.route, context.page.listingCount));
   const canonical = buildCanonical(context.route, page, filtered);
   const indexable = context.indexability.eligible && !filtered && page <= context.page.totalPages;
@@ -94,6 +109,10 @@ export default async function PropertyMarketPage({ params, searchParams }: Props
   const [{ segments = [] }, query] = await Promise.all([params, searchParams]);
   const context = await getBaseMarketContext(segments.join("/"));
   if (!context) notFound();
+  const requestedPath = `/properties${segments.length ? `/${segments.join("/")}` : ""}`;
+  if (context.route.path !== requestedPath.replace(/\/$/, "")) {
+    permanentRedirect(context.route.path);
+  }
 
   const currentPage = Math.max(1, Math.trunc(Number(stringParam(query, "page") ?? "1") || 1));
   const filters = {
@@ -108,7 +127,9 @@ export default async function PropertyMarketPage({ params, searchParams }: Props
         {
           state: context.route.state,
           city: context.route.city,
+          areaSlug: context.route.areaSlug,
           propertyType: context.route.propertyType,
+          propertySubtype: context.route.propertySubtype,
           listingCategory: context.route.category,
           ...filters
         },
@@ -126,7 +147,27 @@ export default async function PropertyMarketPage({ params, searchParams }: Props
     ...(context.route.stateLabel
       ? [{ name: context.route.stateLabel, item: `${siteUrl}${buildPropertyMarketPath({ state: context.route.state })}` }]
       : []),
-    ...(context.route.city ? [{ name: context.route.city, item: `${siteUrl}${context.route.path}` }] : [])
+    ...(context.route.city
+      ? [{
+          name: context.route.city,
+          item: `${siteUrl}${buildPropertyMarketPath({
+            state: context.route.state,
+            city: context.route.city,
+            category: context.route.category
+          })}`
+        }]
+      : []),
+    ...(context.route.area
+      ? [{
+          name: context.route.area,
+          item: `${siteUrl}${buildPropertyMarketPath({
+            state: context.route.state,
+            city: context.route.city,
+            areaSlug: context.route.areaSlug,
+            category: context.route.category
+          })}`
+        }]
+      : [])
   ];
   const breadcrumbJsonLd = {
     "@context": "https://schema.org",
@@ -145,7 +186,7 @@ export default async function PropertyMarketPage({ params, searchParams }: Props
     numberOfItems: result.listingCount,
     itemListElement: result.items.map((listing, index) => ({
       "@type": "ListItem",
-      position: (currentPage - 1) * 12 + index + 1,
+      position: (currentPage - 1) * 10 + index + 1,
       url: `${siteUrl}/listings/${listing.slug}`,
       name: listing.title
     }))
@@ -186,7 +227,7 @@ export default async function PropertyMarketPage({ params, searchParams }: Props
         <button className="rounded-2xl bg-[#430078] px-5 py-3 text-sm font-black text-white">Refine results</button>
       </form>
 
-      {(context.page.activeCities.length > 1 || context.page.activePropertyTypes.length > 1) ? (
+      {(context.page.activeCities.length > 1 || context.page.activePropertyTypes.length > 1 || context.page.activeAreas.length > 1 || context.page.activePropertySubtypes.length > 1) ? (
         <section className="grid gap-5 border-y border-slate-200 py-5 lg:grid-cols-2">
           {context.route.state && !context.route.city && context.page.activeCities.length ? (
             <div>
@@ -204,17 +245,65 @@ export default async function PropertyMarketPage({ params, searchParams }: Props
               </div>
             </div>
           ) : null}
-          {context.route.city && context.route.category && !context.route.propertyType && context.page.activePropertyTypes.length ? (
+          {context.route.city && context.route.category && !context.route.propertyType && !context.route.propertySubtype && context.page.activePropertyTypes.length ? (
             <div>
               <h2 className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Property types</h2>
               <div className="mt-3 flex flex-wrap gap-2">
                 {context.page.activePropertyTypes.map((item) => (
                   <Link
                     key={item.propertyType}
-                    href={`${context.route.path}/${getPropertyTypeSegment(item.propertyType)}`}
+                    href={buildPropertyMarketPath({
+                      state: context.route.state,
+                      city: context.route.city,
+                      category: context.route.category,
+                      propertyType: item.propertyType
+                    })}
                     className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-teal-600"
                   >
                     {PROPERTY_TYPE_LABELS[item.propertyType]} ({item.count})
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {context.route.city && context.route.category && !context.route.areaSlug && context.page.activeAreas.length ? (
+            <div>
+              <h2 className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Browse active neighborhoods</h2>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {context.page.activeAreas.slice(0, 20).map((area) => (
+                  <Link
+                    key={area.slug}
+                    href={buildPropertyMarketPath({
+                      state: context.route.state,
+                      city: context.route.city,
+                      category: context.route.category,
+                      areaSlug: area.slug
+                    })}
+                    className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-teal-600"
+                  >
+                    {area.name} ({area.count})
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {context.route.category && !context.route.propertySubtype && context.page.activePropertySubtypes.length ? (
+            <div>
+              <h2 className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Property subtypes</h2>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {context.page.activePropertySubtypes.slice(0, 20).map((item) => (
+                  <Link
+                    key={item.propertySubtype}
+                    href={buildPropertyMarketPath({
+                      state: context.route.state,
+                      city: context.route.city,
+                      areaSlug: context.route.areaSlug,
+                      category: context.route.category,
+                      propertySubtype: item.propertySubtype
+                    })}
+                    className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-teal-600"
+                  >
+                    {PROPERTY_SUBTYPE_LABELS[item.propertySubtype]} ({item.count})
                   </Link>
                 ))}
               </div>
@@ -240,7 +329,14 @@ export default async function PropertyMarketPage({ params, searchParams }: Props
         <ListingGrid
           listings={result.items}
           hasActiveFilters={filtered}
-          pagination={{ currentPage: result.currentPage, totalPages: result.totalPages, basePath: context.route.path }}
+          queryParams={filters}
+          pagination={{
+            currentPage: result.currentPage,
+            pageSize: 10,
+            totalItems: result.listingCount,
+            totalPages: result.totalPages,
+            basePath: context.route.path
+          }}
         />
       </section>
 

@@ -3,6 +3,7 @@ import { unstable_cache } from "next/cache";
 import { listingFilterSchema, listingInputSchema, listingUpdateSchema } from "@/modules/listings/listing.schema";
 import {
   activatePendingListingsForAgent,
+  buildPublicMarketPageFromRanked,
   countMediaBearingListingsForAgent,
   countActiveAvailableListingsForAgent,
   createListing,
@@ -12,12 +13,14 @@ import {
   getListingById,
   getPublicListingByIdentifier,
   listAgentListings,
+  listAgentListingsPage,
   listListingsByAgentIds,
   listListingCountsByAgentIds,
   listListingsForAdmin,
-  listPublicListings,
+  listRankedPublicListingCandidates,
+  resolveCanonicalPublicArea,
+  paginateRankedPublicListings,
   listPublicMarketFacets,
-  listPublicMarketPage,
   listPublicListingsByAgent,
   listSimilarPublicListings,
   updateListing,
@@ -32,11 +35,15 @@ import {
 import { createUnavailableLifecycle, hasListingMedia } from "@/lib/listing-retention";
 import type { ListingRecord, SubscriptionRecord } from "@/lib/types";
 import { normalizeAndVerifyListingImages } from "@/modules/listings/listing-image-payload";
+import { isSubtypeForPropertyType } from "@/lib/property-taxonomy";
 
-const getCachedHomepageListings = unstable_cache(
-  async () => listPublicListings({ limit: 12 }),
-  ["public-listings-home"],
-  { tags: ["public-listings"], revalidate: 300 }
+const getCachedPublicRankingSnapshot = unstable_cache(
+  async (serializedFilters: string) =>
+    listRankedPublicListingCandidates(
+      JSON.parse(serializedFilters) as Parameters<typeof listRankedPublicListingCandidates>[0]
+    ),
+  ["public-listing-ranking-v2"],
+  { tags: ["public-listings"], revalidate: 60 }
 );
 
 const getCachedMarketFacets = unstable_cache(
@@ -45,29 +52,28 @@ const getCachedMarketFacets = unstable_cache(
   { tags: ["public-listings", "public-markets"], revalidate: 300 }
 );
 
-const getCachedMarketPage = unstable_cache(
-  async (serializedFilters: string, page: number) =>
-    listPublicMarketPage(JSON.parse(serializedFilters) as Parameters<typeof listPublicMarketPage>[0], page),
-  ["public-market-page"],
-  { tags: ["public-listings", "public-markets"], revalidate: 300 }
-);
-
 export async function getPublicListings(input: Record<string, unknown>) {
   const filters = listingFilterSchema.parse(input);
-  const isDefaultHomepageQuery =
-    Object.entries(filters).every(([key, value]) => key === "limit" ? value === 12 : value === undefined);
-  return isDefaultHomepageQuery ? getCachedHomepageListings() : listPublicListings(filters);
+  const { page, limit, ...rankingFilters } = filters;
+  const ranked = await getCachedPublicRankingSnapshot(JSON.stringify(rankingFilters));
+  return paginateRankedPublicListings(ranked, page, limit);
 }
 
 export async function getPublicMarketFacets() {
   return getCachedMarketFacets();
 }
 
+export async function resolvePublicMarketArea(state: string, city: string, areaSlug: string) {
+  return resolveCanonicalPublicArea(state, city, areaSlug);
+}
+
 export async function getPublicMarketPage(
   filters: {
     state?: string;
     city?: string;
+    areaSlug?: string;
     propertyType?: string;
+    propertySubtype?: string;
     listingCategory?: string;
     minPrice?: string | number;
     maxPrice?: string | number;
@@ -76,18 +82,21 @@ export async function getPublicMarketPage(
   },
   page = 1
 ) {
-  const parsed = listingFilterSchema.parse({ ...filters, limit: 12 });
+  const parsed = listingFilterSchema.parse({ ...filters, limit: 10, page });
   const marketFilters = {
     state: parsed.state,
     city: parsed.city,
+    areaSlug: parsed.areaSlug,
     propertyType: parsed.propertyType,
+    propertySubtype: parsed.propertySubtype,
     listingCategory: parsed.listingCategory,
     minPrice: parsed.minPrice,
     maxPrice: parsed.maxPrice,
     bedrooms: parsed.bedrooms,
     bathrooms: parsed.bathrooms
   };
-  return getCachedMarketPage(JSON.stringify(marketFilters), Math.max(1, Math.trunc(page)));
+  const ranked = await getCachedPublicRankingSnapshot(JSON.stringify(marketFilters));
+  return buildPublicMarketPageFromRanked(ranked, Math.max(1, Math.trunc(page)), 10);
 }
 
 export async function getListingDetails(listingId: string) {
@@ -112,10 +121,10 @@ export async function getSimilarListingsForPublicListing(listing: ListingRecord,
   return listSimilarPublicListings(listing, limit);
 }
 
-export async function getPublicAgentListings(agentId: string) {
+export async function getPublicAgentListings(agentId: string, page = 1) {
   const [agent, listings] = await Promise.all([
     getPublicAgentSummary(agentId),
-    listPublicListingsByAgent(agentId)
+    listPublicListingsByAgent(agentId, page)
   ]);
 
   if (!agent) {
@@ -127,6 +136,10 @@ export async function getPublicAgentListings(agentId: string) {
 
 export async function getAgentListings(agentId: string, limit = 50) {
   return listAgentListings(agentId, limit);
+}
+
+export async function getAgentListingsPage(agentId: string, page = 1) {
+  return listAgentListingsPage(agentId, page);
 }
 
 export async function getListingsForAdmin() {
@@ -254,6 +267,13 @@ export async function updateAgentListing(agentId: string, listingId: string, inp
 
   const currentListing = await ensureAgentOwnsListing(agentId, listingId);
   const payload = listingUpdateSchema.parse(normalizeAndVerifyListingImages(agentId, input));
+  const nextPropertyType = payload.propertyType ?? currentListing.propertyType;
+  const nextPropertySubtype = payload.propertySubtype === undefined
+    ? currentListing.propertySubtype ?? null
+    : payload.propertySubtype;
+  if (nextPropertySubtype && !isSubtypeForPropertyType(nextPropertyType, nextPropertySubtype)) {
+    throw new Error("Select a property subtype that matches the property group.");
+  }
   const planSlug = getEffectivePlanSlug(subscription);
 
   const nextHasMedia =

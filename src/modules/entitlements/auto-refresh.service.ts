@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isSubscriptionCurrentlyActive } from "@/lib/subscriptions";
 import { toSubscriptionRecord } from "@/lib/supabase-mappers";
 import { enforceAgentActiveListingLimit } from "@/modules/listings/listing.service";
+import { revalidateListingMutationPaths } from "@/modules/listings/listing-cache";
 import { runListingRetentionMaintenance } from "@/modules/listings/listing-retention.service";
 import { sendPlanDowngradedEmail, sendSubscriptionExpiryReminderEmail } from "@/modules/email/email.service";
 
@@ -107,5 +108,8 @@ export async function refreshEligibleListings() {
   }
 
   const retention = await runListingRetentionMaintenance();
+  if (refreshed > 0 || demoted > 0 || Object.values(retention).some((value) => typeof value === "number" && value > 0)) {
+    revalidateListingMutationPaths();
+  }
   return { refreshed, demoted, subscriptionReminders, ...retention };
 }

@@ -15,7 +15,7 @@ import {
   updateUserProfile
 } from "@/modules/agents/agent.repository";
 import { AdminAgentDetails, AdminAgentReview, AdminAgentSummary, PaidPlanStats } from "@/lib/types";
-import { getListingCountsByAgentIds, getListingsByAgentIds } from "@/modules/listings/listing.service";
+import { getAgentListingsPage, getListingCountsByAgentIds, getListingsByAgentIds } from "@/modules/listings/listing.service";
 import { sendAgentRegistrationReceivedEmail, sendAgentVerificationEmail } from "@/modules/email/email.service";
 import { getSubscriptionAdminGrantHistory } from "@/modules/subscriptions/admin-grant.service";
 
@@ -105,11 +105,11 @@ export async function getPaidPlanStatsForAdmin(): Promise<PaidPlanStats> {
   return countPaidPlanSubscriptionsForAdmin();
 }
 
-export async function getAgentReviewForAdmin(agentId: string): Promise<AdminAgentDetails | null> {
-  const [{ agent, subscription }, user, listings, subscriptionGrants] = await Promise.all([
+export async function getAgentReviewForAdmin(agentId: string, page = 1): Promise<AdminAgentDetails | null> {
+  const [{ agent, subscription }, user, listingResult, subscriptionGrants] = await Promise.all([
     getAgentProfile(agentId),
     getUserProfile(agentId),
-    getListingsByAgentIds([agentId]),
+    getAgentListingsPage(agentId, page),
     getSubscriptionAdminGrantHistory(agentId).catch(() => [])
   ]);
 
@@ -120,10 +120,11 @@ export async function getAgentReviewForAdmin(agentId: string): Promise<AdminAgen
   return {
     user,
     agent,
-    listingCount: listings.length,
+    listingCount: listingResult.pagination.totalItems,
     subscription: subscription ?? null,
     subscriptionGrants,
-    listings
+    listings: listingResult.items,
+    listingPagination: listingResult.pagination
   };
 }
 

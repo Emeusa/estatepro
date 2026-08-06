@@ -4,6 +4,7 @@ import { SafeListingImage } from "@/components/listings/safe-listing-image";
 import { formatPrice } from "@/lib/format";
 import { getListingHeroImage } from "@/lib/listing-images";
 import { LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
+import { PROPERTY_SUBTYPE_LABELS, PROPERTY_TYPE_LABELS } from "@/lib/property-taxonomy";
 import { getListingHref } from "@/lib/listing-urls";
 import { PublicListingCardRecord } from "@/lib/types";
 
@@ -43,7 +44,9 @@ export function SimilarListingCard({ listing }: Props) {
             {LISTING_CATEGORY_LABELS[listing.listingCategory]}
           </span>
           <span className="rounded-full bg-emerald-100 px-2 py-1 text-[0.65rem] font-bold capitalize text-emerald-800">
-            {listing.propertyType}
+            {listing.propertySubtype
+              ? PROPERTY_SUBTYPE_LABELS[listing.propertySubtype]
+              : PROPERTY_TYPE_LABELS[listing.propertyType]}
           </span>
         </div>
         <p className="mt-2 text-sm font-black text-slate-950">{formatPrice(listing.price)}</p>

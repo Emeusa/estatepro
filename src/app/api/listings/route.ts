@@ -21,13 +21,15 @@ export async function GET(request: NextRequest) {
       location: searchParams.get("location") ?? undefined,
       state: searchParams.get("state") ?? undefined,
       city: searchParams.get("city") ?? undefined,
+      areaSlug: searchParams.get("areaSlug") ?? undefined,
       minPrice: searchParams.get("minPrice") ?? undefined,
       maxPrice: searchParams.get("maxPrice") ?? undefined,
       bedrooms: searchParams.get("bedrooms") ?? undefined,
       bathrooms: searchParams.get("bathrooms") ?? undefined,
       propertyType: searchParams.get("propertyType") ?? undefined,
+      propertySubtype: searchParams.get("propertySubtype") ?? undefined,
       listingCategory: searchParams.get("listingCategory") ?? undefined,
-      cursor: searchParams.get("cursor") ?? undefined,
+      page: searchParams.get("page") ?? undefined,
       limit: searchParams.get("limit") ?? undefined
     });
 

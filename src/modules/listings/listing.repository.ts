@@ -12,6 +12,13 @@ import { getListingImageCount } from "@/lib/listing-images";
 import { getListingCardFeatureBadges } from "@/lib/listing-quality";
 import { rankListingsForFeed } from "@/lib/listing-visibility";
 import { getNigeriaStateStorageValues, normalizeNigeriaState } from "@/lib/nigeria-locations";
+import {
+  getLegacySubtypeForPropertyType,
+  getPropertyTypeStorageValues,
+  isPropertySubtype,
+  normalizePropertyType
+} from "@/lib/property-taxonomy";
+import { slugifyLocation } from "@/lib/sanitize";
 import { toListingRecord } from "@/lib/supabase-mappers";
 import {
   ListingCategory,
@@ -19,6 +26,7 @@ import {
   ListingRecord,
   ListingStatus,
   PaginatedResponse,
+  PropertySubtype,
   PropertyType,
   PublicMarketFacet,
   PublicMarketPage,
@@ -28,10 +36,50 @@ import {
 
 const PUBLIC_FEED_LISTINGS_SOURCE = "public_feed_listings";
 const PUBLIC_CARD_IMAGE_LIMIT = 4;
+const PUBLIC_PAGE_SIZE = 10;
+const PUBLIC_RANKING_BATCH_SIZE = 500;
+const PUBLIC_RANKING_COLUMNS = [
+  "id",
+  "agent_id",
+  "title",
+  "description",
+  "price",
+  "property_type",
+  "property_subtype",
+  "area_slug",
+  "listing_category",
+  "availability",
+  "status",
+  "image_urls",
+  "image_variants",
+  "promotion_type",
+  "boosted_at",
+  "last_refreshed_at",
+  "expires_at",
+  "featured_until",
+  "sponsored_until",
+  "photos_verified_at",
+  "location",
+  "bedrooms",
+  "bathrooms",
+  "property_size",
+  "land_size",
+  "amenities",
+  "utilities",
+  "safety_features",
+  "title_document_type",
+  "created_at",
+  "updated_at"
+].join(",");
+const PUBLIC_RANKING_COLUMNS_LEGACY = PUBLIC_RANKING_COLUMNS
+  .split(",")
+  .filter((column) => column !== "property_subtype" && column !== "area_slug")
+  .join(",");
 
 type KeywordFilters = {
   state?: string;
   propertyType?: PropertyType;
+  propertySubtype?: PropertySubtype;
   listingCategory?: ListingCategory;
   titleKeyword?: string;
 };
@@ -45,6 +93,12 @@ type SimilarListingFilters = {
 export type ListingSitemapEntry = {
   slug: string;
   updatedAt: string;
+};
+
+type SeoAreaRow = {
+  canonical_name: string;
+  slug: string;
+  aliases: string[] | null;
 };
 
 function normalizeKeyword(value: string) {
@@ -65,8 +119,47 @@ function isMissingSlugColumnError(error: { message?: string; code?: string } | n
   return error?.code === "42703" || /column .*slug.* does not exist/i.test(error?.message ?? "");
 }
 
+function isMissingTaxonomyColumnError(error: { message?: string; code?: string } | null | undefined) {
+  return /property_subtype|area_slug/i.test(error?.message ?? "") &&
+    (error?.code === "42703" || error?.code === "PGRST204" || /does not exist|schema cache/i.test(error?.message ?? ""));
+}
+
 function isDuplicateSlugError(error: { message?: string; code?: string } | null | undefined) {
   return error?.code === "23505" && /slug/i.test(error?.message ?? "");
+}
+
+function isMissingSeoAreasTable(error: { message?: string; code?: string } | null | undefined) {
+  return error?.code === "42P01" || /seo_areas/i.test(error?.message ?? "");
+}
+
+async function listSeoAreas(state: string, city: string): Promise<SeoAreaRow[]> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("seo_areas")
+    .select("canonical_name, slug, aliases")
+    .eq("state", state)
+    .eq("city", city)
+    .limit(250);
+
+  if (error) {
+    if (isMissingSeoAreasTable(error)) return [];
+    throw new Error(error.message);
+  }
+  return (data ?? []) as SeoAreaRow[];
+}
+
+export async function resolveCanonicalPublicArea(state: string, city: string, areaSlug: string) {
+  const normalized = slugifyLocation([areaSlug]);
+  const row = (await listSeoAreas(state, city)).find((item) =>
+    item.slug === normalized || (item.aliases ?? []).some((alias) => slugifyLocation([alias]) === normalized)
+  );
+  return row ? { name: row.canonical_name, slug: row.slug } : null;
+}
+
+async function normalizeListingAreaSlug(location: ListingRecord["location"]) {
+  const requestedSlug = location.areaSlug ?? slugifyLocation([location.area]);
+  const canonical = await resolveCanonicalPublicArea(location.state, location.city, requestedSlug);
+  return { ...location, areaSlug: canonical?.slug ?? requestedSlug };
 }
 
 function parseKeywordFilters(keyword?: string): KeywordFilters {
@@ -98,21 +191,42 @@ function parseKeywordFilters(keyword?: string): KeywordFilters {
     value = value.replace(/\bfor\s+sale\b|\bsale\b/g, " ");
   }
 
-  if (/\bflat\b|\bflats\b|\bmini\s+flat\b|\bmini\s+flats\b|\bself\s+contain\b|\bapartment\b/.test(value)) {
+  if (/\bflat\b|\bflats\b|\bmini\s+flat\b|\bmini\s+flats\b|\bself[ -]?contain\b|\bapartment\b|\bstudio\b/.test(value)) {
     filters.propertyType = "apartment";
+    if (/\bmini\s+flat/.test(value)) filters.propertySubtype = "mini_flat";
+    else if (/\bself[ -]?contain/.test(value)) filters.propertySubtype = "self_contain";
+    else if (/\bstudio/.test(value)) filters.propertySubtype = "studio_apartment";
     value = value.replace(/\bflat(s)?\b|\bmini\s+flat(s)?\b|\bself\s+contain\b|\bapartment(s)?\b/g, " ");
-  } else if (/\bhouse\b|\bhouses\b|\bduplex\b|\bduplexes\b/.test(value)) {
-    filters.propertyType = "duplex";
-    value = value.replace(/\bhouse(s)?\b|\bduplex(es)?\b/g, " ");
+  } else if (/\bhouse\b|\bhouses\b|\bduplex\b|\bduplexes\b|\bbungalow\b|\btownhouse\b|\bmansion\b|\bvilla\b/.test(value)) {
+    filters.propertyType = "house";
+    if (/\bsemi[ -]?detached\s+duplex/.test(value)) filters.propertySubtype = "semi_detached_duplex";
+    else if (/\bdetached\s+duplex/.test(value)) filters.propertySubtype = "detached_duplex";
+    else if (/\bterrace(d)?\s+duplex/.test(value)) filters.propertySubtype = "terraced_duplex";
+    else if (/\bduplex/.test(value)) filters.propertySubtype = "duplex";
+    else if (/\bbungalow/.test(value)) filters.propertySubtype = "bungalow";
+    value = value.replace(/\bhouse(s)?\b|\bduplex(es)?\b|\bbungalow(s)?\b|\btownhouse(s)?\b|\bmansion(s)?\b|\bvilla(s)?\b/g, " ");
+  } else if (/\bsingle\s+room\b|\broom\s+and\s+parlour\b|\bboys'?\s+quarters\b|\bshared\s+room\b/.test(value)) {
+    filters.propertyType = "room";
+    if (/\broom\s+and\s+parlour/.test(value)) filters.propertySubtype = "room_and_parlour";
+    else if (/\bboys'?\s+quarters/.test(value)) filters.propertySubtype = "boys_quarters";
+    else if (/\bshared\s+room/.test(value)) filters.propertySubtype = "shared_room";
+    else filters.propertySubtype = "single_room";
+    value = value.replace(/\bsingle\s+room\b|\broom\s+and\s+parlour\b|\bboys'?\s+quarters\b|\bshared\s+room\b/g, " ");
   } else if (/\bland\b/.test(value)) {
     filters.propertyType = "land";
+    if (/\bresidential\s+land/.test(value)) filters.propertySubtype = "residential_land";
+    else if (/\bcommercial\s+land/.test(value)) filters.propertySubtype = "commercial_land";
+    else if (/\bindustrial\s+land/.test(value)) filters.propertySubtype = "industrial_land";
+    else if (/\bfarm\s+land|\bagricultural\s+land/.test(value)) filters.propertySubtype = "agricultural_land";
     value = value.replace(/\bland\b/g, " ");
-  } else if (/\boffice\b|\boffices\b/.test(value)) {
-    filters.propertyType = "office";
-    value = value.replace(/\boffice(s)?\b/g, " ");
-  } else if (/\bshop\b|\bshops\b/.test(value)) {
-    filters.propertyType = "shop";
-    value = value.replace(/\bshop(s)?\b/g, " ");
+  } else if (/\boffice\b|\boffices\b|\bwarehouse\b|\bfactory\b|\bhotel\b|\bshop\b|\bshops\b/.test(value)) {
+    filters.propertyType = "commercial";
+    if (/\bwarehouse/.test(value)) filters.propertySubtype = "warehouse";
+    else if (/\bfactory/.test(value)) filters.propertySubtype = "factory";
+    else if (/\bhotel/.test(value)) filters.propertySubtype = "hotel";
+    else if (/\bshop/.test(value)) filters.propertySubtype = "shop";
+    else filters.propertySubtype = "office";
+    value = value.replace(/\boffice(s)?\b|\bwarehouse(s)?\b|\bfactor(y|ies)\b|\bhotel(s)?\b|\bshop(s)?\b/g, " ");
   }
 
   const titleKeyword = value.replace(/\bin\b/g, " ").replace(/\s+/g, " ").trim();
@@ -133,6 +247,7 @@ function toPublicListingCardRecord(
     title: listing.title,
     price: listing.price,
     propertyType: listing.propertyType,
+    propertySubtype: listing.propertySubtype ?? null,
     listingCategory: listing.listingCategory,
     availability: listing.availability,
     status: listing.status,
@@ -207,108 +322,102 @@ async function toPublicListingCardRecords(listings: ListingRecord[]) {
 export async function listPublicListings(
   filters: ListingFilters
 ): Promise<PaginatedResponse<PublicListingCardRecord>> {
+  const rankedListings = await listRankedPublicListingCandidates(filters);
+  return paginateRankedPublicListings(rankedListings, filters.page, filters.limit);
+}
+
+export async function paginateRankedPublicListings(
+  rankedListings: ListingRecord[],
+  page = 1,
+  limit = PUBLIC_PAGE_SIZE
+): Promise<PaginatedResponse<PublicListingCardRecord>> {
+  const safePage = Math.max(1, Math.trunc(page));
+  const pageSize = Math.min(PUBLIC_PAGE_SIZE, Math.max(1, Math.trunc(limit)));
+  const start = (safePage - 1) * pageSize;
+  const selectedIds = rankedListings.slice(start, start + pageSize).map((listing) => listing.id);
+  const items = await listPublicListingCardsByIds(selectedIds);
+
+  return {
+    items,
+    pagination: {
+      currentPage: safePage,
+      pageSize,
+      totalItems: rankedListings.length,
+      totalPages: Math.max(1, Math.ceil(rankedListings.length / pageSize))
+    }
+  };
+}
+
+export async function listRankedPublicListingCandidates(filters: ListingFilters) {
   const supabase = createServerSupabaseClient();
   const keywordFilters = parseKeywordFilters(filters.keyword);
-  const requestedLimit = filters.limit ?? 12;
-  const candidateLimit = Math.min(Math.max(requestedLimit * 6, requestedLimit), 72);
-
-  let query = supabase
-    .from(PUBLIC_FEED_LISTINGS_SOURCE)
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(candidateLimit);
-
   const stateFilter = filters.state ?? keywordFilters.state;
   const propertyTypeFilter = filters.propertyType ?? keywordFilters.propertyType;
+  const propertySubtypeFilter = filters.propertySubtype ?? keywordFilters.propertySubtype;
   const listingCategoryFilter = filters.listingCategory ?? keywordFilters.listingCategory;
+  const candidates: ListingRecord[] = [];
 
-  if (stateFilter) {
-    const stateValues = getNigeriaStateStorageValues(stateFilter);
-    query = stateValues.length === 1
-      ? query.eq("location->>state", stateValues[0])
-      : query.in("location->>state", stateValues);
-  }
-  if (filters.city) {
-    query = query.eq("location->>city", filters.city);
-  }
-  if (!stateFilter && !filters.city && filters.location) {
-    query = query.eq("location->>slug", filters.location);
-  }
-  if (propertyTypeFilter) {
-    query = query.eq("property_type", propertyTypeFilter);
-  }
-  if (listingCategoryFilter) {
-    query = query.eq("listing_category", listingCategoryFilter);
-  }
-  if (keywordFilters.titleKeyword) {
-    query = query.ilike("title", `%${keywordFilters.titleKeyword}%`);
-  }
-  if (filters.minPrice) {
-    query = query.gte("price", filters.minPrice);
-  }
-  if (filters.maxPrice) {
-    query = query.lte("price", filters.maxPrice);
-  }
-  if (filters.bedrooms) {
-    query = query.gte("bedrooms", filters.bedrooms);
-  }
-  if (filters.bathrooms) {
-    query = query.gte("bathrooms", filters.bathrooms);
-  }
-  if (filters.cursor) {
-    const { data: cursorRow } = await supabase
-      .from(PUBLIC_FEED_LISTINGS_SOURCE)
-      .select("created_at")
-      .eq("id", filters.cursor)
-      .single();
-    if (cursorRow?.created_at) {
-      query = query.lt("created_at", cursorRow.created_at);
+  for (let from = 0; ; from += PUBLIC_RANKING_BATCH_SIZE) {
+    function createQuery(columns: string, includeTaxonomy: boolean) {
+      let query = supabase
+        .from(PUBLIC_FEED_LISTINGS_SOURCE)
+        .select(columns)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, from + PUBLIC_RANKING_BATCH_SIZE - 1);
+
+      if (stateFilter) {
+        const stateValues = getNigeriaStateStorageValues(stateFilter);
+        query = stateValues.length === 1
+          ? query.eq("location->>state", stateValues[0])
+          : query.in("location->>state", stateValues);
+      }
+      if (filters.city) query = query.eq("location->>city", filters.city);
+      if (includeTaxonomy && filters.areaSlug) query = query.eq("area_slug", filters.areaSlug);
+      if (!stateFilter && !filters.city && filters.location) query = query.eq("location->>slug", filters.location);
+      if (propertyTypeFilter) query = query.in("property_type", getPropertyTypeStorageValues(propertyTypeFilter));
+      if (includeTaxonomy && propertySubtypeFilter) query = query.eq("property_subtype", propertySubtypeFilter);
+      if (listingCategoryFilter) query = query.eq("listing_category", listingCategoryFilter);
+      if (keywordFilters.titleKeyword) query = query.ilike("title", `%${keywordFilters.titleKeyword}%`);
+      if (filters.minPrice) query = query.gte("price", filters.minPrice);
+      if (filters.maxPrice) query = query.lte("price", filters.maxPrice);
+      if (filters.bedrooms) query = query.gte("bedrooms", filters.bedrooms);
+      if (filters.bathrooms) query = query.gte("bathrooms", filters.bathrooms);
+      return query;
     }
+
+    let { data, error } = await createQuery(PUBLIC_RANKING_COLUMNS, true);
+    if (isMissingTaxonomyColumnError(error)) {
+      const legacyResult = await createQuery(PUBLIC_RANKING_COLUMNS_LEGACY, false);
+      data = legacyResult.data;
+      error = legacyResult.error;
+    }
+    if (error) throw new Error(error.message);
+    const rows = data ?? [];
+    const mappedRows = rows.map((row) =>
+        toListingRecord({
+          ...(row as unknown as Record<string, unknown>),
+          contact_phone: "",
+          contact_whatsapp: ""
+        } as Parameters<typeof toListingRecord>[0])
+      );
+    candidates.push(...mappedRows.filter((listing) => {
+      if (filters.areaSlug && (listing.location.areaSlug ?? slugifyLocation([listing.location.area])) !== filters.areaSlug) {
+        return false;
+      }
+      if (propertySubtypeFilter && listing.propertySubtype !== propertySubtypeFilter) return false;
+      return true;
+    }));
+    if (rows.length < PUBLIC_RANKING_BATCH_SIZE) break;
   }
 
-  const { data, error } = await query;
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const candidates = (data ?? []).map(toListingRecord);
-  const rankedListings = rankListingsForFeed(candidates, requestedLimit);
-  const items = await toPublicListingCardRecords(rankedListings);
-  const nextCursorIndex = Math.min(requestedLimit, candidates.length) - 1;
-  const nextCursor = candidates.length > requestedLimit ? candidates[nextCursorIndex]?.id ?? null : null;
-  return { items, nextCursor };
+  return rankListingsForFeed(candidates);
 }
 
 type PublicMarketFilters = Pick<
   ListingFilters,
-  "state" | "city" | "propertyType" | "listingCategory" | "minPrice" | "maxPrice" | "bedrooms" | "bathrooms"
+  "state" | "city" | "areaSlug" | "propertyType" | "propertySubtype" | "listingCategory" | "minPrice" | "maxPrice" | "bedrooms" | "bathrooms"
 >;
-
-function applyPublicMarketFilters<T extends {
-  eq: (column: string, value: unknown) => T;
-  in: (column: string, values: unknown[]) => T;
-  gte: (column: string, value: number) => T;
-  lte: (column: string, value: number) => T;
-}>(
-  query: T,
-  filters: PublicMarketFilters
-) {
-  let filtered = query;
-  if (filters.state) {
-    const stateValues = getNigeriaStateStorageValues(filters.state);
-    filtered = stateValues.length === 1
-      ? filtered.eq("location->>state", stateValues[0])
-      : filtered.in("location->>state", stateValues);
-  }
-  if (filters.city) filtered = filtered.eq("location->>city", filters.city);
-  if (filters.propertyType) filtered = filtered.eq("property_type", filters.propertyType);
-  if (filters.listingCategory) filtered = filtered.eq("listing_category", filters.listingCategory);
-  if (filters.minPrice) filtered = filtered.gte("price", filters.minPrice);
-  if (filters.maxPrice) filtered = filtered.lte("price", filters.maxPrice);
-  if (filters.bedrooms) filtered = filtered.gte("bedrooms", filters.bedrooms);
-  if (filters.bathrooms) filtered = filtered.gte("bathrooms", filters.bathrooms);
-  return filtered;
-}
 
 function getDuplicateListingRatio(listings: ListingRecord[]) {
   if (!listings.length) return 0;
@@ -325,42 +434,45 @@ function getDuplicateListingRatio(listings: ListingRecord[]) {
 export async function listPublicMarketPage(
   filters: PublicMarketFilters,
   page = 1,
-  pageSize = 12
+  pageSize = PUBLIC_PAGE_SIZE
 ): Promise<PublicMarketPage> {
-  const supabase = createServerSupabaseClient();
+  const ranked = await listRankedPublicListingCandidates(filters);
+  return buildPublicMarketPageFromRanked(ranked, page, pageSize);
+}
+
+export async function buildPublicMarketPageFromRanked(
+  ranked: ListingRecord[],
+  page = 1,
+  pageSize = PUBLIC_PAGE_SIZE
+): Promise<PublicMarketPage> {
   const safePage = Math.max(1, Math.trunc(page));
-  const safePageSize = Math.min(20, Math.max(1, Math.trunc(pageSize)));
-  const candidateLimit = Math.min(Math.max(safePage * safePageSize * 6, 72), 1000);
-  let query = supabase
-    .from(PUBLIC_FEED_LISTINGS_SOURCE)
-    .select("*", { count: "exact" })
-    .order("created_at", { ascending: false })
-    .limit(candidateLimit);
-
-  query = applyPublicMarketFilters(query, filters);
-  const { data, error, count } = await query;
-  if (error) throw new Error(error.message);
-
-  const candidates = (data ?? []).map(toListingRecord);
-  const ranked = rankListingsForFeed(candidates, candidates.length);
+  const safePageSize = Math.min(PUBLIC_PAGE_SIZE, Math.max(1, Math.trunc(pageSize)));
   const start = (safePage - 1) * safePageSize;
   const selected = ranked.slice(start, start + safePageSize);
-  const listingCount = count ?? candidates.length;
+  const listingCount = ranked.length;
   const cityCounts = new Map<string, number>();
   const typeCounts = new Map<PropertyType, number>();
+  const areaCounts = new Map<string, { name: string; count: number }>();
+  const subtypeCounts = new Map<PropertySubtype, number>();
 
-  for (const listing of candidates) {
+  for (const listing of ranked) {
     cityCounts.set(listing.location.city, (cityCounts.get(listing.location.city) ?? 0) + 1);
     typeCounts.set(listing.propertyType, (typeCounts.get(listing.propertyType) ?? 0) + 1);
+    const areaSlug = listing.location.areaSlug ?? slugifyLocation([listing.location.area]);
+    const currentArea = areaCounts.get(areaSlug);
+    areaCounts.set(areaSlug, { name: listing.location.area, count: (currentArea?.count ?? 0) + 1 });
+    if (listing.propertySubtype) {
+      subtypeCounts.set(listing.propertySubtype, (subtypeCounts.get(listing.propertySubtype) ?? 0) + 1);
+    }
   }
 
   return {
-    items: await toPublicListingCardRecords(selected),
+    items: await listPublicListingCardsByIds(selected.map((listing) => listing.id)),
     listingCount,
-    latestUpdatedAt: candidates
+    latestUpdatedAt: ranked
       .map((listing) => listing.updatedAt)
       .sort((first, second) => second.localeCompare(first))[0] ?? null,
-    duplicateRatio: getDuplicateListingRatio(candidates),
+    duplicateRatio: getDuplicateListingRatio(ranked),
     currentPage: safePage,
     totalPages: Math.max(1, Math.ceil(listingCount / safePageSize)),
     activeCities: [...cityCounts.entries()]
@@ -368,37 +480,61 @@ export async function listPublicMarketPage(
       .sort((first, second) => second.count - first.count || first.name.localeCompare(second.name)),
     activePropertyTypes: [...typeCounts.entries()]
       .map(([propertyType, typeCount]) => ({ propertyType, count: typeCount }))
+      .sort((first, second) => second.count - first.count),
+    activeAreas: [...areaCounts.entries()]
+      .map(([slug, value]) => ({ slug, name: value.name, count: value.count }))
+      .sort((first, second) => second.count - first.count || first.name.localeCompare(second.name)),
+    activePropertySubtypes: [...subtypeCounts.entries()]
+      .map(([propertySubtype, count]) => ({ propertySubtype, count }))
       .sort((first, second) => second.count - first.count)
   };
 }
 
 export async function listPublicMarketFacets(): Promise<PublicMarketFacet[]> {
   const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from(PUBLIC_FEED_LISTINGS_SOURCE)
-    .select("location, listing_category, property_type, title, price, updated_at")
+    .select("location, area_slug, listing_category, property_type, property_subtype, title, price, updated_at")
     .order("updated_at", { ascending: false })
     .limit(5000);
+
+  if (isMissingTaxonomyColumnError(error)) {
+    const legacyResult = await supabase
+      .from(PUBLIC_FEED_LISTINGS_SOURCE)
+      .select("location, listing_category, property_type, title, price, updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(5000);
+    data = legacyResult.data as typeof data;
+    error = legacyResult.error;
+  }
 
   if (error) throw new Error(error.message);
 
   const facets = new Map<string, PublicMarketFacet>();
   for (const row of data ?? []) {
-    const location = row.location as { state?: string; city?: string } | null;
+    const location = row.location as { state?: string; city?: string; area?: string; areaSlug?: string } | null;
     if (!location?.state || !location.city) continue;
     const listingCategory = row.listing_category as ListingCategory;
-    const propertyType = row.property_type as PropertyType;
+    const propertyType = normalizePropertyType(row.property_type);
+    const propertySubtype = typeof row.property_subtype === "string" && isPropertySubtype(row.property_subtype)
+      ? row.property_subtype
+      : getLegacySubtypeForPropertyType(row.property_type);
     const state = normalizeNigeriaState(location.state);
-    const fingerprint = [row.title, (row.location as { area?: string } | null)?.area, location.city, row.price]
+    const area = location.area?.trim() ?? "";
+    const areaSlug = String(row.area_slug ?? location.areaSlug ?? slugifyLocation([area]));
+    const fingerprint = [row.title, area, location.city, row.price]
       .map((value) => normalizeKeyword(String(value ?? "")))
       .join("|");
-    const key = [state, location.city, listingCategory, propertyType].join("|");
+    const key = [state, location.city, areaSlug, listingCategory, propertyType, propertySubtype ?? ""].join("|");
     const current = facets.get(key);
     facets.set(key, {
       state,
       city: location.city,
+      area,
+      areaSlug,
       listingCategory,
       propertyType,
+      propertySubtype,
       listingCount: (current?.listingCount ?? 0) + 1,
       listingFingerprints: [...(current?.listingFingerprints ?? []), fingerprint],
       latestUpdatedAt:
@@ -431,7 +567,7 @@ async function listSimilarPublicListingCandidates(
       : query.in("location->>state", stateValues);
   }
   if (filters.propertyType) {
-    query = query.eq("property_type", filters.propertyType);
+    query = query.in("property_type", getPropertyTypeStorageValues(filters.propertyType));
   }
   if (filters.listingCategory) {
     query = query.eq("listing_category", filters.listingCategory);
@@ -521,20 +657,37 @@ export async function getPublicListingByIdentifier(identifier: string) {
   return getListingRowBySlug(identifier, "public_listings");
 }
 
-export async function listPublicListingsByAgent(agentId: string) {
+export async function listPublicListingsByAgent(
+  agentId: string,
+  page = 1,
+  pageSize = PUBLIC_PAGE_SIZE
+): Promise<PaginatedResponse<PublicListingCardRecord>> {
   const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase
+  const safePage = Math.max(1, Math.trunc(page));
+  const safePageSize = Math.min(PUBLIC_PAGE_SIZE, Math.max(1, Math.trunc(pageSize)));
+  const from = (safePage - 1) * safePageSize;
+  const { data, error, count } = await supabase
     .from("public_listings")
-    .select("*")
+    .select("*", { count: "exact" })
     .eq("agent_id", agentId)
     .order("created_at", { ascending: false })
-    .limit(50);
+    .order("id", { ascending: true })
+    .range(from, from + safePageSize - 1);
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return toPublicListingCardRecords((data ?? []).map(toListingRecord));
+  const totalItems = count ?? 0;
+  return {
+    items: await toPublicListingCardRecords((data ?? []).map(toListingRecord)),
+    pagination: {
+      currentPage: safePage,
+      pageSize: safePageSize,
+      totalItems,
+      totalPages: Math.max(1, Math.ceil(totalItems / safePageSize))
+    }
+  };
 }
 
 export async function listPublicListingCardsByIds(listingIds: string[]) {
@@ -622,6 +775,31 @@ export async function listAgentListings(agentId: string, limit = 50) {
     throw new Error(error.message);
   }
   return (data ?? []).map(toListingRecord);
+}
+
+export async function listAgentListingsPage(agentId: string, page = 1, pageSize = PUBLIC_PAGE_SIZE) {
+  const supabase = createServerSupabaseClient();
+  const safePage = Math.max(1, Math.trunc(page));
+  const safePageSize = Math.min(PUBLIC_PAGE_SIZE, Math.max(1, Math.trunc(pageSize)));
+  const from = (safePage - 1) * safePageSize;
+  const { data, error, count } = await supabase
+    .from("listings")
+    .select("*", { count: "exact" })
+    .eq("agent_id", agentId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: true })
+    .range(from, from + safePageSize - 1);
+  if (error) throw new Error(error.message);
+  const totalItems = count ?? 0;
+  return {
+    items: (data ?? []).map(toListingRecord),
+    pagination: {
+      currentPage: safePage,
+      pageSize: safePageSize,
+      totalItems,
+      totalPages: Math.max(1, Math.ceil(totalItems / safePageSize))
+    }
+  };
 }
 
 export async function listListingsForAdmin() {
@@ -873,6 +1051,7 @@ export async function createListing(
   initialStatus: Extract<ListingStatus, "active" | "pending">
 ) {
   const supabase = createServerSupabaseClient();
+  const location = await normalizeListingAreaSlug(payload.location);
   let slug = await createUniqueListingSlug(payload);
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -883,6 +1062,8 @@ export async function createListing(
       description: payload.description,
       price: payload.price,
       property_type: payload.propertyType,
+      property_subtype: payload.propertySubtype ?? null,
+      area_slug: location.areaSlug,
       listing_category: payload.listingCategory,
       availability: payload.availability,
       status: initialStatus,
@@ -890,7 +1071,7 @@ export async function createListing(
       image_variants: payload.imageVariants,
       contact_phone: payload.contactPhone,
       contact_whatsapp: payload.contactWhatsapp,
-      location: payload.location,
+      location,
       bedrooms: payload.bedrooms,
       bathrooms: payload.bathrooms,
       toilets: payload.toilets,
@@ -951,11 +1132,13 @@ export async function updateListing(
 ) {
   const supabase = createServerSupabaseClient();
   const updates: Record<string, unknown> = {};
+  const location = payload.location ? await normalizeListingAreaSlug(payload.location) : null;
 
   if (payload.title !== undefined) updates.title = payload.title;
   if (payload.description !== undefined) updates.description = payload.description;
   if (payload.price !== undefined) updates.price = payload.price;
   if (payload.propertyType !== undefined) updates.property_type = payload.propertyType;
+  if (payload.propertySubtype !== undefined) updates.property_subtype = payload.propertySubtype;
   if (payload.listingCategory !== undefined) updates.listing_category = payload.listingCategory;
   if (payload.availability !== undefined) updates.availability = payload.availability;
   if (payload.status !== undefined) updates.status = payload.status;
@@ -978,7 +1161,10 @@ export async function updateListing(
   if (payload.imageVariants !== undefined) updates.image_variants = payload.imageVariants;
   if (payload.contactPhone !== undefined) updates.contact_phone = payload.contactPhone;
   if (payload.contactWhatsapp !== undefined) updates.contact_whatsapp = payload.contactWhatsapp;
-  if (payload.location !== undefined) updates.location = payload.location;
+  if (location) {
+    updates.location = location;
+    updates.area_slug = location.areaSlug;
+  }
   if (payload.bedrooms !== undefined) updates.bedrooms = payload.bedrooms;
   if (payload.bathrooms !== undefined) updates.bathrooms = payload.bathrooms;
   if (payload.toilets !== undefined) updates.toilets = payload.toilets;

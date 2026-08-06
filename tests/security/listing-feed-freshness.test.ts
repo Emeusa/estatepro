@@ -39,10 +39,18 @@ describe("public listing feed image performance", () => {
     expect(rowSource).toContain("<PhotoCount count={photoCount} />");
   });
 
-  it("uses Next Image optimization for configured Supabase listing images with a safe fallback", () => {
+  it("serves configured Supabase listing images directly by default with a Vercel rollback mode", () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://project.supabase.co";
+    delete process.env.NEXT_PUBLIC_LISTING_IMAGE_DELIVERY_MODE;
     const safeImageSource = readSource("src/components/listings/safe-listing-image.tsx");
 
+    expect(
+      shouldOptimizeListingImage(
+        "https://project.supabase.co/storage/v1/object/public/listing-images/agent-id/photo-card.webp"
+      )
+    ).toBe(false);
+
+    process.env.NEXT_PUBLIC_LISTING_IMAGE_DELIVERY_MODE = "vercel";
     expect(
       shouldOptimizeListingImage(
         "https://project.supabase.co/storage/v1/object/public/listing-images/agent-id/photo-card.webp"
@@ -59,6 +67,8 @@ describe("public listing feed image performance", () => {
     expect(safeImageSource).toContain("setUseDirectImage(true)");
     expect(safeImageSource).toContain("unoptimized={!canUseOptimizer || useDirectImage}");
 
+    delete process.env.NEXT_PUBLIC_LISTING_IMAGE_DELIVERY_MODE;
+
     for (const componentPath of [
       "src/components/listings/listing-result.tsx",
       "src/components/listings/listing-card.tsx",
@@ -73,6 +83,22 @@ describe("public listing feed image performance", () => {
       expect(source).not.toContain("unoptimized={preview.isPreprocessed}");
       expect(source).not.toContain("unoptimized={selectedImage.isPreprocessed}");
     }
+  });
+
+  it("adds immutable-style cache metadata to new images and provides a safe maintenance command", () => {
+    const uploadRouteSource = readSource("src/app/api/uploads/listing-images/fallback/route.ts");
+    const maintenanceSource = readSource("scripts/maintenance-image-cache.mjs");
+    const packageSource = readSource("package.json");
+    const envExampleSource = readSource(".env.example");
+
+    expect(uploadRouteSource).toContain('cacheControl: "31536000"');
+    expect(uploadRouteSource).toContain("upsert: false");
+    expect(maintenanceSource).toContain('const apply = process.argv.includes("--apply")');
+    expect(maintenanceSource).toContain("if (!apply) continue");
+    expect(maintenanceSource).toContain(".update(path, bytes");
+    expect(maintenanceSource).not.toContain('.from("listings").update');
+    expect(packageSource).toContain('"maintenance:image-cache"');
+    expect(envExampleSource).toContain("NEXT_PUBLIC_LISTING_IMAGE_DELIVERY_MODE=direct");
   });
 
   it("uses only image quality values allowed by Next config", () => {

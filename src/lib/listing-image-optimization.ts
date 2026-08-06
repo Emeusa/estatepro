@@ -1,4 +1,8 @@
 export function shouldOptimizeListingImage(url: string) {
+  if (process.env.NEXT_PUBLIC_LISTING_IMAGE_DELIVERY_MODE !== "vercel") {
+    return false;
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!supabaseUrl) {
     return false;

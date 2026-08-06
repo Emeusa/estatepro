@@ -3,6 +3,13 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import {
+  buildPropertyMarketPath,
+  getMarketSeoTitle,
+  parsePropertyMarketSegments
+} from "../../src/lib/property-search";
+import { PROPERTY_SUBTYPES } from "../../src/lib/property-taxonomy";
+
 function readSource(relativePath: string) {
   return readFileSync(path.join(process.cwd(), relativePath), "utf8");
 }
@@ -17,21 +24,83 @@ describe("nationwide SEO architecture", () => {
     expect(homepage).not.toMatch(/Uyo[- ]based/i);
     expect(footer).toContain("getPublicMarketFacets");
     expect(footer).toContain("/properties/locations");
+    expect(readSource("src/lib/homepage-filters.ts")).toContain(
+      "C59 Estatehub - Verified Properties Across Nigeria"
+    );
+    expect(homepage).toContain("Find verified properties for rent, sale, and short let across Nigeria.");
+  });
+
+  it("supports broad property groups, nationwide subtypes, and neighborhood routes", () => {
+    expect(PROPERTY_SUBTYPES.apartment).toContain("mini_flat");
+    expect(PROPERTY_SUBTYPES.house).toContain("detached_duplex");
+    expect(PROPERTY_SUBTYPES.room).toContain("room_and_parlour");
+    expect(PROPERTY_SUBTYPES.land).toContain("joint_venture_land");
+    expect(PROPERTY_SUBTYPES.commercial).toContain("warehouse");
+
+    const route = parsePropertyMarketSegments([
+      "for-rent",
+      "lagos",
+      "eti-osa",
+      "sangotedo",
+      "mini-flat"
+    ]);
+    expect(route).toMatchObject({
+      kind: "area_subtype",
+      state: "Lagos",
+      city: "Eti-Osa",
+      areaSlug: "sangotedo",
+      propertySubtype: "mini_flat",
+      path: "/properties/for-rent/lagos/eti-osa/sangotedo/mini-flats"
+    });
+    expect(buildPropertyMarketPath({ category: "for_sale", propertyType: "commercial" }))
+      .toBe("/properties/for-sale/commercial");
+    expect(getMarketSeoTitle({ ...route!, area: "Sangotedo" }, 12))
+      .toBe("Mini flats for rent in Sangotedo, Lagos (12 available) | C59 Estatehub");
+  });
+
+  it("keeps taxonomy schema additive and creates direct redirect boundaries", () => {
+    const schema = readSource("docs/supabase-schema.sql");
+    const middleware = readSource("src/middleware.ts");
+    const uuidResolver = readSource("src/app/api/listings/legacy-redirect/[listingId]/route.ts");
+
+    expect(schema).toContain("add column if not exists property_subtype text");
+    expect(schema).toContain("add column if not exists area_slug text");
+    expect(schema).toContain("create table if not exists public.seo_areas");
+    expect(middleware).toContain("NextResponse.redirect(new URL(redirectPath, request.url), 308)");
+    expect(middleware).toContain("NextResponse.rewrite(resolverUrl)");
+    expect(uuidResolver).toContain("NextResponse.redirect");
+    expect(uuidResolver).toContain(", 308)");
   });
 
   it("serves one responsive listing result structure with crawlable pagination", () => {
     const grid = readSource("src/components/listings/listing-grid.tsx");
+    const pagination = readSource("src/components/listings/pagination-nav.tsx");
     const result = readSource("src/components/listings/listing-result.tsx");
 
     expect(grid).toContain("ListingResult");
     expect(grid).not.toContain('from "@/components/listings/listing-desktop-row"');
     expect(grid).not.toContain('from "@/components/listings/listing-card"');
-    expect(grid).toContain('aria-label="Property result pages"');
-    expect(grid).toContain("pagination.basePath");
+    expect(grid).toContain("PaginationNav");
+    expect(grid).not.toContain("Load more properties");
+    expect(pagination).toContain("Showing {firstItem}-{lastItem} of {totalItems}");
+    expect(pagination).toContain("currentPage - 2");
     expect(result).toContain("whitespace-nowrap");
     expect(result).toContain('className="h-3.5 w-3.5 shrink-0 fill-current"');
     expect(result).toMatch(/>\s*Call\s*<\/a>/);
     expect(result).not.toContain("Call agent");
+  });
+
+  it("slices one cached global ranking snapshot instead of using cursors", () => {
+    const service = readSource("src/modules/listings/listing.service.ts");
+    const repository = readSource("src/modules/listings/listing.repository.ts");
+    const api = readSource("src/app/api/listings/route.ts");
+
+    expect(service).toContain("getCachedPublicRankingSnapshot");
+    expect(service).toContain("const { page, limit, ...rankingFilters } = filters");
+    expect(repository).toContain("paginateRankedPublicListings");
+    expect(repository).toContain("PUBLIC_RANKING_COLUMNS");
+    expect(api).toContain('page: searchParams.get("page")');
+    expect(api).not.toContain('searchParams.get("cursor")');
   });
 
   it("keeps mobile listing text contained and reduces mobile feature density", () => {

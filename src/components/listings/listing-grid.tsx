@@ -9,15 +9,16 @@ import { PublicListingCardRecord } from "@/lib/types";
 import { buildPropertyMarketPath } from "@/lib/property-search";
 
 import { ListingResult } from "@/components/listings/listing-result";
+import { PaginationNav } from "@/components/listings/pagination-nav";
+import type { PaginationMetadata } from "@/lib/types";
 
 type Props = {
   listings: PublicListingCardRecord[];
   hasActiveFilters?: boolean;
-  nextCursor?: string | null;
   queryParams?: Record<string, string | undefined>;
   showDiscoveryRail?: boolean;
   discoveryMarkets?: Array<{ state: string; label: string; count: number }>;
-  pagination?: { currentPage: number; totalPages: number; basePath: string };
+  pagination?: PaginationMetadata & { basePath: string; fragment?: string };
 };
 
 const popularSearches = [
@@ -144,26 +145,20 @@ function ListingDiscoveryRail({
 export function ListingGrid({
   listings,
   hasActiveFilters = false,
-  nextCursor = null,
   queryParams = {},
   showDiscoveryRail = false,
   discoveryMarkets = [],
   pagination
 }: Props) {
   const [items, setItems] = useState(listings);
-  const [cursor, setCursor] = useState(nextCursor);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [checkedSavedIds, setCheckedSavedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setItems(listings);
-    setCursor(nextCursor);
-    setError("");
     setSavedIds(new Set());
     setCheckedSavedIds(new Set());
-  }, [listings, nextCursor]);
+  }, [listings]);
 
   useEffect(() => {
     const uncheckedIds = items.map((listing) => listing.id).filter((listingId) => !checkedSavedIds.has(listingId));
@@ -228,46 +223,6 @@ export function ListingGrid({
       return next;
     });
     setCheckedSavedIds((current) => new Set(current).add(listingId));
-  }
-
-  async function loadMore() {
-    if (!cursor || loading) {
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-
-    const params = new URLSearchParams();
-    Object.entries(queryParams).forEach(([key, value]) => {
-      if (value) {
-        params.set(key, value);
-      }
-    });
-    params.set("limit", "12");
-    params.set("cursor", cursor);
-
-    try {
-      const response = await fetch(`/api/listings?${params.toString()}`, {
-        headers: { Accept: "application/json" }
-      });
-      if (!response.ok) {
-        throw new Error("Could not load more listings.");
-      }
-      const data = (await response.json()) as {
-        items: PublicListingCardRecord[];
-        nextCursor: string | null;
-      };
-      setItems((current) => {
-        const seen = new Set(current.map((listing) => listing.id));
-        return [...current, ...data.items.filter((listing) => !seen.has(listing.id))];
-      });
-      setCursor(data.nextCursor);
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Could not load more listings.");
-    } finally {
-      setLoading(false);
-    }
   }
 
   if (!items.length) {
@@ -335,52 +290,9 @@ export function ListingGrid({
           </div>
         ) : null}
       </div>
-      {pagination && pagination.totalPages > 1 ? (
-        <nav aria-label="Property result pages" className="flex flex-wrap items-center justify-center gap-2">
-          {pagination.currentPage > 1 ? (
-            <Link
-              href={`${pagination.basePath}?page=${pagination.currentPage - 1}`}
-              className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700"
-            >
-              Previous
-            </Link>
-          ) : null}
-          {Array.from({ length: Math.min(pagination.totalPages, 7) }, (_, index) => {
-            const page = index + 1;
-            return (
-              <Link
-                key={page}
-                href={page === 1 ? pagination.basePath : `${pagination.basePath}?page=${page}`}
-                aria-current={page === pagination.currentPage ? "page" : undefined}
-                className={`grid h-10 w-10 place-items-center rounded-full text-sm font-black ${
-                  page === pagination.currentPage ? "bg-slate-950 text-white" : "border border-slate-300 bg-white text-slate-700"
-                }`}
-              >
-                {page}
-              </Link>
-            );
-          })}
-          {pagination.currentPage < pagination.totalPages ? (
-            <Link
-              href={`${pagination.basePath}?page=${pagination.currentPage + 1}`}
-              className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700"
-            >
-              Next
-            </Link>
-          ) : null}
-        </nav>
-      ) : null}
-      {cursor && !pagination ? (
-        <div className="flex flex-col items-center gap-3">
-          <button
-            type="button"
-            className="rounded-full bg-slate-950 px-6 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-            onClick={loadMore}
-            disabled={loading}
-          >
-            {loading ? "Loading properties..." : "Load more properties"}
-          </button>
-          {error ? <p className="text-sm font-semibold text-rose-600">{error}</p> : null}
+      {pagination ? (
+        <div className={showDiscoveryRail ? "xl:w-[56rem] 2xl:w-[58rem]" : ""}>
+          <PaginationNav {...pagination} queryParams={queryParams} itemLabel="properties" />
         </div>
       ) : null}
     </div>

@@ -58,10 +58,33 @@ export function aggregateSeoMarkets(facets: PublicMarketFacet[]) {
   for (const facet of facets) {
     add("/properties", facet);
     add(buildPropertyMarketPath({ category: facet.listingCategory }), facet);
+    add(buildPropertyMarketPath({ category: facet.listingCategory, propertyType: facet.propertyType }), facet);
+    if (facet.propertySubtype) {
+      add(buildPropertyMarketPath({ category: facet.listingCategory, propertySubtype: facet.propertySubtype }), facet);
+    }
     add(buildPropertyMarketPath({ state: facet.state }), facet);
     add(buildPropertyMarketPath({ state: facet.state, category: facet.listingCategory }), facet);
+    add(buildPropertyMarketPath({ state: facet.state, category: facet.listingCategory, propertyType: facet.propertyType }), facet);
+    if (facet.propertySubtype) {
+      add(buildPropertyMarketPath({ state: facet.state, category: facet.listingCategory, propertySubtype: facet.propertySubtype }), facet);
+    }
     add(buildPropertyMarketPath({ state: facet.state, city: facet.city, category: facet.listingCategory }), facet);
     add(buildPropertyMarketPath({ state: facet.state, city: facet.city, category: facet.listingCategory, propertyType: facet.propertyType }), facet);
+    if (facet.propertySubtype) {
+      add(buildPropertyMarketPath({ state: facet.state, city: facet.city, category: facet.listingCategory, propertySubtype: facet.propertySubtype }), facet);
+    }
+    if (facet.areaSlug) {
+      add(buildPropertyMarketPath({ state: facet.state, city: facet.city, areaSlug: facet.areaSlug, category: facet.listingCategory }), facet);
+      if (facet.propertySubtype) {
+        add(buildPropertyMarketPath({
+          state: facet.state,
+          city: facet.city,
+          areaSlug: facet.areaSlug,
+          category: facet.listingCategory,
+          propertySubtype: facet.propertySubtype
+        }), facet);
+      }
+    }
   }
 
   return [...markets.values()];

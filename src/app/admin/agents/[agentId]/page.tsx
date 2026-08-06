@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 
 import { AdminIdentityCard, AdminShell, statusPillClass } from "@/components/admin/admin-shell";
+import { PaginationNav } from "@/components/listings/pagination-nav";
 import { apiRequest } from "@/lib/api";
 import { formatDate, formatPrice } from "@/lib/format";
 import { getListingImageCount } from "@/lib/listing-images";
@@ -68,7 +69,10 @@ function expiryIsoFromDateInput(value: string) {
 
 export default function AdminAgentDetailPage() {
   const params = useParams<{ agentId: string }>();
+  const searchParams = useSearchParams();
   const agentId = params.agentId;
+  const requestedPage = Number(searchParams.get("page") ?? "1");
+  const currentPage = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const [review, setReview] = useState<AdminAgentDetails | null>(null);
   const [account, setAccount] = useState<UserRecord | null>(null);
   const [token, setToken] = useState("");
@@ -95,7 +99,7 @@ export default function AdminAgentDetailPage() {
 
       try {
         const [agentData, adminAccount] = await Promise.all([
-          apiRequest<AdminAgentResponse>(`/api/admin/agents/${agentId}`, {
+          apiRequest<AdminAgentResponse>(`/api/admin/agents/${agentId}?page=${currentPage}`, {
             headers: { Authorization: `Bearer ${session.access_token}` }
           }),
           apiRequest<AdminAccount>("/api/auth/me", {
@@ -128,7 +132,7 @@ export default function AdminAgentDetailPage() {
       active = false;
       subscription.unsubscribe();
     };
-  }, [agentId]);
+  }, [agentId, currentPage]);
 
   async function moderateAgent(action: "approve" | "reject" | "block" | "unblock") {
     if (!review || !token) {
@@ -395,7 +399,7 @@ export default function AdminAgentDetailPage() {
               </div>
               <div className="rounded-2xl bg-slate-300/60 p-4">
                 <dt className="text-slate-500">Listings</dt>
-                <dd className="mt-1 font-medium text-slate-950">{review.listings.length}</dd>
+                <dd className="mt-1 font-medium text-slate-950">{review.listingCount}</dd>
               </div>
             </dl>
           </div>
@@ -552,7 +556,7 @@ export default function AdminAgentDetailPage() {
                 <h2 className="text-lg font-bold text-slate-950">Agent listings</h2>
                 <p className="mt-1 text-sm text-slate-500">Listings load only on this agent profile page.</p>
               </div>
-              <span className="text-sm font-semibold text-slate-600">{review.listings.length} total</span>
+              <span className="text-sm font-semibold text-slate-600">{review.listingCount} total</span>
             </div>
 
             <div className="mt-4 space-y-3">
@@ -613,6 +617,13 @@ export default function AdminAgentDetailPage() {
                   This agent has not created listings yet.
                 </p>
               )}
+            </div>
+            <div className="mt-5">
+              <PaginationNav
+                {...review.listingPagination}
+                basePath={`/admin/agents/${agentId}`}
+                itemLabel="listings"
+              />
             </div>
           </div>
         </section>

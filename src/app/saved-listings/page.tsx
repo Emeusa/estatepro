@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { ListingCard } from "@/components/listings/listing-card";
+import { PaginationNav } from "@/components/listings/pagination-nav";
 import { apiRequest } from "@/lib/api";
 import { supabase } from "@/lib/supabase/client";
-import { PublicListingCardRecord } from "@/lib/types";
+import { PaginationMetadata, PublicListingCardRecord } from "@/lib/types";
 
 type AccountResponse = {
   user: {
@@ -17,6 +19,7 @@ type AccountResponse = {
 
 type SavedListingsResponse = {
   items: PublicListingCardRecord[];
+  pagination: PaginationMetadata;
 };
 
 function dashboardHrefForRole(role?: "client" | "agent" | "admin") {
@@ -25,8 +28,12 @@ function dashboardHrefForRole(role?: "client" | "agent" | "admin") {
   return "/dashboard";
 }
 
-export default function SavedListingsPage() {
+function SavedListingsContent() {
+  const searchParams = useSearchParams();
+  const requestedPage = Number(searchParams.get("page") ?? "1");
+  const currentPage = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const [items, setItems] = useState<PublicListingCardRecord[]>([]);
+  const [pagination, setPagination] = useState<PaginationMetadata | null>(null);
   const [account, setAccount] = useState<AccountResponse["user"]>(null);
   const [message, setMessage] = useState("Loading saved listings...");
 
@@ -48,7 +55,7 @@ export default function SavedListingsPage() {
           apiRequest<AccountResponse>("/api/auth/me", {
             headers: { Authorization: `Bearer ${session.access_token}` }
           }),
-          apiRequest<SavedListingsResponse>("/api/saved-listings", {
+          apiRequest<SavedListingsResponse>(`/api/saved-listings?page=${currentPage}`, {
             headers: { Authorization: `Bearer ${session.access_token}` }
           })
         ]);
@@ -56,6 +63,7 @@ export default function SavedListingsPage() {
         if (active) {
           setAccount(accountResponse.user);
           setItems(savedResponse.items);
+          setPagination(savedResponse.pagination);
           setMessage("");
         }
       } catch (error) {
@@ -77,11 +85,12 @@ export default function SavedListingsPage() {
       active = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [currentPage]);
 
   function handleSavedChange(listingId: string, saved: boolean) {
     if (!saved) {
       setItems((current) => current.filter((listing) => listing.id !== listingId));
+      setPagination((current) => current ? { ...current, totalItems: Math.max(0, current.totalItems - 1) } : current);
     }
   }
 
@@ -141,6 +150,17 @@ export default function SavedListingsPage() {
           ))}
         </div>
       ) : null}
+      {pagination ? (
+        <PaginationNav {...pagination} basePath="/saved-listings" itemLabel="saved listings" />
+      ) : null}
     </section>
+  );
+}
+
+export default function SavedListingsPage() {
+  return (
+    <Suspense fallback={<p className="text-sm font-semibold text-slate-500">Loading saved listings...</p>}>
+      <SavedListingsContent />
+    </Suspense>
   );
 }

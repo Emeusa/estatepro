@@ -41,6 +41,32 @@ function validVariant(extension: "webp" | "jpg" | "jpeg" = "webp", blurType: "we
 }
 
 describe("listingInputSchema", () => {
+  it("accepts a matching optional subtype and rejects a mismatched group", () => {
+    const valid = listingInputSchema.safeParse({
+      ...validListing,
+      propertyType: "house",
+      propertySubtype: "detached_duplex"
+    });
+    expect(valid.success).toBe(true);
+
+    const invalid = listingInputSchema.safeParse({
+      ...validListing,
+      propertyType: "land",
+      propertySubtype: "mini_flat"
+    });
+    expect(invalid.success).toBe(false);
+    if (!invalid.success) {
+      expect(invalid.error.issues[0]?.path).toContain("propertySubtype");
+    }
+  });
+
+  it("normalizes legacy property groups without invalidating existing clients", () => {
+    const duplex = listingInputSchema.safeParse({ ...validListing, propertyType: "duplex" });
+    const office = listingInputSchema.safeParse({ ...validListing, propertyType: "office" });
+    expect(duplex.success && duplex.data.propertyType).toBe("house");
+    expect(office.success && office.data.propertyType).toBe("commercial");
+  });
+
   it("normalizes the legacy Nasarawa spelling for future listings", () => {
     const result = listingInputSchema.safeParse({
       ...validListing,

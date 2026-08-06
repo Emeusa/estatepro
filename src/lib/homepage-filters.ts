@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 
-import { DEFAULT_SITE_DESCRIPTION, SITE_NAME } from "@/lib/seo";
-import type { ListingCategory, PropertyType } from "@/lib/types";
+import { DEFAULT_SITE_DESCRIPTION } from "@/lib/seo";
+import { normalizePropertyType } from "@/lib/property-taxonomy";
+import type { ListingCategory } from "@/lib/types";
 
-export const homeTitle = `Verified Property Listings in Nigeria | ${SITE_NAME}`;
+export const homeTitle = "C59 Estatehub - Verified Properties Across Nigeria";
 
 export const HOMEPAGE_FILTER_KEYS = [
   "q",
@@ -17,7 +18,7 @@ export const HOMEPAGE_FILTER_KEYS = [
   "listingCategory"
 ] as const;
 
-const validPropertyTypes = new Set<PropertyType>(["apartment", "duplex", "land", "office", "shop"]);
+const validPropertyTypes = new Set(["apartment", "house", "room", "land", "commercial", "duplex", "office", "shop"]);
 const validListingCategories = new Set<ListingCategory>(["for_sale", "for_rent", "short_let"]);
 
 export type HomeSearchParams = Record<string, string | string[] | undefined>;
@@ -39,7 +40,7 @@ function numberParam(params: HomeSearchParams, key: string) {
 
 function propertyTypeParam(params: HomeSearchParams) {
   const value = stringParam(params, "propertyType");
-  return value && validPropertyTypes.has(value as PropertyType) ? value : undefined;
+  return value && validPropertyTypes.has(value) ? normalizePropertyType(value) : undefined;
 }
 
 function listingCategoryParam(params: HomeSearchParams) {
@@ -82,16 +83,27 @@ export function hasHomepageActiveFilters(params: HomeSearchParams) {
   return Object.values(filters).some(Boolean);
 }
 
+export function getHomepagePage(params: HomeSearchParams) {
+  const value = stringParam(params, "page");
+  if (!value) return 1;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
 export function buildHomepageMetadata(params: HomeSearchParams): Metadata {
   const hasFilteredQuery = hasHomepageActiveFilters(params);
+  const page = getHomepagePage(params);
+  const canonical = !hasFilteredQuery && page > 1 ? `/?page=${page}` : "/";
+
+  const pageTitle = page > 1 ? `${homeTitle} - Page ${page}` : homeTitle;
 
   return {
     title: {
-      absolute: homeTitle
+      absolute: pageTitle
     },
     description: DEFAULT_SITE_DESCRIPTION,
     alternates: {
-      canonical: "/"
+      canonical
     },
     robots: hasFilteredQuery
       ? {
@@ -100,14 +112,14 @@ export function buildHomepageMetadata(params: HomeSearchParams): Metadata {
         }
       : undefined,
     openGraph: {
-      title: homeTitle,
+      title: pageTitle,
       description: DEFAULT_SITE_DESCRIPTION,
-      url: "/",
+      url: canonical,
       type: "website"
     },
     twitter: {
       card: "summary_large_image",
-      title: homeTitle,
+      title: pageTitle,
       description: DEFAULT_SITE_DESCRIPTION
     }
   };

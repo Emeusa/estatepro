@@ -13,7 +13,23 @@ import {
   ZONING_TYPES
 } from "@/lib/listing-quality";
 import { isNigeriaLga, isNigeriaState, normalizeNigeriaState } from "@/lib/nigeria-locations";
+import {
+  isSubtypeForPropertyType,
+  normalizePropertyType,
+  PROPERTY_SUBTYPE_LABELS
+} from "@/lib/property-taxonomy";
 import { normalizePhone, sanitizeText, slugifyLocation } from "@/lib/sanitize";
+
+const propertyTypeInputSchema = z
+  .enum(["apartment", "house", "room", "land", "commercial", "duplex", "office", "shop"])
+  .transform(normalizePropertyType);
+
+const propertySubtypeSchema = z.enum(
+  Object.keys(PROPERTY_SUBTYPE_LABELS) as [
+    keyof typeof PROPERTY_SUBTYPE_LABELS,
+    ...(keyof typeof PROPERTY_SUBTYPE_LABELS)[]
+  ]
+);
 
 function isAllowedListingImageUrl(value: string, options?: { optimizedVariantOnly?: boolean }) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -63,6 +79,7 @@ const locationSchema = z
     state: normalizeNigeriaState(sanitizeText(value.state)),
     city: sanitizeText(value.city),
     area: sanitizeText(value.area),
+    areaSlug: slugifyLocation([value.area]),
     slug: slugifyLocation([normalizeNigeriaState(value.state), value.city, value.area])
   }));
 
@@ -149,7 +166,8 @@ const listingInputBaseSchema = z.object({
   title: z.string().min(8).max(120).transform((value) => normalizeListingTitle(sanitizeText(value))),
   description: z.string().min(20).max(1200).transform(sanitizeText),
   price: z.number().int().positive().max(5000000000),
-  propertyType: z.enum(["apartment", "duplex", "land", "office", "shop"]),
+  propertyType: propertyTypeInputSchema,
+  propertySubtype: z.preprocess(emptyToNull, propertySubtypeSchema.nullable().optional()).transform((value) => value ?? null),
   listingCategory: z.enum(["for_sale", "for_rent", "short_let"]).default("for_sale"),
   availability: z.enum(["available", "sold", "rented", "booked"]).default("available"),
   imageUrls: z
@@ -188,6 +206,19 @@ const listingInputBaseSchema = z.object({
   roadAccess: optionalEnum(ROAD_ACCESS_TYPES)
 }).strict();
 
+function validatePropertyTaxonomy(
+  value: { propertyType?: "apartment" | "house" | "room" | "land" | "commercial"; propertySubtype?: keyof typeof PROPERTY_SUBTYPE_LABELS | null },
+  context: z.RefinementCtx
+) {
+  if (value.propertyType && value.propertySubtype && !isSubtypeForPropertyType(value.propertyType, value.propertySubtype)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Select a property subtype that matches the property group.",
+      path: ["propertySubtype"]
+    });
+  }
+}
+
 function validateAvailability(
   value: { listingCategory?: "for_sale" | "for_rent" | "short_let"; availability?: "available" | "sold" | "rented" | "booked" },
   context: z.RefinementCtx
@@ -211,23 +242,31 @@ function validateAvailability(
   }
 }
 
-export const listingInputSchema = listingInputBaseSchema.superRefine(validateAvailability);
+export const listingInputSchema = listingInputBaseSchema.superRefine((value, context) => {
+  validateAvailability(value, context);
+  validatePropertyTaxonomy(value, context);
+});
 
-export const listingUpdateSchema = listingInputBaseSchema.partial().superRefine(validateAvailability);
+export const listingUpdateSchema = listingInputBaseSchema.partial().superRefine((value, context) => {
+  validateAvailability(value, context);
+  validatePropertyTaxonomy(value, context);
+});
 
 export const listingFilterSchema = z.object({
   keyword: z.string().trim().max(120).optional(),
   location: z.string().optional(),
   state: z.string().optional(),
   city: z.string().optional(),
-  propertyType: z.enum(["apartment", "duplex", "land", "office", "shop"]).optional(),
+  propertyType: propertyTypeInputSchema.optional(),
+  propertySubtype: propertySubtypeSchema.optional(),
+  areaSlug: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(100).optional(),
   listingCategory: z.enum(["for_sale", "for_rent", "short_let"]).optional(),
   minPrice: z.coerce.number().int().positive().optional(),
   maxPrice: z.coerce.number().int().positive().optional(),
   bedrooms: z.coerce.number().int().positive().max(100).optional(),
   bathrooms: z.coerce.number().int().positive().max(100).optional(),
-  cursor: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(20).default(12)
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(10).default(10)
 }).strict().superRefine((value, context) => {
   if (value.state && !isNigeriaState(value.state)) {
     context.addIssue({

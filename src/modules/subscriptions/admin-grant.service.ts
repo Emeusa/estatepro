@@ -4,6 +4,7 @@ import { SubscriptionAdminGrantRecord, SubscriptionRecord } from "@/lib/types";
 import { getAgentProfile, getUserProfile } from "@/modules/agents/agent.repository";
 import { syncAgentPlanCredits } from "@/modules/entitlements/entitlement.service";
 import { enforceAgentActiveListingLimit } from "@/modules/listings/listing.service";
+import { revalidateListingMutationPaths } from "@/modules/listings/listing-cache";
 import {
   insertSubscriptionAdminGrant,
   listSubscriptionAdminGrantsForAgent,
@@ -113,6 +114,7 @@ export async function grantAdminSubscription(input: {
     await syncAgentPlanCredits(input.agentId, nextSubscription);
   }
   await enforceAgentActiveListingLimit(input.agentId, nextSubscription);
+  revalidateListingMutationPaths();
 
   return { subscription: nextSubscription, grant };
 }

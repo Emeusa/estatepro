@@ -7,9 +7,9 @@ import {
   saveListingReference
 } from "@/modules/saved-listings/saved-listing.repository";
 
-export async function listSavedListings(userId: string) {
-  const listingIds = await listSavedListingReferences(userId);
-  return listPublicListingCardsByIds(listingIds);
+export async function listSavedListings(userId: string, page = 1) {
+  const { listingIds, pagination } = await listSavedListingReferences(userId, page);
+  return { items: await listPublicListingCardsByIds(listingIds), pagination };
 }
 
 export async function listSavedListingIds(userId: string, listingIds: string[]) {

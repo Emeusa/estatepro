@@ -21,8 +21,9 @@ export async function GET(request: NextRequest) {
       return withRateLimitHeaders(NextResponse.json({ savedListingIds }), limited.headers);
     }
 
-    const items = await listSavedListings(decoded.uid);
-    return withRateLimitHeaders(NextResponse.json({ items }), limited.headers);
+    const page = Number(request.nextUrl.searchParams.get("page") ?? "1");
+    const result = await listSavedListings(decoded.uid, Number.isInteger(page) && page > 0 ? page : 1);
+    return withRateLimitHeaders(NextResponse.json(result), limited.headers);
   } catch (error) {
     captureServerError(error, { route: "/api/saved-listings", method: "GET" });
     return NextResponse.json(

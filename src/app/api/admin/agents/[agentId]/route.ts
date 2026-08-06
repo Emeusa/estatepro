@@ -10,6 +10,7 @@ import {
 } from "@/modules/agents/agent.service";
 import { agentModerationSchema } from "@/modules/agents/agent.schema";
 import { approvePendingListingsForAgent } from "@/modules/listings/listing.service";
+import { revalidateListingMutationPaths } from "@/modules/listings/listing-cache";
 
 type Props = {
   params: Promise<{ agentId: string }>;
@@ -24,7 +25,9 @@ export async function GET(request: NextRequest, { params }: Props) {
     }
 
     const { agentId } = await params;
-    const review = await getAgentReviewForAdmin(agentId);
+    const requestedPage = Number(request.nextUrl.searchParams.get("page") ?? "1");
+    const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+    const review = await getAgentReviewForAdmin(agentId, page);
 
     if (!review) {
       return withRateLimitHeaders(NextResponse.json({ message: "Agent not found." }, { status: 404 }), limited.headers);
@@ -76,6 +79,8 @@ export async function PATCH(request: NextRequest, { params }: Props) {
         metadata: { agentId, isBlocked: body.isBlocked }
       });
     }
+
+    revalidateListingMutationPaths();
 
     return withRateLimitHeaders(
       NextResponse.json({

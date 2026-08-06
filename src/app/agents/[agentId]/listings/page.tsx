@@ -11,13 +11,20 @@ import { getPublicAgentListings } from "@/modules/listings/listing.service";
 
 type Props = {
   params: Promise<{ agentId: string }>;
+  searchParams: Promise<{ page?: string | string[] }>;
 };
 
 const getAgentListingsForPage = cache(getPublicAgentListings);
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { agentId } = await params;
-  const data = await getAgentListingsForPage(agentId);
+function readPage(value?: string | string[]) {
+  const parsed = Number(typeof value === "string" ? value : "1");
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
+  const [{ agentId }, query] = await Promise.all([params, searchParams]);
+  const page = readPage(query.page);
+  const data = await getAgentListingsForPage(agentId, page);
 
   if (!data) {
     return {
@@ -31,7 +38,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     };
   }
 
-  const title = `Properties from ${data.agent.displayName} | ${SITE_NAME}`;
+  const baseTitle = `Properties from ${data.agent.displayName} | ${SITE_NAME}`;
+  const title = page > 1 ? `${baseTitle} - Page ${page}` : baseTitle;
   const description = `Browse active verified property listings from ${data.agent.displayName} on ${SITE_NAME}.`;
 
   return {
@@ -39,19 +47,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       absolute: title
     },
     description,
-    robots: data.listings.length
+    robots: data.listings.pagination.totalItems
       ? undefined
       : {
           index: false,
           follow: true
         },
     alternates: {
-      canonical: `/agents/${agentId}/listings`
+      canonical: page > 1 ? `/agents/${agentId}/listings?page=${page}` : `/agents/${agentId}/listings`
     },
     openGraph: {
       title,
       description,
-      url: `/agents/${agentId}/listings`,
+      url: page > 1 ? `/agents/${agentId}/listings?page=${page}` : `/agents/${agentId}/listings`,
       type: "website"
     },
     twitter: {
@@ -62,15 +70,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function AgentListingsPage({ params }: Props) {
-  const { agentId } = await params;
-  const data = await getAgentListingsForPage(agentId);
+export default async function AgentListingsPage({ params, searchParams }: Props) {
+  const [{ agentId }, query] = await Promise.all([params, searchParams]);
+  const page = readPage(query.page);
+  const data = await getAgentListingsForPage(agentId, page);
 
   if (!data) {
     notFound();
   }
-  const activeMarkets = Array.from(new Set(data.listings.map((listing) => getPublicStateLabel(listing.location.state))));
-  const latestUpdate = data.listings.map((listing) => listing.updatedAt).sort((first, second) => second.localeCompare(first))[0];
+  if (page > data.listings.pagination.totalPages && data.listings.pagination.totalItems > 0) notFound();
+  const activeMarkets = Array.from(new Set(data.listings.items.map((listing) => getPublicStateLabel(listing.location.state))));
+  const latestUpdate = data.listings.items.map((listing) => listing.updatedAt).sort((first, second) => second.localeCompare(first))[0];
   const siteUrl = getSiteUrl().toString().replace(/\/$/, "");
   const agentJsonLd = {
     "@context": "https://schema.org",
@@ -91,14 +101,17 @@ export default async function AgentListingsPage({ params }: Props) {
           <VerifiedAgentName fullName={data.agent.displayName} isVerified={data.agent.isVerified} />
         </h1>
         <p className="mt-2 text-sm text-slate-500">
-          {data.listings.length
+          {data.listings.pagination.totalItems
             ? "These are active listings from an approved agent."
             : "This approved agent does not have active public listings right now."}
         </p>
         {activeMarkets.length ? <p className="mt-3 text-xs font-bold text-teal-700">Active markets: {activeMarkets.join(", ")}</p> : null}
         {latestUpdate ? <p className="mt-1 text-xs font-semibold text-slate-500">Latest listing update: {formatDate(latestUpdate)}</p> : null}
       </section>
-      <ListingGrid listings={data.listings} />
+      <ListingGrid
+        listings={data.listings.items}
+        pagination={{ ...data.listings.pagination, basePath: `/agents/${agentId}/listings` }}
+      />
     </div>
   );
 }

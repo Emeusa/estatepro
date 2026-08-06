@@ -23,6 +23,7 @@ import {
 } from "@/modules/email/email.service";
 import { syncAgentPlanCredits } from "@/modules/entitlements/entitlement.service";
 import { enforceAgentActiveListingLimit } from "@/modules/listings/listing.service";
+import { revalidateListingMutationPaths } from "@/modules/listings/listing-cache";
 import {
   createBillingTransaction,
   getBillingTransactionByReference,
@@ -354,6 +355,7 @@ async function applyWebhookFailureOrDisable(data: Record<string, unknown>, statu
     cancelAtPeriodEnd: status === "cancelled"
   });
   await enforceAgentActiveListingLimit(agentId, subscription).catch(() => undefined);
+  revalidateListingMutationPaths();
   if (status === "past_due") {
     await sendSubscriptionFailedEmail(agentId);
   } else {
@@ -407,6 +409,7 @@ export async function cancelAgentSubscription(agentId: string) {
     cancelAtPeriodEnd: true
   });
   await enforceAgentActiveListingLimit(agentId, updatedSubscription).catch(() => undefined);
+  revalidateListingMutationPaths();
   await sendSubscriptionCancelledEmail(agentId);
   return updatedSubscription;
 }

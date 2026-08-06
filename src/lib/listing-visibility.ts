@@ -1,7 +1,7 @@
 import { getListingImageCount } from "@/lib/listing-images";
 import { ListingRecord } from "@/lib/types";
 
-const SPONSORED_SLOTS = [0, 4, 11];
+const PREMIUM_SLOTS = [0, 4, 8];
 
 function isFuture(value?: string | null) {
   return value ? new Date(value).getTime() > Date.now() : false;
@@ -95,11 +95,27 @@ export function getListingVisibilityScore(listing: ListingRecord) {
   );
 }
 
-export function rankListingsForFeed(listings: ListingRecord[], limit: number) {
+function latestRankingActivity(listing: ListingRecord) {
+  return Math.max(
+    ...[listing.boostedAt, listing.lastRefreshedAt, listing.createdAt]
+      .filter(Boolean)
+      .map((value) => new Date(value as string).getTime())
+  );
+}
+
+export function rankListingsForFeed(listings: ListingRecord[], limit = listings.length) {
   const ranked = listings
     .filter(isListingFeedEligible)
     .map((listing) => ({ listing, score: getListingVisibilityScore(listing) }))
-    .sort((first, second) => second.score - first.score);
+    .sort((first, second) => {
+      const scoreDifference = second.score - first.score;
+      if (scoreDifference !== 0) return scoreDifference;
+      const activityDifference = latestRankingActivity(second.listing) - latestRankingActivity(first.listing);
+      if (activityDifference !== 0) return activityDifference;
+      const createdDifference = new Date(second.listing.createdAt).getTime() - new Date(first.listing.createdAt).getTime();
+      if (createdDifference !== 0) return createdDifference;
+      return first.listing.id.localeCompare(second.listing.id);
+    });
 
   const sponsored = ranked.filter(({ listing }) => isFuture(listing.sponsoredUntil));
   const organic = ranked.filter(({ listing }) => !isFuture(listing.sponsoredUntil));
@@ -122,7 +138,7 @@ export function rankListingsForFeed(listings: ListingRecord[], limit: number) {
   }
 
   for (const [slotIndex, { listing }] of sponsored.entries()) {
-    const position = SPONSORED_SLOTS[slotIndex] ?? selected.length;
+    const position = PREMIUM_SLOTS[slotIndex] ?? selected.length;
     if (selected.some((item) => item.id === listing.id)) continue;
     selected.splice(Math.min(position, selected.length), 0, listing);
   }
