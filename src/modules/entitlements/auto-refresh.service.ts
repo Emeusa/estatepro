@@ -1,8 +1,9 @@
 import { getPricingPlan, isPaidPricingPlanSlug } from "@/lib/pricing";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { captureServerError } from "@/lib/security/logger";
 import { isSubscriptionCurrentlyActive } from "@/lib/subscriptions";
 import { toSubscriptionRecord } from "@/lib/supabase-mappers";
-import { enforceAgentActiveListingLimit } from "@/modules/listings/listing.service";
+import { reconcileAgentListingsForPlan } from "@/modules/listings/listing-plan-reconciliation.service";
 import { revalidateListingMutationPaths } from "@/modules/listings/listing-cache";
 import { runListingRetentionMaintenance } from "@/modules/listings/listing-retention.service";
 import { sendPlanDowngradedEmail, sendSubscriptionExpiryReminderEmail } from "@/modules/email/email.service";
@@ -24,6 +25,7 @@ export async function refreshEligibleListings() {
   const supabase = createServerSupabaseClient();
   let refreshed = 0;
   let demoted = 0;
+  let reactivated = 0;
   let subscriptionReminders = 0;
   const pageSize = 500;
 
@@ -44,13 +46,23 @@ export async function refreshEligibleListings() {
 
     for (const row of rows) {
       const subscription = toSubscriptionRecord(row);
-      const limitResult = await enforceAgentActiveListingLimit(subscription.agentId, subscription);
-      demoted += limitResult.demotedListings;
-      if (limitResult.demotedListings > 0) {
-        await sendPlanDowngradedEmail({
+      try {
+        const limitResult = await reconcileAgentListingsForPlan(subscription.agentId, subscription);
+        demoted += limitResult.demotedListings;
+        reactivated += limitResult.activatedListings;
+        if (limitResult.demotedListings > 0) {
+          await sendPlanDowngradedEmail({
+            agentId: subscription.agentId,
+            activeListingLimit: limitResult.activeListingLimit,
+            demotedListings: limitResult.demotedListings
+          });
+        }
+      } catch (error) {
+        captureServerError(error, {
+          service: "auto_refresh",
+          operation: "listing_plan_reconciliation",
           agentId: subscription.agentId,
-          activeListingLimit: limitResult.activeListingLimit,
-          demotedListings: limitResult.demotedListings
+          planSlug: subscription.planSlug
         });
       }
 
@@ -108,8 +120,13 @@ export async function refreshEligibleListings() {
   }
 
   const retention = await runListingRetentionMaintenance();
-  if (refreshed > 0 || demoted > 0 || Object.values(retention).some((value) => typeof value === "number" && value > 0)) {
+  if (
+    refreshed > 0 ||
+    demoted > 0 ||
+    reactivated > 0 ||
+    Object.values(retention).some((value) => typeof value === "number" && value > 0)
+  ) {
     revalidateListingMutationPaths();
   }
-  return { refreshed, demoted, subscriptionReminders, ...retention };
+  return { refreshed, demoted, reactivated, subscriptionReminders, ...retention };
 }

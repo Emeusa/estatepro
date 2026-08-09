@@ -15,6 +15,7 @@ import { isBillingLiveEnabled } from "@/lib/billing-config";
 import { getEffectivePlanSlug, isSubscriptionCurrentlyActive } from "@/lib/subscriptions";
 import { getPlanAmountKobo, isLowerPlan, isPaidPricingPlanSlug } from "@/lib/pricing";
 import { BillingMode, BillingProvider, SubscriptionRecord } from "@/lib/types";
+import { captureServerError } from "@/lib/security/logger";
 import { getAgentProfile } from "@/modules/agents/agent.repository";
 import {
   sendSubscriptionActivatedEmail,
@@ -24,6 +25,7 @@ import {
 import { syncAgentPlanCredits } from "@/modules/entitlements/entitlement.service";
 import { enforceAgentActiveListingLimit } from "@/modules/listings/listing.service";
 import { revalidateListingMutationPaths } from "@/modules/listings/listing-cache";
+import { reconcileAgentListingsForPlan } from "@/modules/listings/listing-plan-reconciliation.service";
 import {
   createBillingTransaction,
   getBillingTransactionByReference,
@@ -41,6 +43,29 @@ type PaystackWebhookEvent = {
   event: string;
   data?: Record<string, unknown>;
 };
+
+async function reconcileListingsAfterSubscriptionChange(
+  agentId: string,
+  subscription: SubscriptionRecord,
+  source: string
+) {
+  try {
+    const result = await reconcileAgentListingsForPlan(agentId, subscription);
+    if (result.activatedListings > 0 || result.demotedListings > 0) {
+      revalidateListingMutationPaths();
+    }
+    return result;
+  } catch (error) {
+    captureServerError(error, {
+      service: "billing",
+      operation: "listing_plan_reconciliation",
+      source,
+      agentId,
+      planSlug: subscription.planSlug
+    });
+    return null;
+  }
+}
 
 function normalizeBillingProvider(): BillingProvider {
   return "paystack";
@@ -284,6 +309,11 @@ export async function applySuccessfulPaystackTransaction(reference: string) {
     rawResponse: transaction
   });
   await syncAgentPlanCredits(billingTransaction.agentId, subscription).catch(() => undefined);
+  await reconcileListingsAfterSubscriptionChange(
+    billingTransaction.agentId,
+    subscription,
+    "paystack_transaction_verification"
+  );
   await sendSubscriptionActivatedEmail({
     agentId: billingTransaction.agentId,
     planSlug: billingTransaction.planSlug,
@@ -319,6 +349,43 @@ async function resolveWebhookAgentId(data: Record<string, unknown>) {
   return null;
 }
 
+async function applySuccessfulWebhookRenewal(data: Record<string, unknown>) {
+  if (data.paid !== true || readString(data.status)?.toLowerCase() !== "success") {
+    return;
+  }
+
+  const agentId = await resolveWebhookAgentId(data);
+  if (!agentId) {
+    return;
+  }
+
+  const currentSubscription = await getSubscriptionByAgentId(agentId);
+  if (
+    !currentSubscription ||
+    currentSubscription.paymentProvider !== "paystack" ||
+    currentSubscription.billingMode !== "recurring" ||
+    !isPaidPricingPlanSlug(currentSubscription.planSlug)
+  ) {
+    return;
+  }
+
+  const periodStart = readString(data.period_start) ?? readString(data.paid_at) ?? new Date().toISOString();
+  const candidatePeriodEnd = readString(data.period_end);
+  const periodEnd = candidatePeriodEnd && new Date(candidatePeriodEnd).getTime() > new Date(periodStart).getTime()
+    ? candidatePeriodEnd
+    : getFallbackPeriodEnd(new Date(periodStart));
+  const renewedSubscription = await updateSubscriptionBillingState(agentId, {
+    status: "active",
+    isActive: true,
+    cancelAtPeriodEnd: false,
+    currentPeriodStart: periodStart,
+    currentPeriodEnd: periodEnd
+  });
+
+  await syncAgentPlanCredits(agentId, renewedSubscription).catch(() => undefined);
+  await reconcileListingsAfterSubscriptionChange(agentId, renewedSubscription, "paystack_invoice_renewal");
+}
+
 async function applyWebhookSubscriptionUpdate(data: Record<string, unknown>) {
   const agentId = await resolveWebhookAgentId(data);
   const planCode = readPlanCode(data);
@@ -341,6 +408,7 @@ async function applyWebhookSubscriptionUpdate(data: Record<string, unknown>) {
     currentPeriodEnd: readPeriodEnd(data)
   });
   await syncAgentPlanCredits(agentId, subscription).catch(() => undefined);
+  await reconcileListingsAfterSubscriptionChange(agentId, subscription, "paystack_subscription_webhook");
 }
 
 async function applyWebhookFailureOrDisable(data: Record<string, unknown>, status: "past_due" | "cancelled") {
@@ -369,13 +437,21 @@ export async function processPaystackWebhook(event: PaystackWebhookEvent) {
   if (event.event === "charge.success") {
     const reference = readString(data.reference);
     if (reference) {
-      await applySuccessfulPaystackTransaction(reference);
+      const billingTransaction = await getBillingTransactionByReference(reference);
+      if (billingTransaction) {
+        await applySuccessfulPaystackTransaction(reference);
+      }
     }
     return;
   }
 
   if (event.event === "subscription.create" || event.event === "subscription.enable") {
     await applyWebhookSubscriptionUpdate(data);
+    return;
+  }
+
+  if (event.event === "invoice.update") {
+    await applySuccessfulWebhookRenewal(data);
     return;
   }
 

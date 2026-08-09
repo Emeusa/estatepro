@@ -3,10 +3,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const mocks = vi.hoisted(() => ({
-  enforceAgentActiveListingLimit: vi.fn(),
   getAgentProfile: vi.fn(),
   getUserProfile: vi.fn(),
   insertSubscriptionAdminGrant: vi.fn(),
+  reconcileAgentListingsForPlan: vi.fn(),
   syncAgentPlanCredits: vi.fn(),
   upsertManualSubscription: vi.fn()
 }));
@@ -21,7 +21,11 @@ vi.mock("@/modules/entitlements/entitlement.service", () => ({
 }));
 
 vi.mock("@/modules/listings/listing.service", () => ({
-  enforceAgentActiveListingLimit: mocks.enforceAgentActiveListingLimit
+  enforceAgentActiveListingLimit: vi.fn()
+}));
+
+vi.mock("@/modules/listings/listing-plan-reconciliation.service", () => ({
+  reconcileAgentListingsForPlan: mocks.reconcileAgentListingsForPlan
 }));
 
 vi.mock("@/modules/subscriptions/admin-grant.repository", () => ({
@@ -90,6 +94,11 @@ describe("admin subscription grants", () => {
       previousPeriodEnd: "2099-08-01T00:00:00.000Z",
       createdAt: "2026-07-21T00:00:00.000Z"
     });
+    mocks.reconcileAgentListingsForPlan.mockResolvedValue({
+      activatedListings: 2,
+      demotedListings: 0,
+      activeListingLimit: 750
+    });
   });
 
   it("grants a paid manual promo subscription and syncs credits", async () => {
@@ -120,7 +129,7 @@ describe("admin subscription grants", () => {
       })
     );
     expect(mocks.syncAgentPlanCredits).toHaveBeenCalledWith("agent-id", result.subscription);
-    expect(mocks.enforceAgentActiveListingLimit).toHaveBeenCalledWith("agent-id", result.subscription);
+    expect(mocks.reconcileAgentListingsForPlan).toHaveBeenCalledWith("agent-id", result.subscription);
   });
 
   it("rejects paid promo grants without an expiry date", async () => {
@@ -226,7 +235,7 @@ describe("admin subscription grants", () => {
       })
     );
     expect(mocks.syncAgentPlanCredits).not.toHaveBeenCalled();
-    expect(mocks.enforceAgentActiveListingLimit).toHaveBeenCalledWith("agent-id", result.subscription);
+    expect(mocks.reconcileAgentListingsForPlan).toHaveBeenCalledWith("agent-id", result.subscription);
   });
 });
 

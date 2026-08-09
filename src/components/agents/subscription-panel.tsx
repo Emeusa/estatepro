@@ -56,7 +56,9 @@ export function AgentSubscriptionPanel({
   useEffect(() => {
     const billingResult = new URLSearchParams(window.location.search).get("billing");
     if (billingResult === "success") {
-      setBillingMessage("Payment confirmed. Your plan has been updated.");
+      setBillingMessage(
+        "Payment confirmed. Your plan has been updated. Any eligible inactive listings were reactivated automatically."
+      );
     } else if (billingResult === "failed") {
       setBillingMessage("Payment verification failed. If you were charged, contact support with your payment reference.");
     }

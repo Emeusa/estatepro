@@ -10,7 +10,7 @@ import { apiRequest } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { AVAILABILITY_LABELS, getUnavailableBadge, LISTING_CATEGORY_LABELS } from "@/lib/listing-labels";
 import { getListingQualityBadges } from "@/lib/listing-quality";
-import { retentionSummary } from "@/lib/listing-retention";
+import { retentionSummary, shouldRedirectListingReactivationToSubscription } from "@/lib/listing-retention";
 import { AgentEntitlements, ListingRecord } from "@/lib/types";
 
 type Props = {
@@ -291,13 +291,22 @@ export function ListingManager({
                     </button>
                   ) : null}
                   {listing.status === "inactive" && !listing.mediaDeletedAt ? (
-                    <button
-                      className="rounded-xl bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200 transition hover:bg-emerald-200"
-                      onClick={() => updateRetentionAction(listing.id, "reactivate")}
-                      type="button"
-                    >
-                      Reactivate
-                    </button>
+                    shouldRedirectListingReactivationToSubscription(listing) ? (
+                      <Link
+                        className="rounded-xl bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200 transition hover:bg-emerald-200"
+                        href="/agents/subscription"
+                      >
+                        Reactivate
+                      </Link>
+                    ) : (
+                      <button
+                        className="rounded-xl bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200 transition hover:bg-emerald-200"
+                        onClick={() => updateRetentionAction(listing.id, "reactivate")}
+                        type="button"
+                      >
+                        Reactivate
+                      </button>
+                    )
                   ) : null}
                   <button
                     className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-red-600 ring-1 ring-slate-300 transition hover:bg-red-100"

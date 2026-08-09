@@ -4,7 +4,9 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  isEligibleForAutomaticPlanReactivation,
   isActiveAvailableListingState,
+  selectListingsForAutomaticPlanReactivation,
   splitListingsByActiveLimit,
   willConsumeNewActiveAvailableSlot
 } from "../../src/lib/listing-limits";
@@ -23,6 +25,29 @@ function listing(id: string, createdAt: string, lastRefreshedAt?: string | null)
     boostedAt: null,
     lastRefreshedAt: lastRefreshedAt ?? null
   } as Pick<ListingRecord, "id" | "createdAt" | "updatedAt" | "boostedAt" | "lastRefreshedAt">;
+}
+
+function inactivePlanListing(
+  id: string,
+  createdAt: string,
+  overrides: Partial<ListingRecord> = {}
+) {
+  return {
+    id,
+    createdAt,
+    updatedAt: createdAt,
+    boostedAt: null,
+    lastRefreshedAt: null,
+    agentKeepActivePriority: null,
+    status: "inactive",
+    availability: "available",
+    deactivationReason: "plan_limit",
+    mediaDeletedAt: null,
+    imageUrls: [`https://example.com/${id}.webp`],
+    imageVariants: [],
+    expiresAt: null,
+    ...overrides
+  } as ListingRecord;
 }
 
 describe("listing active slot limits", () => {
@@ -72,5 +97,54 @@ describe("listing active slot limits", () => {
 
     expect(kept.map((item) => item.id)).toEqual(["refreshed", "new"]);
     expect(overflow.map((item) => item.id)).toEqual(["old"]);
+  });
+
+  it("selects eligible plan-demoted listings by preference and recent activity", () => {
+    const selected = selectListingsForAutomaticPlanReactivation(
+      [
+        inactivePlanListing("recent", "2026-08-03T00:00:00.000Z"),
+        inactivePlanListing("preferred", "2026-08-01T00:00:00.000Z", { agentKeepActivePriority: 1 }),
+        inactivePlanListing("older", "2026-08-02T00:00:00.000Z")
+      ],
+      2,
+      new Date("2026-08-09T00:00:00.000Z")
+    );
+
+    expect(selected.map((item) => item.id)).toEqual(["preferred", "recent"]);
+  });
+
+  it("excludes unsafe or unrelated inactive listings from automatic reactivation", () => {
+    const now = new Date("2026-08-09T00:00:00.000Z");
+    expect(isEligibleForAutomaticPlanReactivation(inactivePlanListing("safe", now.toISOString()), now)).toBe(true);
+    expect(
+      isEligibleForAutomaticPlanReactivation(
+        inactivePlanListing("unavailable", now.toISOString(), { availability: "sold" }),
+        now
+      )
+    ).toBe(false);
+    expect(
+      isEligibleForAutomaticPlanReactivation(
+        inactivePlanListing("admin", now.toISOString(), { deactivationReason: "admin" }),
+        now
+      )
+    ).toBe(false);
+    expect(
+      isEligibleForAutomaticPlanReactivation(
+        inactivePlanListing("deleted", now.toISOString(), { mediaDeletedAt: now.toISOString() }),
+        now
+      )
+    ).toBe(false);
+    expect(
+      isEligibleForAutomaticPlanReactivation(
+        inactivePlanListing("no-media", now.toISOString(), { imageUrls: [], imageVariants: [] }),
+        now
+      )
+    ).toBe(false);
+    expect(
+      isEligibleForAutomaticPlanReactivation(
+        inactivePlanListing("expired", now.toISOString(), { expiresAt: "2026-08-08T00:00:00.000Z" }),
+        now
+      )
+    ).toBe(false);
   });
 });

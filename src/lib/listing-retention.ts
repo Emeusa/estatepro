@@ -33,6 +33,16 @@ export function hasListingMedia(listing: Pick<ListingRecord, "imageUrls" | "imag
   return !listing.mediaDeletedAt && (listing.imageUrls.length > 0 || listing.imageVariants.length > 0);
 }
 
+export function shouldRedirectListingReactivationToSubscription(
+  listing: Pick<ListingRecord, "status" | "deactivationReason" | "mediaDeletedAt">
+) {
+  return (
+    listing.status === "inactive" &&
+    !listing.mediaDeletedAt &&
+    (listing.deactivationReason === "plan_limit" || listing.deactivationReason === "subscription_expired")
+  );
+}
+
 export function getMediaBearingListingAllowance(planSlug?: string | null) {
   const activeLimit = getActiveListingLimit(planSlug);
   if (planSlug === "free_starter" || !planSlug) {

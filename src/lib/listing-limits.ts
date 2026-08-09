@@ -7,6 +7,18 @@ type ListingActivityInput = Pick<
   "id" | "createdAt" | "updatedAt" | "boostedAt" | "lastRefreshedAt" | "agentKeepActivePriority"
 >;
 
+type ListingReactivationInput = ListingActivityInput &
+  Pick<
+    ListingRecord,
+    | "status"
+    | "availability"
+    | "deactivationReason"
+    | "mediaDeletedAt"
+    | "imageUrls"
+    | "imageVariants"
+    | "expiresAt"
+  >;
+
 export class ActiveListingLimitError extends Error {
   status = 403;
 }
@@ -62,4 +74,28 @@ export function splitListingsByActiveLimit<T extends ListingActivityInput>(
     kept: sorted.slice(0, Math.max(activeListingLimit, 0)),
     overflow: sorted.slice(Math.max(activeListingLimit, 0))
   };
+}
+
+export function isEligibleForAutomaticPlanReactivation(listing: ListingReactivationInput, now = new Date()) {
+  const hasMedia = !listing.mediaDeletedAt && (listing.imageUrls.length > 0 || listing.imageVariants.length > 0);
+  const hasNotExpired = !listing.expiresAt || new Date(listing.expiresAt).getTime() > now.getTime();
+
+  return (
+    listing.status === "inactive" &&
+    listing.availability === "available" &&
+    (listing.deactivationReason === "plan_limit" || listing.deactivationReason === "subscription_expired") &&
+    hasMedia &&
+    hasNotExpired
+  );
+}
+
+export function selectListingsForAutomaticPlanReactivation<T extends ListingReactivationInput>(
+  listings: T[],
+  availableSlots: number,
+  now = new Date()
+) {
+  return splitListingsByActiveLimit(
+    listings.filter((listing) => isEligibleForAutomaticPlanReactivation(listing, now)),
+    availableSlots
+  ).kept;
 }

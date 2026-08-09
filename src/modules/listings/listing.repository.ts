@@ -5,7 +5,7 @@ import {
   getAvailableListingSlug,
   isUuidListingIdentifier
 } from "@/lib/listing-slugs";
-import { splitListingsByActiveLimit } from "@/lib/listing-limits";
+import { selectListingsForAutomaticPlanReactivation, splitListingsByActiveLimit } from "@/lib/listing-limits";
 import { createPlanLimitLifecycle, getMediaBearingListingAllowance } from "@/lib/listing-retention";
 import { toNameCase } from "@/lib/format";
 import { getListingImageCount } from "@/lib/listing-images";
@@ -919,6 +919,64 @@ export type ActiveListingLimitEnforcementSummary = {
   demotedListings: number;
   activeListingLimit: number;
 };
+
+export async function reactivateEligiblePlanLimitedListingsForAgent(
+  agentId: string,
+  activeListingLimit: number
+) {
+  const supabase = createServerSupabaseClient();
+  const activeListingCount = await countActiveAvailableListingsForAgent(agentId);
+  const availableSlots = Math.max(activeListingLimit - activeListingCount, 0);
+  if (!availableSlots) {
+    return 0;
+  }
+
+  const { data, error } = await supabase
+    .from("listings")
+    .select("*")
+    .eq("agent_id", agentId)
+    .eq("status", "inactive")
+    .eq("availability", "available")
+    .in("deactivation_reason", ["plan_limit", "subscription_expired"])
+    .is("media_deleted_at", null)
+    .limit(2000);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const reactivateIds = selectListingsForAutomaticPlanReactivation(
+    (data ?? []).map(toListingRecord),
+    availableSlots
+  ).map((listing) => listing.id);
+
+  if (!reactivateIds.length) {
+    return 0;
+  }
+
+  const { data: updatedListings, error: updateError } = await supabase
+    .from("listings")
+    .update({
+      status: "active",
+      deactivated_at: null,
+      deactivation_reason: null,
+      retention_until: null,
+      media_delete_after: null,
+      hard_delete_after: null
+    })
+    .eq("agent_id", agentId)
+    .eq("status", "inactive")
+    .eq("availability", "available")
+    .in("deactivation_reason", ["plan_limit", "subscription_expired"])
+    .in("id", reactivateIds)
+    .select("id");
+
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
+
+  return updatedListings?.length ?? 0;
+}
 
 export async function activatePendingListingsForAgent(
   agentId: string,
