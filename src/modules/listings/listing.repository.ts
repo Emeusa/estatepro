@@ -10,7 +10,7 @@ import { createPlanLimitLifecycle, getMediaBearingListingAllowance } from "@/lib
 import { toNameCase } from "@/lib/format";
 import { getListingImageCount } from "@/lib/listing-images";
 import { getListingCardFeatureBadges } from "@/lib/listing-quality";
-import { rankListingsForFeed } from "@/lib/listing-visibility";
+import { rankListingsForFeed, rankListingsForFeedWithDiagnostics } from "@/lib/listing-visibility";
 import { getNigeriaStateStorageValues, normalizeNigeriaState } from "@/lib/nigeria-locations";
 import {
   getLegacySubtypeForPropertyType,
@@ -348,7 +348,7 @@ export async function paginateRankedPublicListings(
   };
 }
 
-export async function listRankedPublicListingCandidates(filters: ListingFilters) {
+async function listPublicListingCandidates(filters: ListingFilters) {
   const supabase = createServerSupabaseClient();
   const keywordFilters = parseKeywordFilters(filters.keyword);
   const stateFilter = filters.state ?? keywordFilters.state;
@@ -411,7 +411,15 @@ export async function listRankedPublicListingCandidates(filters: ListingFilters)
     if (rows.length < PUBLIC_RANKING_BATCH_SIZE) break;
   }
 
-  return rankListingsForFeed(candidates);
+  return candidates;
+}
+
+export async function listRankedPublicListingCandidates(filters: ListingFilters) {
+  return rankListingsForFeed(await listPublicListingCandidates(filters));
+}
+
+export async function listRankedPublicListingCandidatesWithDiagnostics(filters: ListingFilters) {
+  return rankListingsForFeedWithDiagnostics(await listPublicListingCandidates(filters));
 }
 
 type PublicMarketFilters = Pick<

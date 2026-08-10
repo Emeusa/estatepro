@@ -403,6 +403,33 @@ export type PaginatedResponse<T> = {
   pagination: PaginationMetadata;
 };
 
+export type AdminListingRankingRecord = {
+  position: number;
+  listingId: string;
+  slug: string;
+  title: string;
+  agentId: string;
+  agentName: string | null;
+  listingCategory: ListingCategory;
+  location: LocationValue;
+  promotionTier: "premium" | "sponsored" | "regular";
+  fixedPremiumSlot: boolean;
+  qualityScore: number;
+  freshnessScore: number;
+  freshnessSource: "boost" | "plan_refresh" | "created";
+  freshnessAt: string;
+  promotionBonus: number;
+  baseScore: number;
+  finalScore: number;
+  diversityAdjustments: Array<"page_limit" | "consecutive_limit" | "relaxed">;
+};
+
+export type AdminListingRankingResponse = {
+  items: AdminListingRankingRecord[];
+  pagination: PaginationMetadata;
+  snapshotAt: string;
+};
+
 export type PublicMarketFacet = {
   state: string;
   city: string;

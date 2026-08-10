@@ -18,8 +18,10 @@ import {
   listListingCountsByAgentIds,
   listListingsForAdmin,
   listRankedPublicListingCandidates,
+  listRankedPublicListingCandidatesWithDiagnostics,
   resolveCanonicalPublicArea,
   paginateRankedPublicListings,
+  listPublicListingCardsByIds,
   listPublicMarketFacets,
   listPublicListingsByAgent,
   listSimilarPublicListings,
@@ -33,16 +35,18 @@ import {
   willConsumeNewActiveAvailableSlot
 } from "@/lib/listing-limits";
 import { createUnavailableLifecycle, hasListingMedia } from "@/lib/listing-retention";
-import type { ListingRecord, SubscriptionRecord } from "@/lib/types";
+import type { AdminListingRankingResponse, ListingRecord, SubscriptionRecord } from "@/lib/types";
 import { normalizeAndVerifyListingImages } from "@/modules/listings/listing-image-payload";
 import { isSubtypeForPropertyType } from "@/lib/property-taxonomy";
 
 const getCachedPublicRankingSnapshot = unstable_cache(
-  async (serializedFilters: string) =>
-    listRankedPublicListingCandidates(
+  async (serializedFilters: string) => ({
+    generatedAt: new Date().toISOString(),
+    ranked: await listRankedPublicListingCandidatesWithDiagnostics(
       JSON.parse(serializedFilters) as Parameters<typeof listRankedPublicListingCandidates>[0]
-    ),
-  ["public-listing-ranking-v2"],
+    )
+  }),
+  ["public-listing-ranking-v3"],
   { tags: ["public-listings"], revalidate: 60 }
 );
 
@@ -55,8 +59,53 @@ const getCachedMarketFacets = unstable_cache(
 export async function getPublicListings(input: Record<string, unknown>) {
   const filters = listingFilterSchema.parse(input);
   const { page, limit, ...rankingFilters } = filters;
-  const ranked = await getCachedPublicRankingSnapshot(JSON.stringify(rankingFilters));
+  const snapshot = await getCachedPublicRankingSnapshot(JSON.stringify(rankingFilters));
+  const ranked = snapshot.ranked.map(({ listing }) => listing);
   return paginateRankedPublicListings(ranked, page, limit);
+}
+
+function roundRankingScore(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+export async function getAdminListingRanking(input: Record<string, unknown>): Promise<AdminListingRankingResponse> {
+  const filters = listingFilterSchema.parse(input);
+  const { page, limit, ...rankingFilters } = filters;
+  const snapshot = await getCachedPublicRankingSnapshot(JSON.stringify(rankingFilters));
+  const start = (page - 1) * limit;
+  const selected = snapshot.ranked.slice(start, start + limit);
+  const cards = await listPublicListingCardsByIds(selected.map(({ listing }) => listing.id));
+  const cardsById = new Map(cards.map((card) => [card.id, card]));
+
+  return {
+    items: selected.map(({ listing, position, breakdown }) => ({
+      position,
+      listingId: listing.id,
+      slug: listing.slug,
+      title: listing.title,
+      agentId: listing.agentId,
+      agentName: cardsById.get(listing.id)?.agentName ?? null,
+      listingCategory: listing.listingCategory,
+      location: listing.location,
+      promotionTier: breakdown.promotionTier,
+      fixedPremiumSlot: breakdown.fixedPremiumSlot,
+      qualityScore: roundRankingScore(breakdown.qualityScore),
+      freshnessScore: roundRankingScore(breakdown.freshnessScore),
+      freshnessSource: breakdown.freshnessSource,
+      freshnessAt: breakdown.freshnessAt,
+      promotionBonus: breakdown.promotionBonus,
+      baseScore: roundRankingScore(breakdown.baseScore),
+      finalScore: roundRankingScore(breakdown.finalScore),
+      diversityAdjustments: breakdown.diversityAdjustments
+    })),
+    pagination: {
+      currentPage: page,
+      pageSize: limit,
+      totalItems: snapshot.ranked.length,
+      totalPages: Math.max(1, Math.ceil(snapshot.ranked.length / limit))
+    },
+    snapshotAt: snapshot.generatedAt
+  };
 }
 
 export async function getPublicMarketFacets() {
@@ -95,7 +144,8 @@ export async function getPublicMarketPage(
     bedrooms: parsed.bedrooms,
     bathrooms: parsed.bathrooms
   };
-  const ranked = await getCachedPublicRankingSnapshot(JSON.stringify(marketFilters));
+  const snapshot = await getCachedPublicRankingSnapshot(JSON.stringify(marketFilters));
+  const ranked = snapshot.ranked.map(({ listing }) => listing);
   return buildPublicMarketPageFromRanked(ranked, Math.max(1, Math.trunc(page)), 10);
 }
 
