@@ -10,6 +10,7 @@ type SeoMarketState = {
   path: string;
   is_indexable: boolean;
   below_threshold_since: string | null;
+  first_eligible_at: string | null;
 };
 
 function isMissingSeoTable(error: { code?: string; message?: string } | null) {
@@ -29,7 +30,7 @@ export async function resolveMarketIndexability(
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase
     .from("seo_market_pages")
-    .select("path, is_indexable, below_threshold_since")
+    .select("path, is_indexable, below_threshold_since, first_eligible_at")
     .eq("path", route.path)
     .maybeSingle();
 
@@ -70,7 +71,7 @@ export async function resolveMarketIndexability(
       is_indexable: eligible,
       eligibility_reason: reason,
       first_eligible_at:
-        baseline.eligible && !previous?.is_indexable ? now.toISOString() : undefined,
+        baseline.eligible && !previous?.first_eligible_at ? now.toISOString() : undefined,
       below_threshold_since: baseline.eligible ? null : belowThresholdSince ?? now.toISOString(),
       last_evaluated_at: now.toISOString()
     },

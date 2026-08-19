@@ -43,10 +43,10 @@ export async function PATCH(request: NextRequest, { params }: Props) {
       return limited.response;
     }
     const { listingId } = await params;
-    await ensureAgentOwnsListing(decoded.uid, listingId);
+    const previousListing = await ensureAgentOwnsListing(decoded.uid, listingId);
     const body = await request.json();
     const listing = await updateAgentListing(decoded.uid, listingId, body);
-    revalidateListingMutationPaths(listing);
+    revalidateListingMutationPaths(listing, previousListing);
     return withRateLimitHeaders(NextResponse.json({ listing }), limited.headers);
   } catch (error) {
     if (error instanceof ZodError) {

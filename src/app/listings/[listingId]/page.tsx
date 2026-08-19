@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { cache } from "react";
 
@@ -86,6 +87,28 @@ export default async function ListingPage({ params }: Props) {
     city: details.listing.location.city,
     category: details.listing.listingCategory
   });
+  const areaPath = details.listing.location.areaSlug
+    ? buildPropertyMarketPath({
+        state: details.listing.location.state,
+        city: details.listing.location.city,
+        areaSlug: details.listing.location.areaSlug,
+        category: details.listing.listingCategory
+      })
+    : null;
+  const subtypePath = details.listing.propertySubtype
+    ? buildPropertyMarketPath({
+        state: details.listing.location.state,
+        city: details.listing.location.city,
+        areaSlug: details.listing.location.areaSlug,
+        category: details.listing.listingCategory,
+        propertySubtype: details.listing.propertySubtype
+      })
+    : buildPropertyMarketPath({
+        state: details.listing.location.state,
+        city: details.listing.location.city,
+        category: details.listing.listingCategory,
+        propertyType: details.listing.propertyType
+      });
   const breadcrumbJsonLd = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
@@ -130,6 +153,23 @@ export default async function ListingPage({ params }: Props) {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(listingJsonLd) }} />
       <div className="mx-auto max-w-6xl">
+        <nav aria-label="Browse related property markets" className="mb-4 flex flex-wrap gap-2 text-xs font-bold text-slate-700">
+          <span className="py-2 text-slate-500">Browse:</span>
+          <Link href={statePath} className="rounded-full bg-white/70 px-3 py-2 hover:bg-white">
+            {getPublicStateLabel(details.listing.location.state)} properties
+          </Link>
+          <Link href={marketPath} className="rounded-full bg-white/70 px-3 py-2 hover:bg-white">
+            {details.listing.location.city}
+          </Link>
+          {areaPath ? (
+            <Link href={areaPath} className="rounded-full bg-white/70 px-3 py-2 hover:bg-white">
+              {details.listing.location.area}
+            </Link>
+          ) : null}
+          <Link href={subtypePath} className="rounded-full bg-white/70 px-3 py-2 hover:bg-white">
+            Similar properties
+          </Link>
+        </nav>
         <ListingDetail details={details} similarListings={similarListings} />
       </div>
     </div>

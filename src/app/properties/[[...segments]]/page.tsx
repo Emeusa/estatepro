@@ -36,9 +36,14 @@ const getBaseMarketContext = cache(async (segmentsKey: string) => {
   const normalizedRoute = registeredArea
     ? {
         ...parsedRoute,
+        city: registeredArea.city,
         area: registeredArea.name,
         areaSlug: registeredArea.slug,
-        path: buildPropertyMarketPath({ ...parsedRoute, areaSlug: registeredArea.slug })
+        path: buildPropertyMarketPath({
+          ...parsedRoute,
+          city: registeredArea.city,
+          areaSlug: registeredArea.slug
+        })
       }
     : parsedRoute;
   const page = await getPublicMarketPage({

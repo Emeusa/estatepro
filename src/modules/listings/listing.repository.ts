@@ -96,6 +96,8 @@ export type ListingSitemapEntry = {
 };
 
 type SeoAreaRow = {
+  state: string;
+  city: string;
   canonical_name: string;
   slug: string;
   aliases: string[] | null;
@@ -136,7 +138,7 @@ async function listSeoAreas(state: string, city: string): Promise<SeoAreaRow[]> 
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase
     .from("seo_areas")
-    .select("canonical_name, slug, aliases")
+    .select("state, city, canonical_name, slug, aliases")
     .eq("state", state)
     .eq("city", city)
     .limit(250);
@@ -148,18 +150,49 @@ async function listSeoAreas(state: string, city: string): Promise<SeoAreaRow[]> 
   return (data ?? []) as SeoAreaRow[];
 }
 
+async function listAllSeoAreas(): Promise<SeoAreaRow[]> {
+  const supabase = createServerSupabaseClient();
+  const rows: SeoAreaRow[] = [];
+  const batchSize = 1000;
+  for (let from = 0; from < 5000; from += batchSize) {
+    const { data, error } = await supabase
+      .from("seo_areas")
+      .select("state, city, canonical_name, slug, aliases")
+      .order("state", { ascending: true })
+      .order("city", { ascending: true })
+      .order("slug", { ascending: true })
+      .range(from, from + batchSize - 1);
+    if (error) {
+      if (isMissingSeoAreasTable(error)) return [];
+      throw new Error(error.message);
+    }
+    const batch = (data ?? []) as SeoAreaRow[];
+    rows.push(...batch);
+    if (batch.length < batchSize) break;
+  }
+  return rows;
+}
+
 export async function resolveCanonicalPublicArea(state: string, city: string, areaSlug: string) {
   const normalized = slugifyLocation([areaSlug]);
   const row = (await listSeoAreas(state, city)).find((item) =>
     item.slug === normalized || (item.aliases ?? []).some((alias) => slugifyLocation([alias]) === normalized)
   );
-  return row ? { name: row.canonical_name, slug: row.slug } : null;
+  if (row) return { name: row.canonical_name, slug: row.slug, city: row.city };
+  const stateMatches = (await listAllSeoAreas()).filter((item) =>
+    item.state === state &&
+    (item.slug === normalized || (item.aliases ?? []).some((alias) => slugifyLocation([alias]) === normalized))
+  );
+  return stateMatches.length === 1
+    ? { name: stateMatches[0].canonical_name, slug: stateMatches[0].slug, city: stateMatches[0].city }
+    : null;
 }
 
 async function normalizeListingAreaSlug(location: ListingRecord["location"]) {
   const requestedSlug = location.areaSlug ?? slugifyLocation([location.area]);
   const canonical = await resolveCanonicalPublicArea(location.state, location.city, requestedSlug);
-  return { ...location, areaSlug: canonical?.slug ?? requestedSlug };
+  if (canonical) return { ...location, city: canonical.city, areaSlug: canonical.slug };
+  return { ...location, areaSlug: requestedSlug };
 }
 
 function parseKeywordFilters(keyword?: string): KeywordFilters {
@@ -500,44 +533,69 @@ export async function buildPublicMarketPageFromRanked(
 
 export async function listPublicMarketFacets(): Promise<PublicMarketFacet[]> {
   const supabase = createServerSupabaseClient();
-  let { data, error } = await supabase
-    .from(PUBLIC_FEED_LISTINGS_SOURCE)
-    .select("location, area_slug, listing_category, property_type, property_subtype, title, price, updated_at")
-    .order("updated_at", { ascending: false })
-    .limit(5000);
-
-  if (isMissingTaxonomyColumnError(error)) {
-    const legacyResult = await supabase
+  const seoAreasPromise = listAllSeoAreas();
+  const listingRows: Array<Record<string, unknown>> = [];
+  const batchSize = 1000;
+  let includeTaxonomy = true;
+  for (let from = 0; from < 45000;) {
+    const columns = includeTaxonomy
+      ? "id, location, area_slug, listing_category, property_type, property_subtype, title, price, updated_at"
+      : "id, location, listing_category, property_type, title, price, updated_at";
+    const { data, error } = await supabase
       .from(PUBLIC_FEED_LISTINGS_SOURCE)
-      .select("location, listing_category, property_type, title, price, updated_at")
+      .select(columns)
       .order("updated_at", { ascending: false })
-      .limit(5000);
-    data = legacyResult.data as typeof data;
-    error = legacyResult.error;
+      .order("id", { ascending: true })
+      .range(from, from + batchSize - 1);
+    if (error && includeTaxonomy && isMissingTaxonomyColumnError(error)) {
+      includeTaxonomy = false;
+      listingRows.length = 0;
+      from = 0;
+      continue;
+    }
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as unknown as Array<Record<string, unknown>>;
+    listingRows.push(...batch);
+    if (batch.length < batchSize) break;
+    from += batchSize;
+  }
+  const seoAreas = await seoAreasPromise;
+
+  const canonicalAreas = new Map<string, SeoAreaRow | null>();
+  for (const row of seoAreas) {
+    for (const value of [row.slug, ...(row.aliases ?? []).map((alias) => slugifyLocation([alias]))]) {
+      const key = `${row.state}|${value}`;
+      const existing = canonicalAreas.get(key);
+      if (!canonicalAreas.has(key)) canonicalAreas.set(key, row);
+      else if (existing?.city !== row.city || existing.slug !== row.slug) canonicalAreas.set(key, null);
+    }
   }
 
-  if (error) throw new Error(error.message);
-
   const facets = new Map<string, PublicMarketFacet>();
-  for (const row of data ?? []) {
+  for (const row of listingRows) {
     const location = row.location as { state?: string; city?: string; area?: string; areaSlug?: string } | null;
     if (!location?.state || !location.city) continue;
     const listingCategory = row.listing_category as ListingCategory;
-    const propertyType = normalizePropertyType(row.property_type);
+    const storedPropertyType = typeof row.property_type === "string" ? row.property_type : null;
+    const propertyType = normalizePropertyType(storedPropertyType);
     const propertySubtype = typeof row.property_subtype === "string" && isPropertySubtype(row.property_subtype)
       ? row.property_subtype
-      : getLegacySubtypeForPropertyType(row.property_type);
+      : getLegacySubtypeForPropertyType(storedPropertyType);
     const state = normalizeNigeriaState(location.state);
-    const area = location.area?.trim() ?? "";
-    const areaSlug = String(row.area_slug ?? location.areaSlug ?? slugifyLocation([area]));
-    const fingerprint = [row.title, area, location.city, row.price]
+    const rawArea = location.area?.trim() ?? "";
+    const rawAreaSlug = String(row.area_slug ?? location.areaSlug ?? slugifyLocation([rawArea]));
+    const canonicalArea = canonicalAreas.get(`${state}|${rawAreaSlug}`);
+    const area = canonicalArea?.canonical_name ?? rawArea;
+    const areaSlug = canonicalArea?.slug ?? rawAreaSlug;
+    const city = canonicalArea?.city ?? location.city;
+    const fingerprint = [row.title, area, city, row.price]
       .map((value) => normalizeKeyword(String(value ?? "")))
       .join("|");
-    const key = [state, location.city, areaSlug, listingCategory, propertyType, propertySubtype ?? ""].join("|");
+    const key = [state, city, areaSlug, listingCategory, propertyType, propertySubtype ?? ""].join("|");
     const current = facets.get(key);
     facets.set(key, {
       state,
-      city: location.city,
+      city,
       area,
       areaSlug,
       listingCategory,
@@ -718,21 +776,29 @@ export async function listPublicListingCardsByIds(listingIds: string[]) {
 
 export async function listPublicListingSitemapEntries(limit = 1000): Promise<ListingSitemapEntry[]> {
   const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from(PUBLIC_FEED_LISTINGS_SOURCE)
-    .select("id, slug, updated_at")
-    .not("slug", "is", null)
-    .order("updated_at", { ascending: false })
-    .limit(limit);
+  const safeLimit = Math.min(45000, Math.max(1, Math.trunc(limit)));
+  const rows: Array<{ id: string; slug: string | null; updated_at: string }> = [];
+  const batchSize = 1000;
+  for (let from = 0; from < safeLimit; from += batchSize) {
+    const to = Math.min(from + batchSize, safeLimit) - 1;
+    const { data, error } = await supabase
+      .from(PUBLIC_FEED_LISTINGS_SOURCE)
+      .select("id, slug, updated_at")
+      .not("slug", "is", null)
+      .order("updated_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, to);
 
-  if (error) {
-    if (isMissingSlugColumnError(error)) {
-      return [];
+    if (error) {
+      if (isMissingSlugColumnError(error)) return [];
+      throw new Error(error.message);
     }
-    throw new Error(error.message);
+    const batch = (data ?? []) as Array<{ id: string; slug: string | null; updated_at: string }>;
+    rows.push(...batch);
+    if (batch.length < to - from + 1) break;
   }
 
-  return (data ?? [])
+  return rows
     .map((row) => ({
       slug: typeof row.slug === "string" && row.slug ? row.slug : row.id,
       updatedAt: row.updated_at

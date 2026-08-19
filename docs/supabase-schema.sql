@@ -250,10 +250,14 @@ create table if not exists public.admin_notifications (
   entity_type text not null,
   entity_id uuid,
   href text,
+  dedupe_key text,
   is_read boolean not null default false,
   read_at timestamptz,
   created_at timestamptz not null default timezone('utc', now())
 );
+
+alter table public.admin_notifications
+  add column if not exists dedupe_key text;
 
 create table if not exists public.saved_listings (
   user_id uuid not null references public.users (id) on delete cascade,
@@ -1123,6 +1127,9 @@ create index if not exists admin_notifications_entity_idx
   on public.admin_notifications (entity_type, entity_id, created_at desc)
   where entity_id is not null;
 
+create unique index if not exists admin_notifications_dedupe_key_unique_idx
+  on public.admin_notifications (dedupe_key);
+
 create index if not exists saved_listings_user_created_idx
   on public.saved_listings (user_id, created_at desc);
 
@@ -1957,6 +1964,99 @@ create index if not exists seo_market_pages_indexable_idx
 alter table public.seo_market_pages enable row level security;
 revoke all on public.seo_market_pages from anon, authenticated;
 grant select, insert, update, delete on public.seo_market_pages to service_role;
+
+-- Seed high-confidence canonical areas and aliases. The area registry maps
+-- familiar public markets to the correct administrative LGA used in routes.
+insert into public.seo_areas (state, city, canonical_name, slug, aliases)
+values
+  ('Lagos', 'Eti-Osa', 'Sangotedo', 'sangotedo', array['sangotedo ajah']),
+  ('Lagos', 'Eti-Osa', 'Banana Island', 'banana-island', array['banana island ikoyi']),
+  ('Lagos', 'Eti-Osa', 'Carlton Gate Estate', 'carlton-gate-estate', array['carlton gate', 'carlton gate chevron']),
+  ('Lagos', 'Eti-Osa', 'Chevron', 'chevron', array['chevron drive', 'chevron lekki']),
+  ('Lagos', 'Eti-Osa', 'Orchid Road', 'orchid-road', array['orchid road chevron']),
+  ('Lagos', 'Eti-Osa', 'Lekki Phase 1', 'lekki-phase-1', array['lekki phase one'])
+on conflict (state, city, slug) do update set
+  canonical_name = excluded.canonical_name,
+  aliases = excluded.aliases,
+  updated_at = timezone('utc', now());
+
+-- Correct only high-confidence Lagos locality records. This preserves the
+-- agent-entered street/estate text while fixing the administrative LGA and
+-- canonical area slug used by public market routes.
+with normalized_lagos_areas as (
+  select
+    id,
+    case lower(coalesce(area_slug, location->>'areaSlug', ''))
+      when 'sangotedo' then 'sangotedo'
+      when 'banana-island' then 'banana-island'
+      when 'carlton-gate' then 'carlton-gate-estate'
+      when 'carlton-gate-estate' then 'carlton-gate-estate'
+      when 'chevron-drive' then 'chevron'
+      when 'chevron' then 'chevron'
+      when 'orchid-road-chevron' then 'orchid-road'
+      when 'orchid-road' then 'orchid-road'
+      when 'lekki-phase-1' then 'lekki-phase-1'
+      else null
+    end as canonical_area_slug
+  from public.listings
+  where lower(location->>'state') = 'lagos'
+)
+update public.listings as listings
+set
+  area_slug = normalized.canonical_area_slug,
+  location = jsonb_set(
+    jsonb_set(listings.location::jsonb, '{city}', to_jsonb('Eti-Osa'::text), true),
+    '{areaSlug}',
+    to_jsonb(normalized.canonical_area_slug),
+    true
+  ),
+  updated_at = timezone('utc', now())
+from normalized_lagos_areas as normalized
+where listings.id = normalized.id
+  and normalized.canonical_area_slug is not null
+  and (
+    listings.location->>'city' is distinct from 'Eti-Osa'
+    or listings.area_slug is distinct from normalized.canonical_area_slug
+    or listings.location->>'areaSlug' is distinct from normalized.canonical_area_slug
+  );
+
+-- Read-only Search Console monitoring state. This table never controls whether
+-- a listing is public; it only records discovery and Google inspection results.
+create table if not exists public.seo_indexing_status (
+  path text primary key check (path ~ '^/'),
+  page_family text not null check (page_family in ('homepage', 'listing', 'market', 'guide')),
+  is_eligible boolean not null default true,
+  in_sitemap boolean not null default true,
+  eligible_at timestamptz not null default timezone('utc', now()),
+  last_modified_at timestamptz,
+  last_inspected_at timestamptz,
+  next_inspection_at timestamptz default (timezone('utc', now()) + interval '3 days'),
+  google_verdict text,
+  google_indexed boolean not null default false,
+  coverage_state text,
+  robots_txt_state text,
+  indexing_state text,
+  page_fetch_state text,
+  last_crawl_time timestamptz,
+  user_canonical text,
+  google_canonical text,
+  technical_issue boolean not null default false,
+  last_error text check (last_error is null or char_length(last_error) <= 500),
+  technical_alerted_at timestamptz,
+  delayed_alerted_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists seo_indexing_status_due_idx
+  on public.seo_indexing_status (is_eligible, next_inspection_at)
+  where is_eligible = true;
+create index if not exists seo_indexing_status_google_idx
+  on public.seo_indexing_status (google_indexed, technical_issue, last_inspected_at desc);
+
+alter table public.seo_indexing_status enable row level security;
+revoke all on public.seo_indexing_status from anon, authenticated;
+grant select, insert, update, delete on public.seo_indexing_status to service_role;
 
 -- One-time repair for pending listings created before approved-agent auto-activation:
 -- update public.listings

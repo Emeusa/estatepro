@@ -8,6 +8,10 @@ import { revalidateListingMutationPaths } from "@/modules/listings/listing-cache
 import { runListingRetentionMaintenance } from "@/modules/listings/listing-retention.service";
 import { sendPlanDowngradedEmail, sendSubscriptionExpiryReminderEmail } from "@/modules/email/email.service";
 
+type SeoIndexingMaintenanceResult = Awaited<ReturnType<
+  typeof import("@/modules/seo/search-console.service")["runSeoIndexingMaintenance"]
+>>;
+
 type SubscriptionRow = Parameters<typeof toSubscriptionRecord>[0];
 
 function isDue(listing: { created_at: string; boosted_at?: string | null; last_refreshed_at?: string | null }, days: number) {
@@ -128,5 +132,12 @@ export async function refreshEligibleListings() {
   ) {
     revalidateListingMutationPaths();
   }
-  return { refreshed, demoted, reactivated, subscriptionReminders, ...retention };
+  let seoIndexing: SeoIndexingMaintenanceResult | null = null;
+  try {
+    const { runSeoIndexingMaintenance } = await import("@/modules/seo/search-console.service");
+    seoIndexing = await runSeoIndexingMaintenance();
+  } catch (error) {
+    captureServerError(error, { service: "auto_refresh", operation: "seo_indexing_maintenance" });
+  }
+  return { refreshed, demoted, reactivated, subscriptionReminders, ...retention, seoIndexing };
 }

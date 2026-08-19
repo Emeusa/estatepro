@@ -4,14 +4,21 @@ import { AuthError, requireAdmin } from "@/lib/auth";
 import { captureServerError } from "@/lib/security/logger";
 import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rate-limit";
 import { getSeoMarketCoverage } from "@/modules/seo/seo-coverage.service";
+import { listSeoIndexingStatuses } from "@/modules/seo/seo-indexing.repository";
 
 export async function GET(request: NextRequest) {
   try {
     const decoded = await requireAdmin(request);
     const limited = await rateLimit(request, RATE_LIMITS.admin, decoded.uid, decoded.uid);
     if (!limited.allowed) return limited.response;
-    const markets = await getSeoMarketCoverage();
-    return withRateLimitHeaders(NextResponse.json({ markets, generatedAt: new Date().toISOString() }), limited.headers);
+    const [markets, indexing] = await Promise.all([
+      getSeoMarketCoverage(),
+      listSeoIndexingStatuses()
+    ]);
+    return withRateLimitHeaders(
+      NextResponse.json({ markets, indexing, generatedAt: new Date().toISOString() }),
+      limited.headers
+    );
   } catch (error) {
     captureServerError(error, { route: "/api/admin/seo" });
     return NextResponse.json(

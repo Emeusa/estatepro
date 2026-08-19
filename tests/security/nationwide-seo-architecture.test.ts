@@ -132,13 +132,15 @@ describe("nationwide SEO architecture", () => {
   it("splits canonical sitemap output by listings, markets, and guides", () => {
     const root = readSource("src/app/sitemap.xml/route.ts");
     const markets = readSource("src/app/sitemaps/markets.xml/route.ts");
+    const marketRoutes = readSource("src/modules/seo/seo-market-routes.ts");
 
     expect(root).toContain("/sitemaps/listings.xml");
     expect(root).toContain("/sitemaps/markets.xml");
     expect(root).toContain("/sitemaps/guides.xml");
     expect(markets).toContain("resolveMarketIndexability");
     expect(markets).toContain("decision.eligible");
-    expect(markets).toContain("duplicateRatio");
+    expect(markets).toContain("aggregateSeoMarkets");
+    expect(marketRoutes).toContain("duplicateRatio");
   });
 
   it("keeps advanced filters noindex and adds market/listing structured data", () => {

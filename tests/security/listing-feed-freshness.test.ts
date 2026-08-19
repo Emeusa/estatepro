@@ -163,6 +163,10 @@ describe("homepage listing freshness", () => {
     const cacheSource = readSource("src/modules/listings/listing-cache.ts");
 
     expect(cacheSource).toContain('safeRevalidatePath("/")');
+    expect(cacheSource).toContain('safeRevalidatePath("/sitemaps/listings.xml")');
+    expect(cacheSource).toContain('safeRevalidatePath("/sitemaps/markets.xml")');
+    expect(cacheSource).toContain("getListingMarketPaths(listing)");
+    expect(cacheSource).toContain("refreshSeoMarketEligibility");
     expect(cacheSource).toContain("safeRevalidatePath(`/agents/${listing.agentId}/listings`)");
     expect(cacheSource).toContain("safeRevalidatePath(`/listings/${listing.slug}`)");
     expect(cacheSource).toContain("cache revalidation failed");

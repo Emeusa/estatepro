@@ -466,6 +466,37 @@ export type SeoMarketCoverageRecord = {
   isInGracePeriod: boolean;
   reason: string;
   inSitemap: boolean;
+  discoverable: boolean;
+  googleIndexed: boolean;
+  googleVerdict: string | null;
+  coverageState: string | null;
+  technicalIssue: boolean;
+  lastInspectedAt: string | null;
+  lastCrawlTime: string | null;
+  userCanonical: string | null;
+  googleCanonical: string | null;
+};
+
+export type SeoIndexingStatusRecord = {
+  path: string;
+  pageFamily: "homepage" | "listing" | "market" | "guide";
+  isEligible: boolean;
+  inSitemap: boolean;
+  eligibleAt: string;
+  lastModifiedAt: string | null;
+  lastInspectedAt: string | null;
+  nextInspectionAt: string | null;
+  googleVerdict: string | null;
+  googleIndexed: boolean;
+  coverageState: string | null;
+  robotsTxtState: string | null;
+  indexingState: string | null;
+  pageFetchState: string | null;
+  lastCrawlTime: string | null;
+  userCanonical: string | null;
+  googleCanonical: string | null;
+  technicalIssue: boolean;
+  lastError: string | null;
 };
 
 export type AdminAgentReview = {
