@@ -1849,6 +1849,11 @@ create policy "admins can read email events"
     )
   );
 
+-- Keep these drops adjacent to the creates as well as in the policy reset block.
+-- This makes the full schema safe when a managed policy is recreated mid-run.
+drop policy if exists "admins can read quota overrides" on public.agent_quota_overrides;
+drop policy if exists "admins can manage quota overrides" on public.agent_quota_overrides;
+
 create policy "admins can read quota overrides"
   on public.agent_quota_overrides for select
   using (
