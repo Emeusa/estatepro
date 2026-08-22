@@ -52,6 +52,15 @@ describe("listing image mobile file handling", () => {
     expect(routeSource).toContain("UPLOAD_STORAGE_FAILED");
   });
 
+  it("does not classify unrelated policy wording as an image-storage failure", () => {
+    const formSource = readFileSync(path.join(process.cwd(), "src/components/forms/listing-form.tsx"), "utf8");
+
+    expect(formSource).toContain('message.includes("upload_storage_failed")');
+    expect(formSource).not.toContain('message.includes("row-level security")');
+    expect(formSource).not.toContain('message.includes("permission")');
+    expect(formSource).not.toContain('message.includes("unauthorized")');
+  });
+
   it("uses one hidden gallery picker with a simple thumbnail selector", () => {
     const source = readFileSync(path.join(process.cwd(), "src/components/forms/listing-form.tsx"), "utf8");
 

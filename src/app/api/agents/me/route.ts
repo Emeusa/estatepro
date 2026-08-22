@@ -7,7 +7,11 @@ import { RATE_LIMITS, rateLimit, withRateLimitHeaders } from "@/lib/security/rat
 import { getAgentAnalytics } from "@/modules/analytics/analytics.service";
 import { getAgentDashboardData, getUserAccount } from "@/modules/agents/agent.service";
 import { getAgentEntitlements } from "@/modules/entitlements/entitlement.service";
-import { getAgentListings, getAgentListingsPage } from "@/modules/listings/listing.service";
+import {
+  getAgentListingSummary,
+  getAgentListings,
+  getAgentListingsPage
+} from "@/modules/listings/listing.service";
 
 function readBooleanFlag(request: NextRequest, key: string, defaultValue: boolean) {
   const value = request.nextUrl.searchParams.get(key);
@@ -46,12 +50,14 @@ export async function GET(request: NextRequest) {
     const listPage = Number.isInteger(parsedListPage) && parsedListPage > 0 ? parsedListPage : 1;
     const includeEntitlements = readBooleanFlag(request, "includeEntitlements", true);
     const includeAnalytics = readBooleanFlag(request, "includeAnalytics", true);
-    const [profile, listingResult, user] = await Promise.all([
+    const includeListingSummary = readBooleanFlag(request, "includeListingSummary", false);
+    const [profile, listingResult, user, listingSummary] = await Promise.all([
       getAgentDashboardData(decoded.uid),
       requestedListPage === null
         ? getAgentListings(decoded.uid, listLimit).then((items) => ({ items, pagination: undefined }))
         : getAgentListingsPage(decoded.uid, listPage),
-      getUserAccount(decoded.uid)
+      getUserAccount(decoded.uid),
+      includeListingSummary ? getAgentListingSummary(decoded.uid) : Promise.resolve(undefined)
     ]);
     const subscription = profile.subscription ?? null;
     const [entitlements, analytics] = await Promise.all([
@@ -70,6 +76,10 @@ export async function GET(request: NextRequest) {
 
     if (listingResult.pagination) {
       payload.listingPagination = listingResult.pagination;
+    }
+
+    if (includeListingSummary) {
+      payload.listingSummary = listingSummary;
     }
 
     if (includeEntitlements) {

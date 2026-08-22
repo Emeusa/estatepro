@@ -10,6 +10,7 @@ import {
   deleteListing,
   demoteExcessActiveAvailableListingsForAgent,
   getPublicAgentSummary,
+  getAgentListingSummary as getAgentListingSummaryFromRepository,
   getListingById,
   getPublicListingByIdentifier,
   listAgentListings,
@@ -186,6 +187,10 @@ export async function getPublicAgentListings(agentId: string, page = 1) {
 
 export async function getAgentListings(agentId: string, limit = 50) {
   return listAgentListings(agentId, limit);
+}
+
+export async function getAgentListingSummary(agentId: string) {
+  return getAgentListingSummaryFromRepository(agentId);
 }
 
 export async function getAgentListingsPage(agentId: string, page = 1) {

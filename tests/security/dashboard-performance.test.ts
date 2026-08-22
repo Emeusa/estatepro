@@ -17,7 +17,10 @@ vi.mock("@/modules/agents/agent.repository", () => ({
 }));
 
 import { getAgentAnalytics } from "../../src/modules/analytics/analytics.service";
-import { listAgentListings } from "../../src/modules/listings/listing.repository";
+import {
+  getAgentListingSummary,
+  listAgentListings
+} from "../../src/modules/listings/listing.repository";
 
 function activeSubscription(planSlug = "starter_agent") {
   return {
@@ -72,6 +75,34 @@ describe("dashboard data performance helpers", () => {
     expect(query.limit).toHaveBeenCalledWith(3);
   });
 
+  it("summarizes the complete inventory without loading full listing records", async () => {
+    const query = {
+      select: vi.fn(),
+      eq: vi.fn()
+    };
+    query.select.mockReturnValue(query);
+    query.eq.mockResolvedValue({
+      data: [
+        { status: "active", availability: "available" },
+        { status: "active", availability: "available" },
+        { status: "pending", availability: "available" },
+        { status: "inactive", availability: "rented" }
+      ],
+      error: null
+    });
+    const from = vi.fn(() => query);
+    mocks.createServerSupabaseClient.mockReturnValue({ from });
+
+    await expect(getAgentListingSummary("agent-id")).resolves.toEqual({
+      total: 4,
+      active: 2,
+      pending: 1,
+      unavailable: 1
+    });
+    expect(query.select).toHaveBeenCalledWith("status, availability");
+    expect(query.eq).toHaveBeenCalledWith("agent_id", "agent-id");
+  });
+
   it("does not re-fetch agent profile when analytics receives subscription context", async () => {
     const query = {
       select: vi.fn(),
@@ -97,5 +128,15 @@ describe("dashboard data performance helpers", () => {
     expect(source).toContain('document.getElementById("listing-editor")?.scrollIntoView');
     expect(source).toContain("setMessage(`Editing: ${listing.title}`);");
     expect(source).toContain('className="scroll-mt-24"');
+  });
+
+  it("renders dashboard totals from the authoritative summary and refreshes it after changes", () => {
+    const source = readFileSync(path.join(process.cwd(), "src/app/agents/dashboard/page.tsx"), "utf8");
+
+    expect(source).toContain("includeListingSummary=true");
+    expect(source).toContain("const stats = data?.listingSummary");
+    expect(source).toContain("const dashboardToken = data.token");
+    expect(source).toContain("void refreshDashboardSummary(dashboardToken)");
+    expect(source).not.toContain("total: listings.length");
   });
 });

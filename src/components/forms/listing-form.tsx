@@ -340,20 +340,6 @@ export function ListingForm({ listing, onSaved }: Props) {
       return "We could not upload the selected photos. Check your connection and try again with fewer photos.";
     }
 
-    if (message.includes("bucket") || message.includes("not found")) {
-      return 'Storage bucket "listing-images" is not configured. Run the Supabase schema.';
-    }
-
-    if (
-      message.includes("row-level security") ||
-      message.includes("rls") ||
-      message.includes("policy") ||
-      message.includes("permission") ||
-      message.includes("unauthorized")
-    ) {
-      return "Storage upload is blocked by Supabase policy. Run the latest storage policies.";
-    }
-
     if (message.includes("mime") || message.includes("type") || message.includes("format") || message.includes("not allowed")) {
       return `This file type is not supported. Upload ${SUPPORTED_LISTING_IMAGE_LABEL} images.`;
     }
@@ -657,7 +643,7 @@ export function ListingForm({ listing, onSaved }: Props) {
             disabled={!selectedState}
             onChange={(event) => setSelectedLga(event.target.value)}
           >
-            <option value="">{selectedState ? "Select city" : "Select state first"}</option>
+            <option value="">{selectedState ? "Select LGA / Area Council" : "Select state first"}</option>
             {cityOptions.map((lga) => (
               <option key={lga} value={lga}>
                 {lga}

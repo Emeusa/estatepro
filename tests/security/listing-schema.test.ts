@@ -248,4 +248,18 @@ describe("listingInputSchema", () => {
     expect(mapped?.message).toMatch(/database image limit is not updated/i);
     expect(mapped?.fields.images).toMatch(/15 images/i);
   });
+
+  it("maps invalid area slugs to the location field instead of image storage", () => {
+    const mapped = mapListingRuntimeError(
+      new Error('new row for relation "listings" violates check constraint "listings_area_slug_check"')
+    );
+
+    expect(mapped).toEqual({
+      message: "Please correct the property location.",
+      fields: {
+        area: "Enter a valid property area using letters and numbers."
+      }
+    });
+    expect(mapped?.message).not.toMatch(/storage|image/i);
+  });
 });

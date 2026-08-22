@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { AnalyticsSummary } from "@/components/agents/analytics-summary";
 import { AgentSubscriptionPanel } from "@/components/agents/subscription-panel";
@@ -14,6 +14,7 @@ import { supabase } from "@/lib/supabase/client";
 import {
   AgentAnalyticsSummary,
   AgentEntitlements,
+  AgentListingSummary,
   ListingRecord,
   SubscriptionRecord,
   UserRecord
@@ -31,6 +32,7 @@ type DashboardData = {
     subscription?: SubscriptionRecord;
   };
   listings: ListingRecord[];
+  listingSummary?: AgentListingSummary;
   entitlements?: AgentEntitlements;
   analytics?: AgentAnalyticsSummary;
   billing?: {
@@ -131,7 +133,7 @@ export default function AgentDashboardPage() {
       try {
         const token = session.access_token;
         const profile = await apiRequest<Omit<DashboardData, "token">>(
-          "/api/agents/me?listLimit=3&includeEntitlements=false&includeAnalytics=false",
+          "/api/agents/me?listLimit=3&includeListingSummary=true&includeEntitlements=false&includeAnalytics=false",
           {
             headers: { Authorization: `Bearer ${token}` }
           }
@@ -204,15 +206,42 @@ export default function AgentDashboardPage() {
     };
   }, []);
 
-  const stats = useMemo(() => {
-    const listings = data?.listings ?? [];
-    return {
-      total: listings.length,
-      active: listings.filter((listing) => listing.status === "active" && listing.availability === "available").length,
-      pending: listings.filter((listing) => listing.status === "pending").length,
-      unavailable: listings.filter((listing) => listing.availability !== "available").length
-    };
-  }, [data?.listings]);
+  const stats = data?.listingSummary ?? {
+    total: 0,
+    active: 0,
+    pending: 0,
+    unavailable: 0
+  };
+
+  async function refreshDashboardSummary(token: string) {
+    const [summaryResult, entitlementsResult] = await Promise.allSettled([
+      apiRequest<{ listingSummary: AgentListingSummary }>(
+        "/api/agents/me?listLimit=0&includeListingSummary=true&includeEntitlements=false&includeAnalytics=false",
+        { headers: { Authorization: `Bearer ${token}` } }
+      ),
+      apiRequest<{ entitlements: AgentEntitlements }>("/api/agents/entitlements", {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+    ]);
+
+    setData((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return {
+        ...current,
+        listingSummary:
+          summaryResult.status === "fulfilled"
+            ? summaryResult.value.listingSummary
+            : current.listingSummary,
+        entitlements:
+          entitlementsResult.status === "fulfilled"
+            ? entitlementsResult.value.entitlements
+            : current.entitlements
+      };
+    });
+  }
 
   if (!data) {
     return (
@@ -221,6 +250,8 @@ export default function AgentDashboardPage() {
       </div>
     );
   }
+
+  const dashboardToken = data.token;
 
   async function logout() {
     await supabase.auth.signOut();
@@ -275,20 +306,12 @@ export default function AgentDashboardPage() {
         return current;
       }
 
-      const activeListingCount = listings.filter(
-        (listing) => listing.status === "active" && listing.availability === "available"
-      ).length;
       return {
         ...current,
-        listings,
-        entitlements: current.entitlements
-          ? {
-              ...current.entitlements,
-              activeListingCount
-            }
-          : current.entitlements
+        listings
       };
     });
+    void refreshDashboardSummary(dashboardToken);
   }
 
   return (
@@ -464,7 +487,7 @@ export default function AgentDashboardPage() {
                   }}
                   billingLiveEnabled={billingLiveEnabled}
                   entitlements={data.entitlements}
-                  onSubscriptionChanged={(subscription) =>
+                  onSubscriptionChanged={(subscription) => {
                     setData((current) =>
                       current
                         ? {
@@ -475,8 +498,9 @@ export default function AgentDashboardPage() {
                             }
                           }
                         : current
-                    )
-                  }
+                    );
+                    void refreshDashboardSummary(dashboardToken);
+                  }}
                   subscription={currentSubscription}
                   token={data.token}
                 />

@@ -115,5 +115,14 @@ export function mapListingRuntimeError(error: unknown) {
     };
   }
 
+  if (error.message.includes("listings_area_slug_check")) {
+    return {
+      message: "Please correct the property location.",
+      fields: {
+        area: "Enter a valid property area using letters and numbers."
+      }
+    };
+  }
+
   return null;
 }
