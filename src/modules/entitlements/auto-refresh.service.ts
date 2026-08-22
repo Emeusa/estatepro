@@ -12,6 +12,10 @@ type SeoIndexingMaintenanceResult = Awaited<ReturnType<
   typeof import("@/modules/seo/search-console.service")["runSeoIndexingMaintenance"]
 >>;
 
+type SeoAreaMaintenanceResult = Awaited<ReturnType<
+  typeof import("@/modules/seo/seo-area.repository")["reconcileSeoAreaRegistry"]
+>>;
+
 type SubscriptionRow = Parameters<typeof toSubscriptionRecord>[0];
 
 function isDue(listing: { created_at: string; boosted_at?: string | null; last_refreshed_at?: string | null }, days: number) {
@@ -133,11 +137,21 @@ export async function refreshEligibleListings() {
     revalidateListingMutationPaths();
   }
   let seoIndexing: SeoIndexingMaintenanceResult | null = null;
+  let seoAreas: SeoAreaMaintenanceResult | null = null;
+  try {
+    const { reconcileSeoAreaRegistry } = await import("@/modules/seo/seo-area.repository");
+    seoAreas = await reconcileSeoAreaRegistry();
+    if (seoAreas.normalizedListings > 0) {
+      revalidateListingMutationPaths();
+    }
+  } catch (error) {
+    captureServerError(error, { service: "auto_refresh", operation: "seo_area_maintenance" });
+  }
   try {
     const { runSeoIndexingMaintenance } = await import("@/modules/seo/search-console.service");
     seoIndexing = await runSeoIndexingMaintenance();
   } catch (error) {
     captureServerError(error, { service: "auto_refresh", operation: "seo_indexing_maintenance" });
   }
-  return { refreshed, demoted, reactivated, subscriptionReminders, ...retention, seoIndexing };
+  return { refreshed, demoted, reactivated, subscriptionReminders, ...retention, seoAreas, seoIndexing };
 }

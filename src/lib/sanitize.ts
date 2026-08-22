@@ -17,7 +17,17 @@ export function normalizePhone(input: string) {
 
 export function slugifyLocation(parts: string[]) {
   return parts
-    .map((part) => sanitizeText(part).toLowerCase())
+    .map((part) =>
+      sanitizeText(part)
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/&/g, " and ")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+    )
     .filter(Boolean)
-    .join("-");
+    .join("-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }

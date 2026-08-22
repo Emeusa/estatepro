@@ -80,11 +80,11 @@ describe("automatic SEO discovery", () => {
   });
 
   it("canonicalizes uniquely registered areas away from legacy wrong-LGA paths", () => {
-    const repository = readSource("src/modules/listings/listing.repository.ts");
+    const repository = readSource("src/modules/seo/seo-area.repository.ts");
     const marketPage = readSource("src/app/properties/[[...segments]]/page.tsx");
 
-    expect(repository).toContain("return stateMatches.length === 1");
-    expect(repository).toContain("city: stateMatches[0].city");
+    expect(repository).toContain("if (stateMatches.length === 1)");
+    expect(repository).toContain("return toSeoAreaRecord(stateMatches[0])");
     expect(marketPage).toContain("city: registeredArea.city");
     expect(marketPage).toContain("permanentRedirect(context.route.path)");
   });
@@ -172,7 +172,9 @@ describe("Search Console inspection monitoring", () => {
 
     expect(route).toContain("requireAdmin(request)");
     expect(route).toContain("listSeoIndexingStatuses");
-    expect(route).toContain("{ markets, indexing, generatedAt:");
+    expect(route).toContain("markets,");
+    expect(route).toContain("indexing,");
+    expect(route).toContain("generatedAt: new Date().toISOString()");
     expect(page).toContain("Monitored canonical URLs");
     expect(page).toContain("Google indexed");
     expect(page).toContain("Technical issues");

@@ -1,5 +1,10 @@
 import type { ListingCategory, PropertySubtype, PropertyType } from "@/lib/types";
-import { getLgasForState, NIGERIA_STATES, normalizeNigeriaState } from "@/lib/nigeria-locations";
+import {
+  getLgasForState,
+  NIGERIA_STATES,
+  normalizeNigeriaLga,
+  normalizeNigeriaState
+} from "@/lib/nigeria-locations";
 import {
   getPropertySubtypeSegment,
   PROPERTY_SUBTYPE_LABELS,
@@ -77,20 +82,6 @@ const STATE_PUBLIC_LABELS: Record<string, string> = {
   "Federal Capital Territory": "Abuja"
 };
 
-const STATE_SLUG_ALIASES: Record<string, string> = {
-  "federal-capital-territory": "Federal Capital Territory",
-  fct: "Federal Capital Territory",
-  abuja: "Federal Capital Territory",
-  nassarawa: "Nasarawa",
-  nasarawa: "Nasarawa"
-};
-
-const CITY_SLUG_ALIASES: Record<string, string> = {
-  badagry: "Badagary",
-  abakaliki: "Abakalik",
-  "enugu-south": "EnuguSou"
-};
-
 export const MARKET_INDEX_THRESHOLDS: Record<PropertyMarketKind, number> = {
   national: 1,
   national_type: 1,
@@ -128,17 +119,15 @@ export function getStateSlug(state: string) {
 }
 
 export function resolveStateSlug(slug: string) {
-  const normalized = slugifyMarketPart(slug);
-  if (STATE_SLUG_ALIASES[normalized]) return STATE_SLUG_ALIASES[normalized];
-  return NIGERIA_STATES.find((state) => getStateSlug(state) === normalized) ?? null;
+  const state = normalizeNigeriaState(slug);
+  return NIGERIA_STATES.includes(state)
+    ? state
+    : NIGERIA_STATES.find((item) => getStateSlug(item) === slugifyMarketPart(slug)) ?? null;
 }
 
 export function resolveCitySlug(state: string, slug: string) {
-  const normalized = slugifyMarketPart(slug);
-  const alias = CITY_SLUG_ALIASES[normalized];
-  const cities = getLgasForState(state);
-  if (alias && cities.includes(alias)) return alias;
-  return cities.find((city) => slugifyMarketPart(city) === normalized) ?? null;
+  const canonical = normalizeNigeriaLga(state, slug);
+  return getLgasForState(state).includes(canonical) ? canonical : null;
 }
 
 export function getCategorySegment(category: ListingCategory) {
@@ -312,7 +301,8 @@ export function getLegacyPropertyRedirect(params: Record<string, string | string
 
   const normalizedState = values.state ? normalizeNigeriaState(values.state) : undefined;
   const state = normalizedState && NIGERIA_STATES.includes(normalizedState) ? normalizedState : undefined;
-  const city = state && values.city && getLgasForState(state).includes(values.city) ? values.city : undefined;
+  const normalizedCity = state && values.city ? normalizeNigeriaLga(state, values.city) : undefined;
+  const city = state && normalizedCity && getLgasForState(state).includes(normalizedCity) ? normalizedCity : undefined;
   const category = Object.values(PROPERTY_CATEGORY_SEGMENTS).includes(values.listingCategory as ListingCategory)
     ? (values.listingCategory as ListingCategory)
     : undefined;

@@ -298,7 +298,7 @@ export function FilterBar({
               disabled={!state}
               onChange={(event) => setCity(event.target.value)}
             >
-              <option value="">{state ? "Select city" : "Select state"}</option>
+              <option value="">{state ? "Select LGA / Area Council" : "Select state"}</option>
               {lgas.map((lga) => (
                 <option key={lga} value={lga}>
                   {lga}

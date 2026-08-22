@@ -12,7 +12,12 @@ import {
   TITLE_DOCUMENT_TYPES,
   ZONING_TYPES
 } from "@/lib/listing-quality";
-import { isNigeriaLga, isNigeriaState, normalizeNigeriaState } from "@/lib/nigeria-locations";
+import {
+  isNigeriaLga,
+  isNigeriaState,
+  normalizeNigeriaLga,
+  normalizeNigeriaState
+} from "@/lib/nigeria-locations";
 import {
   isSubtypeForPropertyType,
   normalizePropertyType,
@@ -77,7 +82,7 @@ const locationSchema = z
   })
   .transform((value) => ({
     state: normalizeNigeriaState(sanitizeText(value.state)),
-    city: sanitizeText(value.city),
+    city: normalizeNigeriaLga(value.state, sanitizeText(value.city)),
     area: sanitizeText(value.area),
     areaSlug: slugifyLocation([value.area]),
     slug: slugifyLocation([normalizeNigeriaState(value.state), value.city, value.area])

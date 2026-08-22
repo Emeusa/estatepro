@@ -1,0 +1,135 @@
+{
+  "stateAliases": {
+    "abuja": "Federal Capital Territory",
+    "fct": "Federal Capital Territory",
+    "federal-capital-territory": "Federal Capital Territory",
+    "nassarawa": "Nasarawa"
+  },
+  "lgaAliases": {
+    "Abia": {
+      "oboma-ngwa": "Obi Ngwa"
+    },
+    "Adamawa": {
+      "girie": "Girei",
+      "teungo": "Toungo"
+    },
+    "Bauchi": {
+      "gamjuwa": "Ganjuwa"
+    },
+    "Benue": {
+      "oturkpo": "Otukpo"
+    },
+    "Cross River": {
+      "calabar-municipality": "Calabar Municipal"
+    },
+    "Delta": {
+      "aniochan": "Aniocha North",
+      "aniochas": "Aniocha South",
+      "ethiopee": "Ethiope East",
+      "ikanorth": "Ika North East",
+      "isokonor": "Isoko North",
+      "isokosou": "Isoko South"
+    },
+    "Ebonyi": {
+      "abakalik": "Abakaliki"
+    },
+    "Edo": {
+      "esan-centtral": "Esan Central",
+      "orhionmw": "Orhionmwon"
+    },
+    "Ekiti": {
+      "gboyin": "Gbonyin"
+    },
+    "Enugu": {
+      "enugusou": "Enugu South",
+      "enugu-sou": "Enugu South",
+      "igbo-eti": "Igbo Etiti"
+    },
+    "Federal Capital Territory": {
+      "abuja": "Abuja Municipal Area Council",
+      "municipal": "Abuja Municipal Area Council",
+      "abuja-municipal": "Abuja Municipal Area Council",
+      "amac": "Abuja Municipal Area Council"
+    },
+    "Gombe": {
+      "shomgom": "Shongom",
+      "yalmatu-deba": "Yamaltu/Deba"
+    },
+    "Imo": {
+      "ihitte-uboma-isinweke": "Ihitte/Uboma",
+      "unuimo": "Onuimo"
+    },
+    "Jigawa": {
+      "kirika-samma": "Kiri Kasama",
+      "malam-mado": "Malam Madori"
+    },
+    "Kano": {
+      "garum-mallam": "Garun Malam",
+      "tundun-wada": "Tudun Wada"
+    },
+    "Katsina": {
+      "dutsin-m": "Dutsin-Ma",
+      "kankiya": "Kankia",
+      "katsina-k": "Katsina"
+    },
+    "Kebbi": {
+      "aleiro": "Aliero",
+      "arewa": "Arewa Dandi",
+      "koko-bes": "Koko/Besse"
+    },
+    "Kogi": {
+      "koton-karfe": "Kogi"
+    },
+    "Lagos": {
+      "badagary": "Badagry",
+      "ibeju-lekki": "Ibeju-Lekki",
+      "ifako-ijaye": "Ifako-Ijaiye",
+      "shomolu": "Somolu"
+    },
+    "Nasarawa": {
+      "nassarawa-egon": "Nasarawa Egon"
+    },
+    "Niger": {
+      "kontogur": "Kontagora",
+      "muya": "Munya"
+    },
+    "Ogun": {
+      "egbado-north": "Yewa North",
+      "egbado-south": "Yewa South"
+    },
+    "Osun": {
+      "atakumosa-east": "Atakunmosa East",
+      "atakumosa-west": "Atakunmosa West",
+      "ayedire": "Aiyedire",
+      "ilesha-east": "Ilesa East",
+      "ilesha-west": "Ilesa West"
+    },
+    "Oyo": {
+      "orelope": "Oorelope"
+    },
+    "Plateau": {
+      "qua-anpa": "Qua'an Pan"
+    },
+    "Rivers": {
+      "abua-odu": "Abua-Odual",
+      "abua-odual": "Abua-Odual",
+      "akukutor": "Akuku-Toru",
+      "andoni-odual": "Andoni",
+      "emuoha": "Emohua",
+      "ogba-egbema-andoni": "Ogba/Egbema/Ndoni",
+      "omumma": "Omuma"
+    },
+    "Sokoto": {
+      "gwadabaw": "Gwadabawa",
+      "tambawal": "Tambuwal",
+      "tangazar": "Tangaza",
+      "wamakko": "Wamako"
+    },
+    "Yobe": {
+      "borsari": "Bursari"
+    },
+    "Zamfara": {
+      "birnin-magaji": "Birnin Magaji/Kiyaw"
+    }
+  }
+}

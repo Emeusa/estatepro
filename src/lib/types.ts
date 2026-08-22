@@ -292,6 +292,13 @@ export type AgentEntitlements = {
   periodEnd: string | null;
 };
 
+export type AgentListingSummary = {
+  total: number;
+  active: number;
+  pending: number;
+  unavailable: number;
+};
+
 export type AgentAnalyticsSummary = {
   range: "7d" | "30d";
   analyticsLevel: AnalyticsLevel;
@@ -497,6 +504,17 @@ export type SeoIndexingStatusRecord = {
   googleCanonical: string | null;
   technicalIssue: boolean;
   lastError: string | null;
+};
+
+export type SeoAreaRecord = {
+  id: string;
+  state: string;
+  city: string;
+  canonicalName: string;
+  slug: string;
+  aliases: string[];
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type AdminAgentReview = {

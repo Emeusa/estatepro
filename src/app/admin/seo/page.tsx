@@ -4,14 +4,17 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { AdminIdentityCard, AdminShell } from "@/components/admin/admin-shell";
+import { SeoAreaRegistry } from "@/components/admin/seo-area-registry";
 import { apiRequest } from "@/lib/api";
 import { supabase } from "@/lib/supabase/client";
-import type { SeoIndexingStatusRecord, SeoMarketCoverageRecord, UserRecord } from "@/lib/types";
+import type { SeoAreaRecord, SeoIndexingStatusRecord, SeoMarketCoverageRecord, UserRecord } from "@/lib/types";
 
 export default function AdminSeoPage() {
   const [account, setAccount] = useState<UserRecord | null>(null);
   const [markets, setMarkets] = useState<SeoMarketCoverageRecord[]>([]);
   const [indexing, setIndexing] = useState<SeoIndexingStatusRecord[]>([]);
+  const [areas, setAreas] = useState<SeoAreaRecord[]>([]);
+  const [conflictAreaIds, setConflictAreaIds] = useState<string[]>([]);
   const [generatedAt, setGeneratedAt] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -27,12 +30,14 @@ export default function AdminSeoPage() {
       try {
         const [me, coverage] = await Promise.all([
           apiRequest<{ user: UserRecord }>("/api/auth/me", { headers: { Authorization: `Bearer ${session.access_token}` } }),
-          apiRequest<{ markets: SeoMarketCoverageRecord[]; indexing: SeoIndexingStatusRecord[]; generatedAt: string }>("/api/admin/seo", { headers: { Authorization: `Bearer ${session.access_token}` } })
+          apiRequest<{ markets: SeoMarketCoverageRecord[]; indexing: SeoIndexingStatusRecord[]; areas: SeoAreaRecord[]; conflictAreaIds: string[]; generatedAt: string }>("/api/admin/seo", { headers: { Authorization: `Bearer ${session.access_token}` } })
         ]);
         if (!active) return;
         setAccount(me.user);
         setMarkets(coverage.markets);
         setIndexing(coverage.indexing);
+        setAreas(coverage.areas);
+        setConflictAreaIds(coverage.conflictAreaIds);
         setGeneratedAt(coverage.generatedAt);
       } catch (requestError) {
         if (active) setError(requestError instanceof Error ? requestError.message : "Could not load SEO coverage.");
@@ -154,6 +159,7 @@ export default function AdminSeoPage() {
             </div>
           </section>
         ) : null}
+        {!loading && !error ? <SeoAreaRegistry initialAreas={areas} conflictAreaIds={conflictAreaIds} /> : null}
       </div>
     </AdminShell>
   );

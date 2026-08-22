@@ -11,16 +11,31 @@ import { toNameCase } from "@/lib/format";
 import { getListingImageCount } from "@/lib/listing-images";
 import { getListingCardFeatureBadges } from "@/lib/listing-quality";
 import { rankListingsForFeed, rankListingsForFeedWithDiagnostics } from "@/lib/listing-visibility";
-import { getNigeriaStateStorageValues, normalizeNigeriaState } from "@/lib/nigeria-locations";
+import {
+  getNigeriaLgaStorageValues,
+  getNigeriaLocationSearchEntries,
+  getNigeriaStateStorageValues,
+  normalizeNigeriaState
+} from "@/lib/nigeria-locations";
 import {
   getLegacySubtypeForPropertyType,
+  getPropertySubtypeType,
   getPropertyTypeStorageValues,
   isPropertySubtype,
-  normalizePropertyType
+  normalizePropertyType,
+  PROPERTY_SUBTYPE_LABELS,
+  PROPERTY_SUBTYPE_SEGMENTS,
+  PROPERTY_TYPE_LABELS
 } from "@/lib/property-taxonomy";
 import { slugifyLocation } from "@/lib/sanitize";
 import { toListingRecord } from "@/lib/supabase-mappers";
 import {
+  listSeoAreas as listRegisteredSeoAreas,
+  resolveOrRegisterSeoArea,
+  resolveSeoArea
+} from "@/modules/seo/seo-area.repository";
+import {
+  AgentListingSummary,
   ListingCategory,
   ListingFilters,
   ListingRecord,
@@ -78,6 +93,8 @@ const PUBLIC_RANKING_COLUMNS_LEGACY = PUBLIC_RANKING_COLUMNS
 
 type KeywordFilters = {
   state?: string;
+  city?: string;
+  areaSlug?: string;
   propertyType?: PropertyType;
   propertySubtype?: PropertySubtype;
   listingCategory?: ListingCategory;
@@ -95,16 +112,23 @@ export type ListingSitemapEntry = {
   updatedAt: string;
 };
 
-type SeoAreaRow = {
-  state: string;
-  city: string;
-  canonical_name: string;
-  slug: string;
-  aliases: string[] | null;
-};
-
 function normalizeKeyword(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim();
+  return value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function removePhrase(value: string, phrase: string) {
+  const normalized = normalizeKeyword(phrase);
+  if (!normalized) return { value, matched: false };
+  const escaped = normalized.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+  const expression = new RegExp(`(^|\\s)${escaped}(?=\\s|$)`, "i");
+  if (!expression.test(value)) return { value, matched: false };
+  return { value: value.replace(expression, " ").replace(/\s+/g, " ").trim(), matched: true };
+}
+
+function findLongestPhrase<T extends { term: string }>(value: string, entries: T[]) {
+  return [...entries]
+    .sort((first, second) => normalizeKeyword(second.term).length - normalizeKeyword(first.term).length)
+    .find((entry) => removePhrase(value, entry.term).matched);
 }
 
 function createDescriptionPreview(value: string, maxLength = 110) {
@@ -130,88 +154,25 @@ function isDuplicateSlugError(error: { message?: string; code?: string } | null 
   return error?.code === "23505" && /slug/i.test(error?.message ?? "");
 }
 
-function isMissingSeoAreasTable(error: { message?: string; code?: string } | null | undefined) {
-  return error?.code === "42P01" || /seo_areas/i.test(error?.message ?? "");
-}
-
-async function listSeoAreas(state: string, city: string): Promise<SeoAreaRow[]> {
-  const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from("seo_areas")
-    .select("state, city, canonical_name, slug, aliases")
-    .eq("state", state)
-    .eq("city", city)
-    .limit(250);
-
-  if (error) {
-    if (isMissingSeoAreasTable(error)) return [];
-    throw new Error(error.message);
-  }
-  return (data ?? []) as SeoAreaRow[];
-}
-
-async function listAllSeoAreas(): Promise<SeoAreaRow[]> {
-  const supabase = createServerSupabaseClient();
-  const rows: SeoAreaRow[] = [];
-  const batchSize = 1000;
-  for (let from = 0; from < 5000; from += batchSize) {
-    const { data, error } = await supabase
-      .from("seo_areas")
-      .select("state, city, canonical_name, slug, aliases")
-      .order("state", { ascending: true })
-      .order("city", { ascending: true })
-      .order("slug", { ascending: true })
-      .range(from, from + batchSize - 1);
-    if (error) {
-      if (isMissingSeoAreasTable(error)) return [];
-      throw new Error(error.message);
-    }
-    const batch = (data ?? []) as SeoAreaRow[];
-    rows.push(...batch);
-    if (batch.length < batchSize) break;
-  }
-  return rows;
-}
-
 export async function resolveCanonicalPublicArea(state: string, city: string, areaSlug: string) {
-  const normalized = slugifyLocation([areaSlug]);
-  const row = (await listSeoAreas(state, city)).find((item) =>
-    item.slug === normalized || (item.aliases ?? []).some((alias) => slugifyLocation([alias]) === normalized)
-  );
-  if (row) return { name: row.canonical_name, slug: row.slug, city: row.city };
-  const stateMatches = (await listAllSeoAreas()).filter((item) =>
-    item.state === state &&
-    (item.slug === normalized || (item.aliases ?? []).some((alias) => slugifyLocation([alias]) === normalized))
-  );
-  return stateMatches.length === 1
-    ? { name: stateMatches[0].canonical_name, slug: stateMatches[0].slug, city: stateMatches[0].city }
-    : null;
+  const row = await resolveSeoArea(state, city, areaSlug);
+  return row ? { name: row.canonicalName, slug: row.slug, city: row.city } : null;
 }
 
 async function normalizeListingAreaSlug(location: ListingRecord["location"]) {
-  const requestedSlug = location.areaSlug ?? slugifyLocation([location.area]);
-  const canonical = await resolveCanonicalPublicArea(location.state, location.city, requestedSlug);
-  if (canonical) return { ...location, city: canonical.city, areaSlug: canonical.slug };
-  return { ...location, areaSlug: requestedSlug };
+  return resolveOrRegisterSeoArea(location);
 }
 
-function parseKeywordFilters(keyword?: string): KeywordFilters {
+export async function parseKeywordFilters(
+  keyword?: string,
+  registeredAreas?: Awaited<ReturnType<typeof listRegisteredSeoAreas>>
+): Promise<KeywordFilters> {
   if (!keyword?.trim()) {
     return {};
   }
 
   let value = normalizeKeyword(keyword);
   const filters: KeywordFilters = {};
-
-  if (/\blagos\b/.test(value)) {
-    filters.state = "Lagos";
-    value = value.replace(/\blagos\b/g, " ");
-  }
-
-  if (/\babuja\b/.test(value)) {
-    filters.state = "Federal Capital Territory";
-    value = value.replace(/\babuja\b/g, " ");
-  }
 
   if (/\bshort\s*let\b/.test(value)) {
     filters.listingCategory = "short_let";
@@ -224,42 +185,61 @@ function parseKeywordFilters(keyword?: string): KeywordFilters {
     value = value.replace(/\bfor\s+sale\b|\bsale\b/g, " ");
   }
 
-  if (/\bflat\b|\bflats\b|\bmini\s+flat\b|\bmini\s+flats\b|\bself[ -]?contain\b|\bapartment\b|\bstudio\b/.test(value)) {
-    filters.propertyType = "apartment";
-    if (/\bmini\s+flat/.test(value)) filters.propertySubtype = "mini_flat";
-    else if (/\bself[ -]?contain/.test(value)) filters.propertySubtype = "self_contain";
-    else if (/\bstudio/.test(value)) filters.propertySubtype = "studio_apartment";
-    value = value.replace(/\bflat(s)?\b|\bmini\s+flat(s)?\b|\bself\s+contain\b|\bapartment(s)?\b/g, " ");
-  } else if (/\bhouse\b|\bhouses\b|\bduplex\b|\bduplexes\b|\bbungalow\b|\btownhouse\b|\bmansion\b|\bvilla\b/.test(value)) {
-    filters.propertyType = "house";
-    if (/\bsemi[ -]?detached\s+duplex/.test(value)) filters.propertySubtype = "semi_detached_duplex";
-    else if (/\bdetached\s+duplex/.test(value)) filters.propertySubtype = "detached_duplex";
-    else if (/\bterrace(d)?\s+duplex/.test(value)) filters.propertySubtype = "terraced_duplex";
-    else if (/\bduplex/.test(value)) filters.propertySubtype = "duplex";
-    else if (/\bbungalow/.test(value)) filters.propertySubtype = "bungalow";
-    value = value.replace(/\bhouse(s)?\b|\bduplex(es)?\b|\bbungalow(s)?\b|\btownhouse(s)?\b|\bmansion(s)?\b|\bvilla(s)?\b/g, " ");
-  } else if (/\bsingle\s+room\b|\broom\s+and\s+parlour\b|\bboys'?\s+quarters\b|\bshared\s+room\b/.test(value)) {
-    filters.propertyType = "room";
-    if (/\broom\s+and\s+parlour/.test(value)) filters.propertySubtype = "room_and_parlour";
-    else if (/\bboys'?\s+quarters/.test(value)) filters.propertySubtype = "boys_quarters";
-    else if (/\bshared\s+room/.test(value)) filters.propertySubtype = "shared_room";
-    else filters.propertySubtype = "single_room";
-    value = value.replace(/\bsingle\s+room\b|\broom\s+and\s+parlour\b|\bboys'?\s+quarters\b|\bshared\s+room\b/g, " ");
-  } else if (/\bland\b/.test(value)) {
-    filters.propertyType = "land";
-    if (/\bresidential\s+land/.test(value)) filters.propertySubtype = "residential_land";
-    else if (/\bcommercial\s+land/.test(value)) filters.propertySubtype = "commercial_land";
-    else if (/\bindustrial\s+land/.test(value)) filters.propertySubtype = "industrial_land";
-    else if (/\bfarm\s+land|\bagricultural\s+land/.test(value)) filters.propertySubtype = "agricultural_land";
-    value = value.replace(/\bland\b/g, " ");
-  } else if (/\boffice\b|\boffices\b|\bwarehouse\b|\bfactory\b|\bhotel\b|\bshop\b|\bshops\b/.test(value)) {
-    filters.propertyType = "commercial";
-    if (/\bwarehouse/.test(value)) filters.propertySubtype = "warehouse";
-    else if (/\bfactory/.test(value)) filters.propertySubtype = "factory";
-    else if (/\bhotel/.test(value)) filters.propertySubtype = "hotel";
-    else if (/\bshop/.test(value)) filters.propertySubtype = "shop";
-    else filters.propertySubtype = "office";
-    value = value.replace(/\boffice(s)?\b|\bwarehouse(s)?\b|\bfactor(y|ies)\b|\bhotel(s)?\b|\bshop(s)?\b/g, " ");
+  const locationEntries = getNigeriaLocationSearchEntries();
+  const stateMatch = findLongestPhrase(value, locationEntries.states);
+  if (stateMatch) {
+    filters.state = stateMatch.state;
+    value = removePhrase(value, stateMatch.term).value;
+  }
+
+  const areas = registeredAreas ?? await listRegisteredSeoAreas(filters.state);
+  const areaCandidates = areas.flatMap((area) =>
+    [area.canonicalName, area.slug, ...area.aliases].map((term) => ({ term, area }))
+  );
+  const eligibleAreas = filters.state
+    ? areaCandidates
+    : areaCandidates.filter((candidate) =>
+        areaCandidates.filter((item) => normalizeKeyword(item.term) === normalizeKeyword(candidate.term)).length === 1
+      );
+  const areaMatch = findLongestPhrase(value, eligibleAreas);
+  if (areaMatch) {
+    filters.state = areaMatch.area.state;
+    filters.city = areaMatch.area.city;
+    filters.areaSlug = areaMatch.area.slug;
+    value = removePhrase(value, areaMatch.term).value;
+  }
+
+  const lgaCandidates = filters.state
+    ? locationEntries.lgas.filter((entry) => entry.state === filters.state)
+    : locationEntries.lgas.filter((candidate) =>
+        locationEntries.lgas.filter((item) => normalizeKeyword(item.term) === normalizeKeyword(candidate.term)).length === 1
+      );
+  const lgaMatch = findLongestPhrase(value, lgaCandidates);
+  if (lgaMatch) {
+    filters.state = lgaMatch.state;
+    filters.city = lgaMatch.city;
+    value = removePhrase(value, lgaMatch.term).value;
+  }
+
+  const subtypeCandidates = Object.entries(PROPERTY_SUBTYPE_SEGMENTS).flatMap(([segment, subtype]) => [
+    { term: segment, subtype },
+    { term: PROPERTY_SUBTYPE_LABELS[subtype], subtype }
+  ]);
+  const subtypeMatch = findLongestPhrase(value, subtypeCandidates);
+  if (subtypeMatch) {
+    filters.propertySubtype = subtypeMatch.subtype;
+    filters.propertyType = getPropertySubtypeType(subtypeMatch.subtype) ?? undefined;
+    value = removePhrase(value, subtypeMatch.term).value;
+  } else {
+    const typeCandidates = (Object.entries(PROPERTY_TYPE_LABELS) as Array<[PropertyType, string]>).flatMap(([propertyType, label]) => [
+      { term: propertyType, propertyType },
+      { term: label, propertyType }
+    ]);
+    const typeMatch = findLongestPhrase(value, typeCandidates);
+    if (typeMatch) {
+      filters.propertyType = typeMatch.propertyType;
+      value = removePhrase(value, typeMatch.term).value;
+    }
   }
 
   const titleKeyword = value.replace(/\bin\b/g, " ").replace(/\s+/g, " ").trim();
@@ -383,8 +363,10 @@ export async function paginateRankedPublicListings(
 
 async function listPublicListingCandidates(filters: ListingFilters) {
   const supabase = createServerSupabaseClient();
-  const keywordFilters = parseKeywordFilters(filters.keyword);
+  const keywordFilters = await parseKeywordFilters(filters.keyword);
   const stateFilter = filters.state ?? keywordFilters.state;
+  const cityFilter = filters.city ?? keywordFilters.city;
+  const areaSlugFilter = filters.areaSlug ?? keywordFilters.areaSlug;
   const propertyTypeFilter = filters.propertyType ?? keywordFilters.propertyType;
   const propertySubtypeFilter = filters.propertySubtype ?? keywordFilters.propertySubtype;
   const listingCategoryFilter = filters.listingCategory ?? keywordFilters.listingCategory;
@@ -405,9 +387,14 @@ async function listPublicListingCandidates(filters: ListingFilters) {
           ? query.eq("location->>state", stateValues[0])
           : query.in("location->>state", stateValues);
       }
-      if (filters.city) query = query.eq("location->>city", filters.city);
-      if (includeTaxonomy && filters.areaSlug) query = query.eq("area_slug", filters.areaSlug);
-      if (!stateFilter && !filters.city && filters.location) query = query.eq("location->>slug", filters.location);
+      if (cityFilter) {
+        const cityValues = getNigeriaLgaStorageValues(stateFilter ?? "", cityFilter);
+        query = cityValues.length === 1
+          ? query.eq("location->>city", cityValues[0])
+          : query.in("location->>city", cityValues);
+      }
+      if (includeTaxonomy && areaSlugFilter) query = query.eq("area_slug", areaSlugFilter);
+      if (!stateFilter && !cityFilter && filters.location) query = query.eq("location->>slug", filters.location);
       if (propertyTypeFilter) query = query.in("property_type", getPropertyTypeStorageValues(propertyTypeFilter));
       if (includeTaxonomy && propertySubtypeFilter) query = query.eq("property_subtype", propertySubtypeFilter);
       if (listingCategoryFilter) query = query.eq("listing_category", listingCategoryFilter);
@@ -435,7 +422,7 @@ async function listPublicListingCandidates(filters: ListingFilters) {
         } as Parameters<typeof toListingRecord>[0])
       );
     candidates.push(...mappedRows.filter((listing) => {
-      if (filters.areaSlug && (listing.location.areaSlug ?? slugifyLocation([listing.location.area])) !== filters.areaSlug) {
+      if (areaSlugFilter && (listing.location.areaSlug ?? slugifyLocation([listing.location.area])) !== areaSlugFilter) {
         return false;
       }
       if (propertySubtypeFilter && listing.propertySubtype !== propertySubtypeFilter) return false;
@@ -533,7 +520,7 @@ export async function buildPublicMarketPageFromRanked(
 
 export async function listPublicMarketFacets(): Promise<PublicMarketFacet[]> {
   const supabase = createServerSupabaseClient();
-  const seoAreasPromise = listAllSeoAreas();
+  const seoAreasPromise = listRegisteredSeoAreas();
   const listingRows: Array<Record<string, unknown>> = [];
   const batchSize = 1000;
   let includeTaxonomy = true;
@@ -561,7 +548,7 @@ export async function listPublicMarketFacets(): Promise<PublicMarketFacet[]> {
   }
   const seoAreas = await seoAreasPromise;
 
-  const canonicalAreas = new Map<string, SeoAreaRow | null>();
+  const canonicalAreas = new Map<string, (Awaited<ReturnType<typeof listRegisteredSeoAreas>>)[number] | null>();
   for (const row of seoAreas) {
     for (const value of [row.slug, ...(row.aliases ?? []).map((alias) => slugifyLocation([alias]))]) {
       const key = `${row.state}|${value}`;
@@ -585,7 +572,7 @@ export async function listPublicMarketFacets(): Promise<PublicMarketFacet[]> {
     const rawArea = location.area?.trim() ?? "";
     const rawAreaSlug = String(row.area_slug ?? location.areaSlug ?? slugifyLocation([rawArea]));
     const canonicalArea = canonicalAreas.get(`${state}|${rawAreaSlug}`);
-    const area = canonicalArea?.canonical_name ?? rawArea;
+    const area = canonicalArea?.canonicalName ?? rawArea;
     const areaSlug = canonicalArea?.slug ?? rawAreaSlug;
     const city = canonicalArea?.city ?? location.city;
     const fingerprint = [row.title, area, city, row.price]
@@ -849,6 +836,27 @@ export async function listAgentListings(agentId: string, limit = 50) {
     throw new Error(error.message);
   }
   return (data ?? []).map(toListingRecord);
+}
+
+export async function getAgentListingSummary(agentId: string): Promise<AgentListingSummary> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("listings")
+    .select("status, availability")
+    .eq("agent_id", agentId);
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const listings = data ?? [];
+  return {
+    total: listings.length,
+    active: listings.filter(
+      (listing) => listing.status === "active" && listing.availability === "available"
+    ).length,
+    pending: listings.filter((listing) => listing.status === "pending").length,
+    unavailable: listings.filter((listing) => listing.availability !== "available").length
+  };
 }
 
 export async function listAgentListingsPage(agentId: string, page = 1, pageSize = PUBLIC_PAGE_SIZE) {
@@ -1184,7 +1192,7 @@ export async function createListing(
 ) {
   const supabase = createServerSupabaseClient();
   const location = await normalizeListingAreaSlug(payload.location);
-  let slug = await createUniqueListingSlug(payload);
+  let slug = await createUniqueListingSlug({ ...payload, location });
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const insertPayload: Record<string, unknown> = {
@@ -1248,7 +1256,7 @@ export async function createListing(
     }
 
     if (slug && isDuplicateSlugError(error)) {
-      slug = await createUniqueListingSlug(payload);
+      slug = await createUniqueListingSlug({ ...payload, location });
       continue;
     }
 
