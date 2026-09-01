@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit --project tsconfig.typecheck.json",
     "test:security": "vitest run tests/security",
     "maintenance:image-cache": "node --env-file-if-exists=.env.local scripts/maintenance-image-cache.mjs",
+    "maintenance:image-orphans": "node --env-file-if-exists=.env.local scripts/maintenance-image-orphans.mjs",
     "maintenance:normalize-seo": "node --env-file-if-exists=.env.local scripts/normalize-listing-seo.mjs",
     "smoke:production": "powershell -ExecutionPolicy Bypass -File scripts/smoke-production.ps1"
   },

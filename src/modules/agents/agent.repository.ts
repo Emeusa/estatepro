@@ -5,7 +5,7 @@ import {
   toSubscriptionRecord,
   toUserRecord
 } from "@/lib/supabase-mappers";
-import { AgentProfile, PaidPlanStats } from "@/lib/types";
+import { AdminOverviewStats, AgentProfile, PaidPlanStats } from "@/lib/types";
 
 const PAID_PLAN_STAT_FIELDS: Record<string, keyof Omit<PaidPlanStats, "totalPaidAgents">> = {
   starter_agent: "starterAgent",
@@ -423,6 +423,33 @@ export async function listAgentUsersForAdmin(agentIds: string[]) {
   }
 
   return (data ?? []).map(toUserRecord);
+}
+
+export async function countAdminAgentOverviewStats(): Promise<Omit<AdminOverviewStats, "activeListings">> {
+  const supabase = createServerSupabaseClient();
+  const [totalResult, approvedResult, unapprovedResult] = await Promise.all([
+    supabase.from("agents").select("id", { count: "exact", head: true }),
+    supabase
+      .from("agents")
+      .select("id", { count: "exact", head: true })
+      .eq("verification_status", "approved")
+      .eq("is_blocked", false),
+    supabase
+      .from("agents")
+      .select("id", { count: "exact", head: true })
+      .neq("verification_status", "approved")
+  ]);
+
+  const error = totalResult.error ?? approvedResult.error ?? unapprovedResult.error;
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return {
+    totalAgents: totalResult.count ?? 0,
+    approvedAgents: approvedResult.count ?? 0,
+    unapprovedAgents: unapprovedResult.count ?? 0
+  };
 }
 
 export async function countPaidPlanSubscriptionsForAdmin(): Promise<PaidPlanStats> {

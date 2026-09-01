@@ -288,7 +288,29 @@ describe("client listing image upload flow", () => {
     mocks.processListingImage.mockRejectedValue(new Error("Canvas image decode failed"));
 
     await expect(uploadListingImages(files, "token")).rejects.toThrow("Upload code: IMAGE_COMPRESS_FAILED");
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/uploads/listing-images/telemetry",
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          Authorization: "Bearer fresh-token",
+          "Content-Type": "application/json"
+        },
+        keepalive: true
+      })
+    );
+    const telemetryCall = vi.mocked(fetch).mock.calls.find(([url]) => url === "/api/uploads/listing-images/telemetry");
+    const telemetry = JSON.parse(String(telemetryCall?.[1]?.body));
+    expect(telemetry).toEqual({
+      stage: "browser-compress",
+      code: "IMAGE_COMPRESS_FAILED",
+      imageCount: 1,
+      mimeTypes: ["image/jpeg"],
+      sizeBuckets: ["4_to_8mb"],
+      failedIndex: 0,
+      deviceClass: "desktop"
+    });
+    expect(JSON.stringify(telemetry)).not.toContain("android.jpg");
   });
 
   it("returns a useful message when server fallback succeeds without an image URL", async () => {

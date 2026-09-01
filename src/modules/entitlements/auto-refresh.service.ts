@@ -7,6 +7,7 @@ import { reconcileAgentListingsForPlan } from "@/modules/listings/listing-plan-r
 import { revalidateListingMutationPaths } from "@/modules/listings/listing-cache";
 import { runListingRetentionMaintenance } from "@/modules/listings/listing-retention.service";
 import { sendPlanDowngradedEmail, sendSubscriptionExpiryReminderEmail } from "@/modules/email/email.service";
+import { reconcileListingImageOrphans } from "@/modules/listings/listing-image-cleanup.service";
 
 type SeoIndexingMaintenanceResult = Awaited<ReturnType<
   typeof import("@/modules/seo/search-console.service")["runSeoIndexingMaintenance"]
@@ -17,6 +18,8 @@ type SeoAreaMaintenanceResult = Awaited<ReturnType<
 >>;
 
 type SubscriptionRow = Parameters<typeof toSubscriptionRecord>[0];
+
+type ImageCleanupResult = Awaited<ReturnType<typeof reconcileListingImageOrphans>>;
 
 function isDue(listing: { created_at: string; boosted_at?: string | null; last_refreshed_at?: string | null }, days: number) {
   const latest = [listing.last_refreshed_at, listing.boosted_at, listing.created_at]
@@ -138,6 +141,7 @@ export async function refreshEligibleListings() {
   }
   let seoIndexing: SeoIndexingMaintenanceResult | null = null;
   let seoAreas: SeoAreaMaintenanceResult | null = null;
+  let imageCleanup: ImageCleanupResult | null = null;
   try {
     const { reconcileSeoAreaRegistry } = await import("@/modules/seo/seo-area.repository");
     seoAreas = await reconcileSeoAreaRegistry();
@@ -153,5 +157,23 @@ export async function refreshEligibleListings() {
   } catch (error) {
     captureServerError(error, { service: "auto_refresh", operation: "seo_indexing_maintenance" });
   }
-  return { refreshed, demoted, reactivated, subscriptionReminders, ...retention, seoAreas, seoIndexing };
+  try {
+    imageCleanup = await reconcileListingImageOrphans({
+      dryRun: process.env.LISTING_IMAGE_ORPHAN_CLEANUP_ENABLED !== "true",
+      minimumAgeHours: 72,
+      maxDeletes: 250
+    });
+  } catch (error) {
+    captureServerError(error, { service: "auto_refresh", operation: "listing_image_orphan_cleanup" });
+  }
+  return {
+    refreshed,
+    demoted,
+    reactivated,
+    subscriptionReminders,
+    ...retention,
+    seoAreas,
+    seoIndexing,
+    imageCleanup
+  };
 }

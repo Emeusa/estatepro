@@ -5,6 +5,7 @@ import {
 import {
   getAgentProfile,
   getUserProfile,
+  countAdminAgentOverviewStats,
   listAgentUsersForAdmin,
   listAgentsForAdmin,
   countPaidPlanSubscriptionsForAdmin,
@@ -14,9 +15,14 @@ import {
   setVerificationStatus,
   updateUserProfile
 } from "@/modules/agents/agent.repository";
-import { AdminAgentDetails, AdminAgentReview, AdminAgentSummary, PaidPlanStats } from "@/lib/types";
-import { getAgentListingsPage, getListingCountsByAgentIds, getListingsByAgentIds } from "@/modules/listings/listing.service";
-import { sendAgentRegistrationReceivedEmail, sendAgentVerificationEmail } from "@/modules/email/email.service";
+import { AdminAgentDetails, AdminAgentReview, AdminAgentSummary, AdminOverviewStats, PaidPlanStats } from "@/lib/types";
+import {
+  getActiveListingCountForAdmin,
+  getAgentListingsPage,
+  getListingCountsByAgentIds,
+  getListingsByAgentIds
+} from "@/modules/listings/listing.service";
+import { sendAgentRegistrationReceivedEmail } from "@/modules/email/email.service";
 import { getSubscriptionAdminGrantHistory } from "@/modules/subscriptions/admin-grant.service";
 
 export async function createAgentAccount(input: unknown) {
@@ -105,6 +111,15 @@ export async function getPaidPlanStatsForAdmin(): Promise<PaidPlanStats> {
   return countPaidPlanSubscriptionsForAdmin();
 }
 
+export async function getAdminOverviewStats(): Promise<AdminOverviewStats> {
+  const [agentStats, activeListings] = await Promise.all([
+    countAdminAgentOverviewStats(),
+    getActiveListingCountForAdmin()
+  ]);
+
+  return { ...agentStats, activeListings };
+}
+
 export async function getAgentReviewForAdmin(agentId: string, page = 1): Promise<AdminAgentDetails | null> {
   const [{ agent, subscription }, user, listingResult, subscriptionGrants] = await Promise.all([
     getAgentProfile(agentId),
@@ -132,9 +147,7 @@ export async function updateAgentVerification(
   agentId: string,
   verificationStatus: "approved" | "rejected"
 ) {
-  const result = await setVerificationStatus(agentId, verificationStatus);
-  await sendAgentVerificationEmail(agentId, verificationStatus);
-  return result;
+  return setVerificationStatus(agentId, verificationStatus);
 }
 
 export async function updateAgentBlockStatus(agentId: string, isBlocked: boolean) {

@@ -198,6 +198,45 @@ function warnUploadStage(stage: UploadStage, files: File[], error: unknown, fail
   });
 }
 
+function getImageSizeBucket(size: number) {
+  const megabytes = size / (1024 * 1024);
+  if (megabytes < 1) return "under_1mb";
+  if (megabytes < 4) return "1_to_4mb";
+  if (megabytes < 8) return "4_to_8mb";
+  if (megabytes < 15) return "8_to_15mb";
+  return "15_to_20mb";
+}
+
+function getClientDeviceClass() {
+  if (typeof navigator === "undefined") return "unknown";
+  const userAgent = navigator.userAgent.toLowerCase();
+  if (/iphone|ipad|ipod/.test(userAgent)) return "ios";
+  if (/android/.test(userAgent)) return "android";
+  return "desktop";
+}
+
+function reportClientCompressionFailure(token: string, files: File[], failedIndex: number) {
+  const body = {
+    stage: "browser-compress",
+    code: "IMAGE_COMPRESS_FAILED",
+    imageCount: files.length,
+    mimeTypes: [...new Set(files.map((file) => file.type || "unknown"))],
+    sizeBuckets: files.map((file) => getImageSizeBucket(file.size)),
+    failedIndex,
+    deviceClass: getClientDeviceClass()
+  };
+
+  void fetch("/api/uploads/listing-images/telemetry", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body),
+    keepalive: true
+  }).catch(() => undefined);
+}
+
 async function uploadBrowserProcessedImage(
   file: File,
   token: string,
@@ -212,6 +251,7 @@ async function uploadBrowserProcessedImage(
     optimized = await processListingImage(file, watermark);
   } catch (error) {
     warnUploadStage("browser-compress", allFiles, error, order);
+    reportClientCompressionFailure(token, allFiles, order);
     throw new Error(IMAGE_COMPRESS_FAILED_MESSAGE);
   }
 

@@ -957,6 +957,21 @@ export async function countActiveAvailableListingsForAgent(agentId: string, excl
   return count ?? 0;
 }
 
+export async function countActiveAvailableListingsForAdmin() {
+  const supabase = createServerSupabaseClient();
+  const { count, error } = await supabase
+    .from("listings")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "active")
+    .eq("availability", "available");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return count ?? 0;
+}
+
 export async function countMediaBearingListingsForAgent(
   agentId: string,
   planSlug: string,

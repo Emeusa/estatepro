@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 
 import { AuthError, requireAdmin } from "@/lib/auth";
 import { captureServerError, logSecurityEvent } from "@/lib/security/logger";
@@ -11,10 +11,32 @@ import {
 import { agentModerationSchema } from "@/modules/agents/agent.schema";
 import { approvePendingListingsForAgent } from "@/modules/listings/listing.service";
 import { revalidateListingMutationPaths } from "@/modules/listings/listing-cache";
+import { sendAgentVerificationEmail } from "@/modules/email/email.service";
 
 type Props = {
   params: Promise<{ agentId: string }>;
 };
+
+async function sendVerificationEmailSafely(agentId: string, status: "approved" | "rejected") {
+  try {
+    await sendAgentVerificationEmail(agentId, status);
+  } catch (error) {
+    console.error("Agent verification email failed after moderation", {
+      agentId,
+      status,
+      error: error instanceof Error ? error.message : "unknown"
+    });
+  }
+}
+
+function scheduleVerificationEmail(agentId: string, status: "approved" | "rejected") {
+  try {
+    after(() => sendVerificationEmailSafely(agentId, status));
+  } catch {
+    // Tests and non-Next runtimes may not provide an after() request scope.
+    void sendVerificationEmailSafely(agentId, status);
+  }
+}
 
 export async function GET(request: NextRequest, { params }: Props) {
   try {
@@ -67,6 +89,7 @@ export async function PATCH(request: NextRequest, { params }: Props) {
       if (body.verificationStatus === "approved") {
         listingActivationSummary = await approvePendingListingsForAgent(agentId);
       }
+      scheduleVerificationEmail(agentId, body.verificationStatus);
     }
 
     if (typeof body.isBlocked === "boolean") {

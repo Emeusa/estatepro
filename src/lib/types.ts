@@ -531,6 +531,24 @@ export type PaidPlanStats = {
   agencyPlus: number;
 };
 
+export type AdminOverviewStats = {
+  totalAgents: number;
+  approvedAgents: number;
+  activeListings: number;
+  unapprovedAgents: number;
+};
+
+export type AdminOverviewSection = "supportRequests" | "paidPlanStats" | "reportStats" | "notifications";
+
+export type AdminOverviewResponse = {
+  stats: AdminOverviewStats;
+  supportRequests?: SupportRequestRecord[];
+  paidPlanStats?: PaidPlanStats;
+  reportStats?: ListingReportStats;
+  notifications?: AdminNotificationRecord[];
+  degradedSections: AdminOverviewSection[];
+};
+
 export type AdminAgentSummary = {
   user: UserRecord;
   agent: AgentProfile;

@@ -60,7 +60,7 @@ export async function assertBotProtection(
       action,
       result: "blocked",
       userId,
-      metadata: { reason: "turnstile" }
+      metadata: { reason: "turnstile", category: turnstile.category }
     });
     throw new BotProtectionError(turnstile.message);
   }

@@ -6,6 +6,7 @@ import {
   buildPublicMarketPageFromRanked,
   countMediaBearingListingsForAgent,
   countActiveAvailableListingsForAgent,
+  countActiveAvailableListingsForAdmin,
   createListing,
   deleteListing,
   demoteExcessActiveAvailableListingsForAgent,
@@ -63,6 +64,10 @@ export async function getPublicListings(input: Record<string, unknown>) {
   const snapshot = await getCachedPublicRankingSnapshot(JSON.stringify(rankingFilters));
   const ranked = snapshot.ranked.map(({ listing }) => listing);
   return paginateRankedPublicListings(ranked, page, limit);
+}
+
+export async function getActiveListingCountForAdmin() {
+  return countActiveAvailableListingsForAdmin();
 }
 
 function roundRankingScore(value: number) {
